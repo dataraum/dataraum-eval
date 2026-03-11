@@ -1,0 +1,20 @@
+[project]
+name = "dataraum-eval"
+version = "0.1.0"
+description = "Calibration and evaluation harness for DataRaum entropy detectors"
+requires-python = ">=3.14"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pyyaml>=6.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["calibration"]
+addopts = "-v --tb=short"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
