@@ -15,6 +15,3 @@ output/
 
 # OS
 .DS_Store
-
-# uv
-uv.lock

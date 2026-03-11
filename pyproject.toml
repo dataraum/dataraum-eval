@@ -15,6 +15,9 @@ dev = [
 testpaths = ["calibration"]
 addopts = "-v --tb=short"
 
+[tool.hatch.build.targets.wheel]
+packages = ["calibration"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
