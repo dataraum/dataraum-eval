@@ -76,11 +76,12 @@ injections:
   # Structural layer
   - injector: corrupt_dates
     table: payments
-    detector_id: type_fidelity
+    detector_id: temporal_entropy
     params:
       col: date
       formats:
-        - "%d/%m/%Y"
+        - "DD-Mon-YY"
+        - "Mon DD, YYYY"
         - "epoch"
       severity: high
 

@@ -1,136 +1,153 @@
 # DataRaum Eval
 
 Calibration harness for the DataRaum entropy detection and fix system.
+This repo is a **testing and evaluation framework** — it owns the ground truth
+about whether detectors work, and drives changes to detector code and injection
+strategies until they do.
 
-## What This Repo Does
+## Architecture
 
-Tests whether the pipeline's entropy detectors and fix loop work correctly,
-using known data injections from `dataraum-testdata` as ground truth.
+Three repos, vendored as git submodules under `vendor/`:
 
-### Repos
+| Repo | Role | Editable from here? |
+|------|------|---------------------|
+| `dataraum-testdata` | Generates data with known injections (`entropy_map.yaml`) | Yes — `vendor/dataraum-testdata` |
+| `dataraum-context` | Pipeline: phases, detectors, fix system | Yes — `vendor/dataraum-context` |
+| `dataraum-eval` (this) | Strategies, calibration tests, runner | Yes |
 
-| Repo | Role |
-|------|------|
-| `dataraum-testdata` | Generates closed-loop financial data with known injections (`entropy_map.yaml`) and pre-computed metrics (`ground_truth.yaml`) |
-| `dataraum-context` | The pipeline: phases, detectors, fix system, MCP server |
-| `dataraum-eval` (this) | Calibration tests and evaluation agents |
+Everything runs from this repo via direct Python API calls — no subprocess
+shelling out to sibling repos.
 
-## Concepts
-
-### Quality Zones
-
-The pipeline runs in progressive quality zones. Each zone ends at a quality
-gate where entropy is measured and fixes can be applied.
-
-- **Zone 1 (Foundation):** import → typing → statistics → relationships → semantic → `quality_review` gate. 9 detectors run here.
-- **Zone 2 (Enrichment):** enriched_views → correlations → slicing → drift analysis → `analysis_review` gate (proposed). 5 additional detectors.
-- **Zone 3 (Interpretation):** entropy (Bayesian network) → entropy_interpretation, graph_execution. Re-measures all detectors. Least mature.
-
-See `spec/` for detailed zone specifications.
-
-### Entropy Detectors
-
-Detectors measure uncertainty about data quality. Score 0 = confident, 1 = maximum uncertainty. Each detector declares which analyses it needs (`required_analyses`) — it runs at the earliest zone where those analyses are available.
-
-### Fix System
-
-Fixes are user/agent decisions applied through three interpreters (config, metadata, data). All Zone 1 detectors declare fix schemas. The scheduler applies fixes, resets affected phases, re-runs, and re-measures at the gate. The infrastructure is complete; the MCP `apply_fix` tool is not yet exposed.
-
-## Calibration
-
-### What We Test
-
-1. **Detection calibration** — detectors fire on injected data, stay quiet on clean data. Pure data, no LLM
-2. **Fix calibration** — LLM-in-the-loop: agent proposes fix, fix applied, score drops. Builds on (1)
-3. **Ground truth metrics** — computed values match known answers (requires full pipeline)
-
-### Running
+## Running Calibration
 
 ```bash
-# Generate test data
-cd ../dataraum-testdata
-uv run testdata generate --scenario month-end-close --strategy clean --output ../dataraum-eval/data/clean --seed 42
-uv run testdata generate --scenario month-end-close --strategy medium --output ../dataraum-eval/data/medium --seed 42
+# Full run: generate + pipeline + test
+make calibrate-zone1-detection-v1
 
-# Run pipeline on both
-cd ../dataraum-context
-dataraum run ../dataraum-eval/data/clean --output ../dataraum-eval/output/clean --vertical finance
-dataraum run ../dataraum-eval/data/medium --output ../dataraum-eval/output/medium --vertical finance
-
-# Run calibration
-cd ../dataraum-eval
-uv run pytest calibration/ -v
+# Or step by step:
+make generate-zone1-detection-v1      # testdata → data/zone1-detection-v1/
+make pipeline-zone1-detection-v1      # pipeline → output/zone1-detection-v1/
+uv run pytest calibration/ --strategy zone1-detection-v1 -v
 ```
 
-## Current State
+The runner (`calibration/runner.py`) calls `testdata.scenarios.runner.run_scenario`
+and `dataraum.pipeline.runner.run` directly. Strategy YAML files in `strategies/`
+control injection parameters and detector_id overrides.
 
-As of 2026-03-11, this repo and its calibration tests are being rebuilt.
-The spec in `spec/` contains the shared understanding of what each detector
-measures, what each injection does, and whether they align.
+## How Calibration Works
 
-### What works at Gate 1
+1. **Strategy YAML** defines injections with known parameters (rate, target column,
+   detector_id override)
+2. **testdata** generates clean financial data, applies injections, writes
+   `entropy_map.yaml` listing exactly what was injected
+3. **Pipeline** runs through Zone 1 phases to `quality_review` gate, persists
+   gate scores in `PhaseLog.outputs["gate_column_details"]`
+4. **conftest.py** reads gate scores from `metadata.db` as
+   `(table, column, detector_id) → score`
+5. **test_detector_recall.py** asserts each injection's detector scores above
+   `DETECTION_THRESHOLD` (0.3) for the affected column
 
-| Detector | Status | Notes |
-|---|---|---|
-| outlier_rate | Detects its injection | 5% at 10x multiplier → score ~0.40 |
-| benford | Detects its injection | 60% round numbers → score ~0.85 |
-| null_ratio | Score too low for threshold | 15% injection → score 0.15, below 0.3 threshold |
-| join_path_determinism | No injection in medium strategy | Detector logic is sound |
-| type_fidelity | Injection misaligned | 3% corruption doesn't affect type inference (correct behavior) |
-| unit_entropy | Injection misaligned | Detector checks metadata presence, not value consistency |
-| temporal_entropy | Injection misaligned | Typing handles mixed formats; type↔role stays aligned |
-| relationship_entropy | Composite dilutes signal | 5% orphans → score ~0.18 (weighted composite too forgiving) |
-| business_meaning | Undertested | Injection too mild (abbreviations). Needs garbage names to test confidence penalty |
+## What We Test
 
-### Zone 2+ detectors (not yet calibrated)
+### 4a: Detection calibration (current focus)
+Inject → run pipeline → read gate scores → assert thresholds.
+Pure data, no LLM involvement in the test loop (LLM runs during pipeline's
+semantic phase, but tests only check scores).
 
-| Detector | Zone | Blocked by |
-|---|---|---|
-| temporal_drift | 2 | Needs DRIFT_SUMMARIES (from temporal_slice_analysis) |
-| dimensional_entropy | 2 | Needs SLICE_VARIANCE |
-| derived_value | 2 | Needs CORRELATION |
-| column_quality | 2 | Needs COLUMN_QUALITY_REPORTS |
-| dimension_coverage | 2 | Needs ENRICHED_VIEW |
+### 4b: Fix calibration (next)
+Detector fires → agent proposes fix → fix applied → score drops.
+LLM-in-the-loop. Requires MCP `apply_fix` tool.
 
-### Missing detectors (injections without a detector)
+## Calibration Results (2026-03-12, zone1-detection-v1)
 
-- `cross_table_consistency` — 2 injections target this (GL↔Invoice, Payment↔Bank mismatch)
-- `derived_value_consistency` — 1 injection targets this (trial balance ↔ GL)
+**Zone 1 detection recall: 8/9 pass** (all except unit_entropy which is misaligned)
 
-### Key findings
+### Passing (score > 0.3)
 
-- Most Gate 1 "failures" are injection→detector misalignment, not detector bugs
-- The medium strategy injection rates are too low for some detectors (null_ratio, type_fidelity)
-- `business_meaning` is undertested — injection uses abbreviations that LLMs handle; needs garbage names
-- `relationship_entropy` composite needs decomposition or reweighting
-- Gate scores are ephemeral (not persisted) — eval needs this fixed
-- The fix system infrastructure is complete but lacks MCP exposure
+| Detector | Target | Score | Notes |
+|---|---|---|---|
+| type_fidelity | journal_lines.debit | 0.585 | Boost function on 8% quarantine rate |
+| null_ratio | journal_lines.cost_center | 0.711 | 40% injection rate |
+| outlier_rate | journal_lines.credit | 1.000 | 5% at 10x multiplier |
+| benford | bank_transactions.amount | 0.803 | 60% round numbers |
+| business_meaning | invoices.rrflp_11_zp00 | 0.375 | LLM confidence 0.25 on garbage name |
+| business_meaning | invoices.xq_v7kl | 0.350 | LLM confidence 0.30 on garbage name |
+| temporal_entropy | payments.date | 0.800 | Corrupt dates → VARCHAR → type/role mismatch |
+| relationship_entropy | payments.invoice_id | 0.447 | sqrt-boosted 20% orphan rate |
+
+### Known misaligned (xfail)
+
+| Detector | Target | Score | Root cause |
+|---|---|---|---|
+| unit_entropy | invoices.amount | ~0.1 | Measures metadata completeness, not value consistency. Injection targets values |
+
+### Not testable at Zone 1
+
+temporal_drift, dimensional_entropy, cross_table_consistency,
+derived_value, derived_value_consistency — need Zone 2+ analyses.
+
+## Key Learnings
+
+### Detector scoring needs non-linear amplification
+Linear `score = rate` under-weights real problems. 8% quarantine means 8% of
+your data is broken — that's not 0.08 severity. The `_boost_rate()` function
+in type_fidelity uses `((1+rate)²/-log₁₀(rate))-0.5` to map small rates to
+scores that match actual severity.
+
+### LLM confidence must be calibrated at both tiers
+The business_meaning detector relies on LLM confidence to catch garbage column
+names. Without guidance, LLMs report 0.85-0.90 confidence on garbage names
+because they infer meaning from data. The fix: add `<confidence_guidance>` to
+BOTH tier 1 and tier 2 prompts, update the Pydantic field description, and
+tell tier 2 to PRESERVE (not UPGRADE) confidence reflecting name readability.
+Tier 2 was the main problem — it "upgraded" low tier-1 confidence to high.
+
+### Weighted average composites hide problems
+relationship_entropy's weighted average (0.5 RI + 0.3 cardinality + 0.2 semantic)
+made 20% orphan rates invisible. Max aggregation with sqrt-boosted RI is direct:
+the worst problem drives the score.
+
+### Injector dispatch must match strategy format names
+The corrupt_dates injector uses human-readable format names (`DD/MM/YYYY`) for
+dispatch. The strategy had strftime format strings (`%d/%m/%Y`). Nothing matched
+→ fallback to isoformat → zero corruption. **Always verify injector output.**
+
+### unit_entropy is correctly misaligned
+The detector measures whether the pipeline identified and declared units
+(metadata completeness). The mix_units injection corrupts values. These are
+different things. The detector works — the injection doesn't test it.
+
+## Strategy Design
+
+Strategies in `strategies/` control what gets injected. Key parameters:
+
+- `detector_id`: override which detector this injection targets (used in
+  entropy_map.yaml for test assertions)
+- `ratio`: injection rate — must be high enough for the detector's scoring
+  curve to cross threshold
+- `formats` (corrupt_dates): must use injector's dispatch names, not strftime
+
+### Current strategy: zone1-detection-v1
+
+Raised rates vs baseline medium strategy:
+- null_ratio: 15% → 40% (was below 0.3 threshold)
+- corrupt_types: 3% → 15% (was invisible to type inference)
+- break_ref_integrity: 5% → 20% (composite diluted signal)
+- column names: abbreviations → garbage (`rrFlp_11_zp00`)
+- corrupt_dates: formats fixed to use injector dispatch names + epoch
 
 ## Backlog
 
-Tracked in `spec/` documents and Linear (DAT-133, DAT-135, DAT-94).
+### Next: unit_entropy
+- Document that it measures metadata completeness, not value consistency
+- Either accept the misalignment or create a separate value-consistency injection
 
-### Priority: Fix existing detectors
-- Fix `business_meaning` injection — use garbage names (rrFlp_11_zp00) instead of abbreviations to test confidence penalty
-- Add quarantine rate as sub-signal to `type_fidelity` — already logged during typing
-- Observe `relationship_entropy` — never fired, needs real-world data before rewriting formula
-- `temporal_entropy` unmarked case (0.6) is valuable — keep it, critical for Zone 2 downstream
-
-### Priority: Fix injection→detector alignment
-- `corrupt_types` at 3% doesn't trigger `type_fidelity` — either raise rate, or assign to a different detector (quarantine rate)
-- `introduce_nulls` at 15% is below 0.3 threshold — raise rate or lower threshold
-- `mix_units` targets value consistency but `unit_entropy` checks metadata — misaligned
-- `obscure_column_names` uses abbreviations LLMs handle — needs truly meaningless names
-- `corrupt_dates` should target type_fidelity (unparseable formats → quarantine), not temporal_entropy
-- `break_referential_integrity` at 5% is diluted by composite — either raise rate or decompose detector
-
-### Priority: Pipeline infrastructure for eval
-- Persist gate scores (see spec/00 for three options)
-- Update fix CLI (exists but outdated)
+### Next: Fix calibration (4b)
 - MCP `apply_fix` tool
-- Zone-aware pipeline runs (run to gate, stop, fix, continue)
+- Agent proposes fix → fix applied → score drops
+- Tests the full loop, not just detection
 
-### Future: New detectors (only after existing ones are solid)
-- `cross_table_consistency` — cross-table amount reconciliation
-- Detectors for validation and business_cycles phases (Zone 3)
-- Value-level detectors where current ones only check metadata
+### Future
+- Zone 2 calibration (temporal_drift, dimensional_entropy, derived_value)
+- cross_table_consistency detector (needs JOINs, Zone 2+)
+- Clean data baseline (all scores below threshold, no false alarms)
