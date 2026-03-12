@@ -54,6 +54,12 @@ Inherits all Zone 1 config fixes. Additionally:
 - `dimensional_entropy` → `create_constraint` (metadata target → SemanticAnnotation)
 - `dimensional_entropy` → `document_business_rule` (config target → semantic.yaml)
 
+## Injections NOT Detectable at Any Zone
+
+| Injection | Assigned detector | Why it's undetectable |
+|---|---|---|
+| mix_units (10%, ×1.1) | unit_entropy | **Unit_entropy measures metadata** (is a unit declared?), not value consistency. The injection multiplies 10% of `invoices.amount` by 1.1 while leaving `currency=USD` unchanged. Since all rows share one currency value, slicing by currency produces one group — there's nothing to compare across slices. The 10% × 1.1 shift is too subtle for outlier/Benford detection on the full column. Detection would require either cross-table reconciliation (compare with GL amounts) or sub-population detection within a single currency group — neither exists. The `break_gl_invoice_match` injection already tests cross-table consistency separately. |
+
 ## Open Items (Deferred)
 
 - Gate 2 phase (`analysis_review`) does not exist yet — DAT-109
