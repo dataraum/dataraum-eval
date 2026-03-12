@@ -3,7 +3,11 @@ name = "dataraum-eval"
 version = "0.1.0"
 description = "Calibration and evaluation harness for DataRaum entropy detectors"
 requires-python = ">=3.14"
-dependencies = []
+dependencies = ["dataraum-testdata", "dataraum"]
+
+[tool.uv.sources]
+dataraum-testdata = { path = "vendor/dataraum-testdata", editable = true }
+dataraum = { path = "vendor/dataraum-context", editable = true }
 
 [dependency-groups]
 dev = [

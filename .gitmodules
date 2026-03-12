@@ -1,0 +1,6 @@
+[submodule "vendor/dataraum-testdata"]
+	path = vendor/dataraum-testdata
+	url = ../dataraum-testdata
+[submodule "vendor/dataraum-context"]
+	path = vendor/dataraum-context
+	url = ../dataraum-context
