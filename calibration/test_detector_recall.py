@@ -71,6 +71,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
 def test_injection_detected(
     injection: dict[str, Any],
     pipeline_scores: dict[tuple[str, str, str], float],
+    clean_pipeline_scores: dict[tuple[str, str, str], float],
 ) -> None:
     """Each known injection must produce an elevated score for the affected column."""
     table = injection["target_file"].replace(".csv", "")
@@ -90,7 +91,6 @@ def test_injection_detected(
 
     # Some injections affect multiple columns (e.g., debit/credit mutex)
     if "/" in column:
-        # Check both columns — at least one should be detected
         cols = column_lc.split("/")
         scores = [
             pipeline_scores.get((table, c, detector))
@@ -107,12 +107,18 @@ def test_injection_detected(
         )
         return
 
-    score = pipeline_scores.get((table, column_lc, detector))
+    key = (table, column_lc, detector)
+    score = pipeline_scores.get(key)
     assert score is not None, (
         f"{detector} produced no score for {table}.{column} — "
         f"detector didn't run or doesn't cover this injection type"
     )
+
+    clean = clean_pipeline_scores.get(key, 0.0)
+    delta = score - clean
+
     assert score > DETECTION_THRESHOLD, (
-        f"{detector} scored {score:.3f} for {table}.{column} — "
+        f"{detector} scored {score:.3f} for {table}.{column} "
+        f"(clean={clean:.3f}, delta={delta:+.3f}) — "
         f"injection missed (threshold={DETECTION_THRESHOLD})"
     )

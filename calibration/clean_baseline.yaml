@@ -1,0 +1,26 @@
+description: Clean data baseline scores. Scores above noise floor (0.15) are tracked
+  here. Regenerate after detector changes.
+scores:
+  benford:bank_transactions.amount: 0.717
+  benford:invoices.amount: 0.746
+  benford:journal_lines.credit: 0.711
+  benford:payments.amount: 0.743
+  benford:trial_balance.credit_balance: 0.655
+  benford:trial_balance.debit_balance: 0.772
+  null_ratio:journal_lines.cost_center: 0.519
+  outlier_rate:fx_rates.rate: 1.0
+  outlier_rate:invoices.amount: 1.0
+  outlier_rate:journal_lines.credit: 0.902
+  outlier_rate:journal_lines.debit: 1.0
+  outlier_rate:payments.amount: 1.0
+  outlier_rate:trial_balance.credit_balance: 0.474
+  outlier_rate:trial_balance.debit_balance: 0.894
+  relationship_entropy:chart_of_accounts.account_id: 0.3
+  relationship_entropy:chart_of_accounts.parent_id: 0.3
+  relationship_entropy:invoices.invoice_id: 0.3
+  relationship_entropy:journal_entries.entry_id: 0.3
+  relationship_entropy:journal_lines.account_id: 0.3
+  relationship_entropy:journal_lines.entry_id: 0.3
+  relationship_entropy:payments.invoice_id: 0.3
+  relationship_entropy:trial_balance.account_id: 0.3
+  temporal_entropy:trial_balance.period: 0.8

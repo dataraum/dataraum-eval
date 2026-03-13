@@ -155,3 +155,20 @@ def pipeline_scores(strategy_output_dir: Path) -> dict[tuple[str, str, str], flo
 def clean_pipeline_scores() -> dict[tuple[str, str, str], float]:
     """Detector scores from clean pipeline output (no injections)."""
     return _load_gate_scores(OUTPUT_DIR / "clean" / "metadata.db")
+
+
+@pytest.fixture(scope="session")
+def score_deltas(
+    pipeline_scores: dict[tuple[str, str, str], float],
+    clean_pipeline_scores: dict[tuple[str, str, str], float],
+) -> dict[tuple[str, str, str], float]:
+    """Delta between injected and clean scores (injected - clean).
+
+    A positive delta means the injection raised the score.
+    Keys present in injected but not clean use the raw injected score.
+    """
+    deltas: dict[tuple[str, str, str], float] = {}
+    for key, injected_score in pipeline_scores.items():
+        clean_score = clean_pipeline_scores.get(key, 0.0)
+        deltas[key] = injected_score - clean_score
+    return deltas

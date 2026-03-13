@@ -23,13 +23,17 @@ pipeline-%:
 run-%: generate-% pipeline-%
 	@echo "Run complete for $*"
 
-# Run calibration tests
+# Run calibration tests (recall + precision)
 test:
-	uv run pytest calibration/ --strategy $(STRATEGY)
+	uv run pytest calibration/ --strategy $(STRATEGY) -v
 
 # Full loop: generate + pipeline + test
 calibrate-%: run-%
 	uv run pytest calibration/ --strategy $* -v
+
+# Full calibration including clean baseline for precision tests
+calibrate-full: run-clean run-$(STRATEGY)
+	uv run pytest calibration/ --strategy $(STRATEGY) -v
 
 # List available strategies
 list-strategies:
