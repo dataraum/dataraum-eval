@@ -17,3 +17,5 @@ output/
 .DS_Store
 
 .env
+
+*_testdata/
