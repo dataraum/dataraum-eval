@@ -151,6 +151,34 @@ def pipeline_scores(strategy_output_dir: Path) -> dict[tuple[str, str, str], flo
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Fix calibration fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def fixed_output_dir(strategy_name: str) -> Path:
+    """Path to fixed pipeline output."""
+    path = OUTPUT_DIR / f"{strategy_name}-fixed"
+    if not path.exists():
+        pytest.skip(
+            f"No fixed output at {path}. "
+            f"Run: make fix-{strategy_name}"
+        )
+    return path
+
+
+@pytest.fixture(scope="session")
+def post_fix_scores(fixed_output_dir: Path) -> dict[tuple[str, str, str], float]:
+    """Detector scores after fix application."""
+    return _load_gate_scores(fixed_output_dir / "metadata.db")
+
+
+# ---------------------------------------------------------------------------
+# Clean baseline (always uses "clean" strategy data)
+# ---------------------------------------------------------------------------
+
+
 @pytest.fixture(scope="session")
 def clean_pipeline_scores() -> dict[tuple[str, str, str], float]:
     """Detector scores from clean pipeline output (no injections)."""
