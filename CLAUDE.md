@@ -136,18 +136,52 @@ Raised rates vs baseline medium strategy:
 - column names: abbreviations → garbage (`rrFlp_11_zp00`)
 - corrupt_dates: formats fixed to use injector dispatch names + epoch
 
+## Fix Calibration Results (4b)
+
+**Fix system: 5/8 pass, 3 xfail** (all expected)
+
+### Phase 1: accept_finding (config-only, re-measure at gate)
+
+| Detector | Target | Pre | Post | Expected |
+|---|---|---|---|---|
+| outlier_rate | journal_lines.credit | 1.000 | 0.200 | <= 0.2 |
+| benford | bank_transactions.amount | 0.803 | 0.200 | <= 0.2 |
+| null_ratio | journal_lines.cost_center | 0.711 | 0.100 | <= 0.1 |
+
+### Phase 2: metadata fixes (direct DB update, re-measure at gate)
+
+| Detector | Target | Pre | Post | Expected |
+|---|---|---|---|---|
+| business_meaning | invoices.rrflp_11_zp00 | 0.375 | 0.000 | <= 0.1 |
+| business_meaning | invoices.xq_v7kl | 0.350 | 0.000 | <= 0.1 |
+
+### xfail (fix cannot address injection type)
+
+| Detector | Target | Why |
+|---|---|---|
+| temporal_entropy | payments.date | Type mismatch (VARCHAR from corrupt dates); set_timestamp_role is no-op since column already marked as timestamp |
+| relationship_entropy | payments.invoice_id | ri_entropy (0.447 from 20% orphans) dominates via max aggregation; confirm_relationship only reduces semantic component |
+| type_fidelity | journal_lines.debit | add_type_pattern is for date formats, not numeric corruption |
+
+### Fix system architecture
+
+The calibration runner bypasses the scheduler entirely for fix re-measurement.
+The scheduler's `_available_analyses()` only counts COMPLETED phases, but
+copied output has SKIPPED phases. Instead, `run_fix_pipeline()`:
+
+1. Copies output to `-fixed/` directory
+2. Applies config fixes (ConfigInterpreter → YAML) and metadata fixes
+   (MetadataInterpreter → DB) in a single session
+3. Calls `measure_at_gate()` directly with all Zone 1 analyses
+4. Persists gate results to PhaseLog
+
 ## Backlog
 
 ### Next: unit_entropy
 - Document that it measures metadata completeness, not value consistency
 - Either accept the misalignment or create a separate value-consistency injection
 
-### Next: Fix calibration (4b)
-- MCP `apply_fix` tool
-- Agent proposes fix → fix applied → score drops
-- Tests the full loop, not just detection
-
 ### Future
 - Zone 2 calibration (temporal_drift, dimensional_entropy, derived_value)
 - cross_table_consistency detector (needs JOINs, Zone 2+)
-- Clean data baseline (all scores below threshold, no false alarms)
+- Push `measure_at_gate` re-measurement logic into dataraum-context for MCP exposure

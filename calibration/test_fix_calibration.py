@@ -4,13 +4,11 @@ For each fix spec, the detector must produce a lower score after the fix
 is applied. This proves the complete fix system works end-to-end:
 detector fires → fix applied → score drops.
 
-Phase 1: accept_finding fixes (config-only, quality_review re-run)
-Phase 2: semantic/typing/relationship fixes (skip until implemented)
+Phase 1: accept_finding fixes (config writes, re-measure at gate)
+Phase 2: metadata fixes (direct DB update, re-measure at gate)
 """
 
 from __future__ import annotations
-
-from typing import Any
 
 import pytest
 
@@ -35,12 +33,11 @@ def test_fix_reduces_score(
     post_fix_scores: dict[tuple[str, str, str], float],
 ) -> None:
     """Applying a fix must reduce the detector score for the affected column."""
-    # Phase 2 specs not yet implemented
-    if fix_spec.phase == 2 and not fix_spec.fix_documents:
-        pytest.skip(f"Phase 2 fix not implemented: {fix_spec.action}")
-
     if fix_spec.xfail_reason:
         pytest.xfail(fix_spec.xfail_reason)
+
+    if not fix_spec.fix_documents:
+        pytest.skip(f"No fix documents defined for {fix_spec.test_id}")
 
     key = (fix_spec.table, fix_spec.column, fix_spec.detector_id)
 

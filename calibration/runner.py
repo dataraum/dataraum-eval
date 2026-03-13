@@ -165,22 +165,29 @@ def copy_output_for_fixes(strategy: str) -> Path:
 def apply_fix_documents(
     fix_docs: list[FixDocument],
     config_root: Path,
+    session: object | None = None,
 ) -> None:
-    """Apply fix documents to config files in the given root."""
+    """Apply fix documents to config files and/or metadata DB."""
     for doc in fix_docs:
         print(f"[eval] Applying fix: {doc.action} → {doc.table_name}.{doc.column_name}")
-        apply_fix_document(doc, config_root=config_root)
+        apply_fix_document(doc, config_root=config_root, session=session)
     print(f"[eval] Applied {len(fix_docs)} fix(es)")
 
 
-def run_fix_pipeline(strategy: str) -> None:
-    """Re-measure gate scores on fixed output.
+def run_fix_pipeline(strategy: str, fix_specs: list | None = None) -> None:
+    """Apply fixes and re-measure gate scores on fixed output.
 
-    Calls measure_at_gate() directly with the full set of Zone 1 analyses,
-    bypassing the scheduler. The scheduler's skip logic marks existing phases
-    as SKIPPED which excludes them from _available_analyses() — but we know
-    the data is there, so we provide available_analyses explicitly.
+    Applies all fix documents (config writes + metadata updates) within
+    a single DB session, then calls measure_at_gate() directly with the
+    full set of Zone 1 analyses. Bypasses the scheduler — its skip logic
+    marks existing phases as SKIPPED which excludes them from
+    _available_analyses(), but we know the data is there.
     """
+    if fix_specs is None:
+        from calibration.fix_specs import ZONE1_FIX_SPECS
+
+        fix_specs = ZONE1_FIX_SPECS
+
     from dataraum.core.config import reset_config_root, set_config_root
     from dataraum.core.connections import ConnectionConfig, ConnectionManager
     from dataraum.entropy.dimensions import AnalysisKey
@@ -192,12 +199,10 @@ def run_fix_pipeline(strategy: str) -> None:
             f"No fixed output at {fixed_dir}. Run copy_output_for_fixes first."
         )
 
-    # Point config resolution to the fixed output's config directory
-    # so detectors read the updated thresholds.yaml with accepted_columns.
-    set_config_root(fixed_dir / "config")
+    config_root = fixed_dir / "config"
+    set_config_root(config_root)
     clear_entropy_config_cache()
 
-    # Connect to the fixed output databases
     conn_config = ConnectionConfig.for_directory(fixed_dir)
     manager = ConnectionManager(conn_config)
     manager.initialize()
@@ -210,6 +215,15 @@ def run_fix_pipeline(strategy: str) -> None:
             source = session.execute(select(Source)).scalars().first()
             if not source:
                 raise RuntimeError("No source found in fixed output DB")
+
+            # Apply all fixes (config writes to YAML, metadata updates DB)
+            all_docs = [doc for spec in fix_specs for doc in spec.fix_documents]
+            if all_docs:
+                apply_fix_documents(all_docs, config_root, session=session)
+                session.flush()
+
+            # Clear caches after config writes so detectors read fresh config
+            clear_entropy_config_cache()
 
             # All Zone 1 analyses — these phases ran in the original pipeline
             available = {
@@ -229,7 +243,6 @@ def run_fix_pipeline(strategy: str) -> None:
             print(f"[eval] Gate: {len(gate_result.column_details)} dimensions, "
                   f"{len(gate_result.skipped_detectors)} skipped")
 
-            # Persist gate results to phase_log so conftest can read them
             _persist_gate_to_phase_log(session, source.source_id, gate_result)
             session.commit()
             print("[eval] Gate scores persisted to phase_log")
@@ -286,16 +299,11 @@ if __name__ == "__main__":
     parser.add_argument("--generate-only", action="store_true")
     parser.add_argument("--pipeline-only", action="store_true")
     parser.add_argument("--apply-fixes", action="store_true",
-                        help="Copy output, apply fixes, re-run pipeline")
+                        help="Copy output, apply fixes, re-measure gate scores")
     args = parser.parse_args()
 
     if args.apply_fixes:
-        from calibration.fix_specs import PHASE1_FIX_SPECS
-
-        fixed_dir = copy_output_for_fixes(args.strategy)
-        config_root = fixed_dir / "config"
-        all_docs = [doc for spec in PHASE1_FIX_SPECS for doc in spec.fix_documents]
-        apply_fix_documents(all_docs, config_root)
+        copy_output_for_fixes(args.strategy)
         run_fix_pipeline(args.strategy)
     elif args.pipeline_only:
         run_pipeline(args.strategy)
