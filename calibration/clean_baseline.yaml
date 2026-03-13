@@ -15,12 +15,12 @@ scores:
   outlier_rate:payments.amount: 1.0
   outlier_rate:trial_balance.credit_balance: 0.474
   outlier_rate:trial_balance.debit_balance: 0.894
-  relationship_entropy:chart_of_accounts.account_id: 0.3
-  relationship_entropy:chart_of_accounts.parent_id: 0.3
-  relationship_entropy:invoices.invoice_id: 0.3
-  relationship_entropy:journal_entries.entry_id: 0.3
-  relationship_entropy:journal_lines.account_id: 0.3
-  relationship_entropy:journal_lines.entry_id: 0.3
-  relationship_entropy:payments.invoice_id: 0.3
-  relationship_entropy:trial_balance.account_id: 0.3
+  relationship_entropy:chart_of_accounts.account_id: 0.2
+  relationship_entropy:chart_of_accounts.parent_id: 0.2
+  relationship_entropy:invoices.invoice_id: 0.2
+  relationship_entropy:journal_entries.entry_id: 0.2
+  relationship_entropy:journal_lines.account_id: 0.2
+  relationship_entropy:journal_lines.entry_id: 0.2
+  relationship_entropy:payments.invoice_id: 0.2
+  relationship_entropy:trial_balance.account_id: 0.2
   temporal_entropy:trial_balance.period: 0.8
