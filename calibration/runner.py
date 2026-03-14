@@ -28,9 +28,6 @@ from dotenv import load_dotenv
 EVAL_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(EVAL_ROOT / ".env")
 
-from dataraum.entropy.config import clear_entropy_config_cache  # noqa: E402
-from dataraum.pipeline.fixes.interpreters import apply_fix_document  # noqa: E402
-from dataraum.pipeline.fixes.models import FixDocument  # noqa: E402
 from dataraum.pipeline.runner import GateMode, RunConfig, RunResult  # noqa: E402
 from dataraum.pipeline.runner import run as pipeline_run  # noqa: E402
 from testdata.scenarios.runner import run_scenario  # noqa: E402
@@ -162,53 +159,18 @@ def copy_output_for_fixes(strategy: str) -> Path:
     return dst
 
 
-def apply_fix_documents(
-    fix_docs: list[FixDocument],
-    config_root: Path,
-    session: object | None = None,
-) -> None:
-    """Apply fix documents to config files and/or metadata DB."""
-    for doc in fix_docs:
-        print(f"[eval] Applying fix: {doc.action} → {doc.table_name}.{doc.column_name}")
-        apply_fix_document(doc, config_root=config_root, session=session)
-    print(f"[eval] Applied {len(fix_docs)} fix(es)")
-
-
-def _needs_phase_rerun(fix_specs: list) -> set[str]:
-    """Return set of phases that need re-running (not just gate re-measurement).
-
-    Phases like 'quality_review' and 'semantic' don't need a real re-run —
-    measure_at_gate() handles them by re-reading config/metadata directly.
-    Earlier phases like 'typing' need actual pipeline re-execution.
-    """
-    gate_only_phases = {"quality_review", "semantic"}
-    return {
-        spec.requires_rerun
-        for spec in fix_specs
-        if spec.fix_documents and spec.requires_rerun not in gate_only_phases
-    }
-
-
 def run_fix_pipeline(strategy: str, fix_specs: list | None = None) -> None:
     """Apply fixes and re-measure gate scores on fixed output.
 
-    For config/metadata fixes that only need gate re-measurement (Phase 1+2):
-    applies fixes then calls measure_at_gate() directly, bypassing the
-    scheduler (its skip logic breaks on copied output).
-
-    For fixes requiring earlier phase re-runs (Phase 3, e.g. typing):
-    applies config fixes, cleans the affected phases, then re-runs the
-    pipeline from scratch so the scheduler picks up the changes.
+    Delegates to ``dataraum.pipeline.fixes.api.apply_fixes`` which handles
+    fix application, cascade cleanup, pipeline re-run, and gate persistence.
     """
     if fix_specs is None:
         from calibration.fix_specs import ZONE1_FIX_SPECS
 
         fix_specs = ZONE1_FIX_SPECS
 
-    from dataraum.core.config import reset_config_root, set_config_root
-    from dataraum.core.connections import ConnectionConfig, ConnectionManager
-    from dataraum.entropy.dimensions import AnalysisKey
-    from dataraum.entropy.gate import measure_at_gate
+    from dataraum.pipeline.fixes.api import apply_fixes
 
     fixed_dir = OUTPUT_DIR / f"{strategy}-fixed"
     if not fixed_dir.exists():
@@ -216,167 +178,22 @@ def run_fix_pipeline(strategy: str, fix_specs: list | None = None) -> None:
             f"No fixed output at {fixed_dir}. Run copy_output_for_fixes first."
         )
 
-    config_root = fixed_dir / "config"
-    set_config_root(config_root)
-    clear_entropy_config_cache()
+    all_docs = [d for spec in fix_specs for d in spec.fix_documents]
+    data_dir = DATA_DIR / strategy
 
-    conn_config = ConnectionConfig.for_directory(fixed_dir)
-    manager = ConnectionManager(conn_config)
-    manager.initialize()
+    result = apply_fixes(
+        output_dir=fixed_dir,
+        fix_documents=all_docs,
+        source_path=data_dir if data_dir.exists() else None,
+    )
 
-    try:
-        with manager.session_scope() as session:
-            from sqlalchemy import select
-            from dataraum.storage import Source
+    if not result.success:
+        raise RuntimeError(f"Fix pipeline failed: {result.error}")
 
-            source = session.execute(select(Source)).scalars().first()
-            if not source:
-                raise RuntimeError("No source found in fixed output DB")
-
-            rerun_phases = _needs_phase_rerun(fix_specs)
-
-            # Split fixes: config fixes can be applied before pipeline re-run,
-            # metadata fixes must wait until after (cascade cleanup deletes the rows)
-            config_docs = [d for s in fix_specs for d in s.fix_documents if d.target == "config"]
-            metadata_docs = [d for s in fix_specs for d in s.fix_documents if d.target != "config"]
-
-            if rerun_phases:
-                # 1. Cascade-clean the affected phase + all downstream
-                from dataraum.pipeline.cleanup import cleanup_phase_cascade
-
-                for phase_name in rerun_phases:
-                    print(f"[eval] Cascade-cleaning from phase: {phase_name}")
-                    cleaned = cleanup_phase_cascade(
-                        phase_name, source.source_id,
-                        session, manager._duckdb_conn,  # noqa: SLF001
-                    )
-                    print(f"[eval] Cleaned phases: {cleaned}")
-
-                # 2. Apply config fixes (typing.yaml, thresholds.yaml) before re-run
-                if config_docs:
-                    apply_fix_documents(config_docs, config_root, session=session)
-                    session.flush()
-                session.commit()
-                clear_entropy_config_cache()
-
-                # 3. Re-run pipeline — typing re-executes with forced_types,
-                #    downstream phases (statistics → semantic → quality_review) rebuild
-                print(f"[eval] Re-running pipeline for phases: {rerun_phases}")
-                manager.close()
-                reset_config_root()
-                set_config_root(config_root)
-
-                # Use original data dir as source_path so import phase
-                # can resolve the source (it will skip — raw tables exist)
-                data_dir = DATA_DIR / strategy
-                rerun_result = pipeline_run(RunConfig(
-                    source_path=data_dir if data_dir.exists() else None,
-                    output_dir=fixed_dir,
-                    target_phase="quality_review",
-                    gate_mode=GateMode.SKIP,
-                    contract="aggregation_safe",
-                ))
-                run_result = rerun_result.unwrap()
-                print(f"[eval] Re-run {'succeeded' if run_result.success else 'FAILED'}")
-
-                # 4. Apply metadata fixes on freshly rebuilt DB, then re-measure gate
-                if metadata_docs:
-                    reset_config_root()
-                    set_config_root(config_root)
-                    clear_entropy_config_cache()
-                    conn_config2 = ConnectionConfig.for_directory(fixed_dir)
-                    manager2 = ConnectionManager(conn_config2)
-                    manager2.initialize()
-                    try:
-                        with manager2.session_scope() as session2:
-                            apply_fix_documents(metadata_docs, config_root, session=session2)
-                            session2.flush()
-
-                            available = {
-                                AnalysisKey.TYPING, AnalysisKey.STATISTICS,
-                                AnalysisKey.RELATIONSHIPS, AnalysisKey.SEMANTIC,
-                            }
-                            gate_result = measure_at_gate(
-                                session2, manager2._duckdb_conn,  # noqa: SLF001
-                                source.source_id, available,
-                            )
-                            _persist_gate_to_phase_log(session2, source.source_id, gate_result)
-                            session2.commit()
-                            print("[eval] Post-rerun metadata fixes applied + gate re-measured")
-                    finally:
-                        manager2.close()
-                return
-
-            # No phase re-run needed — apply all fixes and measure at gate
-            all_docs = config_docs + metadata_docs
-            if all_docs:
-                apply_fix_documents(all_docs, config_root, session=session)
-                session.flush()
-            clear_entropy_config_cache()
-
-            available = {
-                AnalysisKey.TYPING, AnalysisKey.STATISTICS,
-                AnalysisKey.RELATIONSHIPS, AnalysisKey.SEMANTIC,
-            }
-
-            print(f"[eval] Measuring gate scores: {fixed_dir}")
-            gate_result = measure_at_gate(
-                session,
-                manager._duckdb_conn,  # noqa: SLF001
-                source.source_id,
-                available,
-            )
-            print(f"[eval] Gate: {len(gate_result.column_details)} dimensions, "
-                  f"{len(gate_result.skipped_detectors)} skipped")
-
-            _persist_gate_to_phase_log(session, source.source_id, gate_result)
-            session.commit()
-            print("[eval] Gate scores persisted to phase_log")
-    finally:
-        reset_config_root()
-        clear_entropy_config_cache()
-        try:
-            manager.close()
-        except Exception:
-            pass  # Already closed for re-run path
-
-
-def _persist_gate_to_phase_log(
-    session: "Session",
-    source_id: str,
-    gate_result: "GateResult",
-) -> None:
-    """Write gate_column_details into the existing quality_review PhaseLog."""
-    from sqlalchemy import select
-
-    from dataraum.entropy.detectors.base import get_default_registry
-    from dataraum.pipeline.db_models import PhaseLog
-
-    # Build detector_id_map (same as scheduler._persist_gate_scores)
-    registry = get_default_registry()
-    id_map: dict[str, str] = {}
-    for det in registry.get_all_detectors():
-        dim_path = f"{det.layer.value}.{det.dimension.value}.{det.sub_dimension.value}"
-        id_map[dim_path] = det.detector_id
-
-    outputs = {
-        "gate_column_details": gate_result.column_details,
-        "detector_id_map": id_map,
-    }
-
-    # Update the existing quality_review log (copied from original output)
-    existing = session.execute(
-        select(PhaseLog)
-        .where(PhaseLog.source_id == source_id, PhaseLog.phase_name == "quality_review")
-        .order_by(PhaseLog.completed_at.desc())
-        .limit(1)
-    ).scalar_one_or_none()
-
-    if existing is None:
-        raise RuntimeError(
-            "No quality_review PhaseLog found — cannot persist gate scores"
-        )
-    existing.outputs = outputs
+    print(
+        f"[eval] Applied {len(result.applied_fixes)} fixes, "
+        f"phases re-run: {result.phases_rerun}"
+    )
 
 
 if __name__ == "__main__":
