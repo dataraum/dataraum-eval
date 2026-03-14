@@ -112,6 +112,12 @@ The corrupt_dates injector uses human-readable format names (`DD/MM/YYYY`) for
 dispatch. The strategy had strftime format strings (`%d/%m/%Y`). Nothing matched
 → fallback to isoformat → zero corruption. **Always verify injector output.**
 
+### COALESCE expressions need TRY_CAST for safe fallthrough
+Strategy 1b combines multiple date patterns via COALESCE. It converts STRPTIME
+to TRY_STRPTIME (NULL on failure), but non-STRPTIME expressions (like epoch
+`CAST(col AS BIGINT)`) must also be error-safe. Use `TRY_CAST` for any inner
+type conversion so non-matching values return NULL instead of erroring.
+
 ### unit_entropy is correctly misaligned
 The detector measures whether the pipeline identified and declared units
 (metadata completeness). The mix_units injection corrupts values. These are
@@ -138,7 +144,7 @@ Raised rates vs baseline medium strategy:
 
 ## Fix Calibration Results (4b)
 
-**Fix system: 5/8 pass, 3 xfail** (all expected)
+**Fix system: 8/10 pass, 2 xfail** (all expected)
 
 ### Phase 1: accept_finding (config-only, re-measure at gate)
 
@@ -147,6 +153,7 @@ Raised rates vs baseline medium strategy:
 | outlier_rate | journal_lines.credit | 1.000 | 0.200 | <= 0.2 |
 | benford | bank_transactions.amount | 0.803 | 0.200 | <= 0.2 |
 | null_ratio | journal_lines.cost_center | 0.711 | 0.100 | <= 0.1 |
+| relationship_entropy | payments.invoice_id | 0.447 | 0.200 | <= 0.2 |
 
 ### Phase 2: metadata fixes (direct DB update, re-measure at gate)
 
@@ -155,25 +162,40 @@ Raised rates vs baseline medium strategy:
 | business_meaning | invoices.rrflp_11_zp00 | 0.375 | 0.000 | <= 0.1 |
 | business_meaning | invoices.xq_v7kl | 0.350 | 0.000 | <= 0.1 |
 
-### xfail (fix cannot address injection type)
+### Phase 3: config fixes requiring phase re-run
 
-| Detector | Target | Why |
-|---|---|---|
-| temporal_entropy | payments.date | Type mismatch (VARCHAR from corrupt dates); set_timestamp_role is no-op since column already marked as timestamp |
-| relationship_entropy | payments.invoice_id | ri_entropy (0.447 from 20% orphans) dominates via max aggregation; confirm_relationship only reduces semantic component |
-| type_fidelity | journal_lines.debit | add_type_pattern is for date formats, not numeric corruption |
+| Detector | Target | Action | Pre | Post | Expected |
+|---|---|---|---|---|---|
+| temporal_entropy | payments.date | add_type_pattern | 0.800 | ~0 | <= 0.2 |
+| type_fidelity | journal_lines.debit | set_column_type | 0.585 | 0.100 | <= 0.1 |
+
+### xfail (fix action doesn't address root cause)
+
+| Detector | Target | Action | Why |
+|---|---|---|---|
+| temporal_entropy | payments.date | set_timestamp_role | Column already marked as timestamp; the issue is type mismatch (VARCHAR from corrupt dates). add_type_pattern (Phase 3) is the real fix. |
+| relationship_entropy | payments.invoice_id | confirm_relationship | ri_entropy (0.447 from 20% orphans) dominates via max aggregation; confirm_relationship only reduces semantic component. accept_finding (Phase 1) is the working fix path. |
 
 ### Fix system architecture
 
-The calibration runner bypasses the scheduler entirely for fix re-measurement.
-The scheduler's `_available_analyses()` only counts COMPLETED phases, but
-copied output has SKIPPED phases. Instead, `run_fix_pipeline()`:
+The calibration runner supports three fix phases:
+
+**Phase 1+2 (gate-only):** Config/metadata fixes that only need gate
+re-measurement. Applies fixes then calls `measure_at_gate()` directly.
+
+**Phase 3 (phase re-run):** Config fixes to typing.yaml or relationships.yaml
+that require the pipeline to re-run from the affected phase. The runner:
 
 1. Copies output to `-fixed/` directory
-2. Applies config fixes (ConfigInterpreter → YAML) and metadata fixes
-   (MetadataInterpreter → DB) in a single session
-3. Calls `measure_at_gate()` directly with all Zone 1 analyses
-4. Persists gate results to PhaseLog
+2. Cascade-cleans affected phase + all downstream phases
+3. Applies config fixes (typing.yaml, thresholds.yaml) before re-run
+4. Re-runs pipeline from the cleaned phase through quality_review
+5. Applies metadata fixes on the rebuilt DB, then re-measures gate
+6. Persists gate results to PhaseLog
+
+Key constraint: config fixes must be applied BEFORE pipeline re-run (typing
+needs forced_types/patterns). Metadata fixes must be applied AFTER (cascade
+cleanup deletes the rows that metadata fixes target).
 
 ## Backlog
 

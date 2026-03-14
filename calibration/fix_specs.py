@@ -5,12 +5,13 @@ fix is applied, score drops. Specs are used by test_fix_calibration.py to
 parametrize end-to-end fix tests.
 
 Phase 1: accept_finding fixes (config-only, quality_review re-run)
-Phase 2: semantic/typing/relationship fixes (earlier phase re-runs, LLM calls)
+Phase 2: metadata fixes (direct DB update, no phase re-run needed)
+Phase 3: config fixes requiring earlier phase re-runs (typing, relationships)
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from dataraum.pipeline.fixes.models import FixDocument
@@ -32,7 +33,7 @@ class FixSpec:
 
     @property
     def test_id(self) -> str:
-        return f"{self.detector_id}:{self.table}.{self.column}"
+        return f"{self.detector_id}:{self.table}.{self.column}:{self.action}"
 
 
 def _accept_finding_doc(
@@ -55,6 +56,59 @@ def _accept_finding_doc(
             "value": f"{table}.{column}",
         },
         description=f"accept_finding: {table}.{column} for {detector_id}",
+    )
+
+
+def _set_column_type_doc(
+    table: str,
+    column: str,
+    target_type: str,
+) -> FixDocument:
+    """Build a FixDocument for set_column_type action (config target)."""
+    return FixDocument(
+        target="config",
+        action="set_column_type",
+        table_name=table,
+        column_name=column,
+        dimension="structural.types.type_fidelity",
+        payload={
+            "config_path": "phases/typing.yaml",
+            "key_path": ["overrides", "forced_types"],
+            "operation": "merge",
+            "value": {f"{table}.{column}": {"target_type": target_type}},
+        },
+        description=f"set_column_type: {table}.{column} → {target_type}",
+    )
+
+
+def _add_type_pattern_doc(
+    table: str,
+    column: str,
+    pattern_name: str,
+    pattern: str,
+    standardization_expr: str,
+    inferred_type: str = "DATE",
+) -> FixDocument:
+    """Build a FixDocument for add_type_pattern action (config target)."""
+    return FixDocument(
+        target="config",
+        action="add_type_pattern",
+        table_name=table,
+        column_name=column,
+        dimension="semantic.temporal",
+        payload={
+            "config_path": "phases/typing.yaml",
+            "key_path": ["overrides", "patterns"],
+            "operation": "merge",
+            "value": {
+                pattern_name: {
+                    "pattern": pattern,
+                    "standardization_expr": standardization_expr,
+                    "inferred_type": inferred_type,
+                },
+            },
+        },
+        description=f"add_type_pattern: {pattern_name} for {table}.{column}",
     )
 
 
@@ -122,6 +176,19 @@ PHASE1_FIX_SPECS: list[FixSpec] = [
             ),
         ],
         expected_max_score=0.1,
+    ),
+    FixSpec(
+        detector_id="relationship_entropy",
+        table="payments",
+        column="invoice_id",
+        action="accept_finding",
+        fix_documents=[
+            _accept_finding_doc(
+                "relationship_entropy", "payments", "invoice_id",
+                "structural.relations.relationship_quality",
+            ),
+        ],
+        expected_max_score=0.2,
     ),
 ]
 
@@ -202,40 +269,75 @@ PHASE2_FIX_SPECS: list[FixSpec] = [
         requires_rerun="semantic",
         phase=2,
         xfail_reason=(
-            "Column already identified as timestamp by semantic analysis; "
-            "the issue is type mismatch (VARCHAR from corrupt dates) — "
-            "fix requires add_type_pattern or data fix, not set_timestamp_role"
+            "Column already marked as timestamp; the issue is type mismatch "
+            "(VARCHAR from corrupt dates) — set_timestamp_role is a no-op. "
+            "See add_type_pattern spec in Phase 3 for the real fix."
         ),
+    ),
+]
+
+# ---------------------------------------------------------------------------
+# Phase 3: config fixes requiring earlier phase re-runs
+# These write to phase config (e.g. typing.yaml) and need the pipeline to
+# re-run from that phase. The runner cleans the affected phase, then runs
+# the pipeline through quality_review.
+# ---------------------------------------------------------------------------
+
+PHASE3_FIX_SPECS: list[FixSpec] = [
+    FixSpec(
+        detector_id="temporal_entropy",
+        table="payments",
+        column="date",
+        action="add_type_pattern",
+        fix_documents=[
+            _add_type_pattern_doc(
+                table="payments",
+                column="date",
+                pattern_name="mon_dd_yyyy",
+                pattern=r"^[A-Za-z]{3}\s\d{1,2},\s\d{4}$",
+                standardization_expr='STRPTIME("{col}", \'%b %d, %Y\')',
+                inferred_type="DATE",
+            ),
+            _add_type_pattern_doc(
+                table="payments",
+                column="date",
+                pattern_name="epoch_seconds",
+                pattern=r"^\d{10,11}$",
+                standardization_expr='CAST(to_timestamp(TRY_CAST("{col}" AS BIGINT)) AS DATE)',
+                inferred_type="DATE",
+            ),
+        ],
+        expected_max_score=0.2,
+        requires_rerun="typing",
+        phase=3,
+    ),
+    FixSpec(
+        detector_id="type_fidelity",
+        table="journal_lines",
+        column="debit",
+        action="set_column_type",
+        fix_documents=[
+            _set_column_type_doc("journal_lines", "debit", "VARCHAR"),
+        ],
+        expected_max_score=0.1,
+        requires_rerun="typing",
+        phase=3,
     ),
     FixSpec(
         detector_id="relationship_entropy",
         table="payments",
         column="invoice_id",
         action="confirm_relationship",
-        fix_documents=[],  # Resolver can't find Relationship row for this column
+        fix_documents=[],
         expected_max_score=0.3,
         requires_rerun="relationships",
-        phase=2,
+        phase=3,
         xfail_reason=(
             "Orphan rate (ri_entropy=0.447 from sqrt-boosted 20%) dominates "
             "via max aggregation; confirm_relationship only reduces semantic "
-            "component (already below ri) — fix requires data repair"
-        ),
-    ),
-    FixSpec(
-        detector_id="type_fidelity",
-        table="journal_lines",
-        column="debit",
-        action="add_type_pattern",
-        fix_documents=[],  # No metadata fix — needs typing phase re-run
-        expected_max_score=0.3,
-        requires_rerun="typing",
-        phase=2,
-        xfail_reason=(
-            "add_type_pattern is for date format issues, not corrupt_types "
-            "injection (numeric corruption)"
+            "component — accept_finding is the working fix path (Phase 1)"
         ),
     ),
 ]
 
-ZONE1_FIX_SPECS: list[FixSpec] = PHASE1_FIX_SPECS + PHASE2_FIX_SPECS
+ZONE1_FIX_SPECS: list[FixSpec] = PHASE1_FIX_SPECS + PHASE2_FIX_SPECS + PHASE3_FIX_SPECS

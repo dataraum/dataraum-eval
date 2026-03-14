@@ -174,14 +174,31 @@ def apply_fix_documents(
     print(f"[eval] Applied {len(fix_docs)} fix(es)")
 
 
+def _needs_phase_rerun(fix_specs: list) -> set[str]:
+    """Return set of phases that need re-running (not just gate re-measurement).
+
+    Phases like 'quality_review' and 'semantic' don't need a real re-run —
+    measure_at_gate() handles them by re-reading config/metadata directly.
+    Earlier phases like 'typing' need actual pipeline re-execution.
+    """
+    gate_only_phases = {"quality_review", "semantic"}
+    return {
+        spec.requires_rerun
+        for spec in fix_specs
+        if spec.fix_documents and spec.requires_rerun not in gate_only_phases
+    }
+
+
 def run_fix_pipeline(strategy: str, fix_specs: list | None = None) -> None:
     """Apply fixes and re-measure gate scores on fixed output.
 
-    Applies all fix documents (config writes + metadata updates) within
-    a single DB session, then calls measure_at_gate() directly with the
-    full set of Zone 1 analyses. Bypasses the scheduler — its skip logic
-    marks existing phases as SKIPPED which excludes them from
-    _available_analyses(), but we know the data is there.
+    For config/metadata fixes that only need gate re-measurement (Phase 1+2):
+    applies fixes then calls measure_at_gate() directly, bypassing the
+    scheduler (its skip logic breaks on copied output).
+
+    For fixes requiring earlier phase re-runs (Phase 3, e.g. typing):
+    applies config fixes, cleans the affected phases, then re-runs the
+    pipeline from scratch so the scheduler picks up the changes.
     """
     if fix_specs is None:
         from calibration.fix_specs import ZONE1_FIX_SPECS
@@ -216,21 +233,90 @@ def run_fix_pipeline(strategy: str, fix_specs: list | None = None) -> None:
             if not source:
                 raise RuntimeError("No source found in fixed output DB")
 
-            # Apply all fixes (config writes to YAML, metadata updates DB)
-            all_docs = [doc for spec in fix_specs for doc in spec.fix_documents]
+            rerun_phases = _needs_phase_rerun(fix_specs)
+
+            # Split fixes: config fixes can be applied before pipeline re-run,
+            # metadata fixes must wait until after (cascade cleanup deletes the rows)
+            config_docs = [d for s in fix_specs for d in s.fix_documents if d.target == "config"]
+            metadata_docs = [d for s in fix_specs for d in s.fix_documents if d.target != "config"]
+
+            if rerun_phases:
+                # 1. Cascade-clean the affected phase + all downstream
+                from dataraum.pipeline.cleanup import cleanup_phase_cascade
+
+                for phase_name in rerun_phases:
+                    print(f"[eval] Cascade-cleaning from phase: {phase_name}")
+                    cleaned = cleanup_phase_cascade(
+                        phase_name, source.source_id,
+                        session, manager._duckdb_conn,  # noqa: SLF001
+                    )
+                    print(f"[eval] Cleaned phases: {cleaned}")
+
+                # 2. Apply config fixes (typing.yaml, thresholds.yaml) before re-run
+                if config_docs:
+                    apply_fix_documents(config_docs, config_root, session=session)
+                    session.flush()
+                session.commit()
+                clear_entropy_config_cache()
+
+                # 3. Re-run pipeline — typing re-executes with forced_types,
+                #    downstream phases (statistics → semantic → quality_review) rebuild
+                print(f"[eval] Re-running pipeline for phases: {rerun_phases}")
+                manager.close()
+                reset_config_root()
+                set_config_root(config_root)
+
+                # Use original data dir as source_path so import phase
+                # can resolve the source (it will skip — raw tables exist)
+                data_dir = DATA_DIR / strategy
+                rerun_result = pipeline_run(RunConfig(
+                    source_path=data_dir if data_dir.exists() else None,
+                    output_dir=fixed_dir,
+                    target_phase="quality_review",
+                    gate_mode=GateMode.SKIP,
+                    contract="aggregation_safe",
+                ))
+                run_result = rerun_result.unwrap()
+                print(f"[eval] Re-run {'succeeded' if run_result.success else 'FAILED'}")
+
+                # 4. Apply metadata fixes on freshly rebuilt DB, then re-measure gate
+                if metadata_docs:
+                    reset_config_root()
+                    set_config_root(config_root)
+                    clear_entropy_config_cache()
+                    conn_config2 = ConnectionConfig.for_directory(fixed_dir)
+                    manager2 = ConnectionManager(conn_config2)
+                    manager2.initialize()
+                    try:
+                        with manager2.session_scope() as session2:
+                            apply_fix_documents(metadata_docs, config_root, session=session2)
+                            session2.flush()
+
+                            available = {
+                                AnalysisKey.TYPING, AnalysisKey.STATISTICS,
+                                AnalysisKey.RELATIONSHIPS, AnalysisKey.SEMANTIC,
+                            }
+                            gate_result = measure_at_gate(
+                                session2, manager2._duckdb_conn,  # noqa: SLF001
+                                source.source_id, available,
+                            )
+                            _persist_gate_to_phase_log(session2, source.source_id, gate_result)
+                            session2.commit()
+                            print("[eval] Post-rerun metadata fixes applied + gate re-measured")
+                    finally:
+                        manager2.close()
+                return
+
+            # No phase re-run needed — apply all fixes and measure at gate
+            all_docs = config_docs + metadata_docs
             if all_docs:
                 apply_fix_documents(all_docs, config_root, session=session)
                 session.flush()
-
-            # Clear caches after config writes so detectors read fresh config
             clear_entropy_config_cache()
 
-            # All Zone 1 analyses — these phases ran in the original pipeline
             available = {
-                AnalysisKey.TYPING,
-                AnalysisKey.STATISTICS,
-                AnalysisKey.RELATIONSHIPS,
-                AnalysisKey.SEMANTIC,
+                AnalysisKey.TYPING, AnalysisKey.STATISTICS,
+                AnalysisKey.RELATIONSHIPS, AnalysisKey.SEMANTIC,
             }
 
             print(f"[eval] Measuring gate scores: {fixed_dir}")
@@ -249,7 +335,10 @@ def run_fix_pipeline(strategy: str, fix_specs: list | None = None) -> None:
     finally:
         reset_config_root()
         clear_entropy_config_cache()
-        manager.close()
+        try:
+            manager.close()
+        except Exception:
+            pass  # Already closed for re-run path
 
 
 def _persist_gate_to_phase_log(
