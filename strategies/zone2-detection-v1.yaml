@@ -1,0 +1,59 @@
+name: zone2-detection-v1
+level: medium
+description: "Zone 2 calibration — clean types, drift and dimensional injections for Gate 2 recall"
+
+# Zone 2 tests detectors that need enrichment analyses (enriched_views,
+# correlations, slicing, temporal_slice_analysis). Type-breaking injections
+# from Zone 1 are omitted so DATE columns remain properly typed and
+# temporal/dimensional analysis can work.
+
+injections:
+  # Temporal drift — bank_transactions.amount shifts after mid-year
+  # Requires: temporal_slice_analysis → DRIFT_SUMMARIES
+  - injector: inject_temporal_drift
+    table: bank_transactions
+    detector_id: temporal_drift
+    params:
+      value_col: amount
+      time_col: date
+      shift_date: "2025-07-01"
+      shift_factor: 1.35
+      severity: medium
+
+  # Dimensional entropy — debit/credit mutual exclusivity
+  # Requires: slicing → SLICE_VARIANCE
+  - injector: create_mutual_exclusivity
+    table: journal_lines
+    detector_id: dimensional_entropy
+    params:
+      col_a: debit
+      col_b: credit
+      severity: low
+
+  # Benford — round numbers in bank transactions (Zone 1 detector, but
+  # included to verify Zone 1 detectors still fire at Gate 2)
+  - injector: break_benford
+    table: bank_transactions
+    detector_id: benford
+    params:
+      col: amount
+      method: round_numbers
+      severity: medium
+
+  # Null ratio — Zone 1 detector baseline check at Gate 2
+  - injector: introduce_nulls
+    table: journal_lines
+    detector_id: null_ratio
+    params:
+      col: cost_center
+      ratio: 0.40
+      severity: high
+
+  # Relationship entropy — orphaned payments
+  - injector: break_referential_integrity
+    table: payments
+    detector_id: relationship_entropy
+    params:
+      fk_col: invoice_id
+      ratio: 0.20
+      severity: high

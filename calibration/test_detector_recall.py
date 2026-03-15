@@ -47,6 +47,18 @@ KNOWN_MISALIGNED = frozenset({
     "unit_entropy",  # Measures metadata, injection corrupts values
 })
 
+# Injections where the detector can't see the specific target column.
+# Key: (detector_id, table, column). Reason documented inline.
+KNOWN_DETECTOR_GAPS: dict[tuple[str, str, str], str] = {
+    # temporal_drift analyzer only processes VARCHAR columns (JS divergence
+    # on categorical distributions). Numeric value drift (mean/variance shift
+    # on DECIMAL amount) is invisible. Needs numeric drift analysis extension.
+    ("temporal_drift", "bank_transactions", "amount"): (
+        "analyzer hardcodes VARCHAR-only columns (analyzer.py:261); "
+        "numeric drift detection not yet implemented"
+    ),
+}
+
 
 def _injection_id(injection: dict[str, Any]) -> str:
     """Human-readable ID for parametrize."""
@@ -139,6 +151,11 @@ def test_injection_detected(
     # Mark known-misaligned injections as expected failures
     if detector in KNOWN_MISALIGNED:
         pytest.xfail(f"{detector} injection is known-misaligned (see CLAUDE.md)")
+
+    # Mark specific detector+target gaps as expected failures
+    gap_key = (detector, table, column)
+    if gap_key in KNOWN_DETECTOR_GAPS:
+        pytest.xfail(KNOWN_DETECTOR_GAPS[gap_key])
 
     # Pipeline lowercases column names during import
     column_lc = column.lower()
