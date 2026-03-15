@@ -49,15 +49,7 @@ KNOWN_MISALIGNED = frozenset({
 
 # Injections where the detector can't see the specific target column.
 # Key: (detector_id, table, column). Reason documented inline.
-KNOWN_DETECTOR_GAPS: dict[tuple[str, str, str], str] = {
-    # temporal_drift analyzer only processes VARCHAR columns (JS divergence
-    # on categorical distributions). Numeric value drift (mean/variance shift
-    # on DECIMAL amount) is invisible. Needs numeric drift analysis extension.
-    ("temporal_drift", "bank_transactions", "amount"): (
-        "analyzer hardcodes VARCHAR-only columns (analyzer.py:261); "
-        "numeric drift detection not yet implemented"
-    ),
-}
+KNOWN_DETECTOR_GAPS: dict[tuple[str, str, str], str] = {}
 
 
 def _injection_id(injection: dict[str, Any]) -> str:
