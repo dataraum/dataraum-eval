@@ -1,16 +1,17 @@
 """Detector recall — does each detector find its known injection?
 
 For each injection in entropy_map.yaml, the corresponding detector must
-produce a score > DETECTION_THRESHOLD for the affected column. If it doesn't,
-the detector has a bug.
+produce a score > DETECTION_THRESHOLD for the affected target. Column-scoped
+detectors are checked per-column; table/view-scoped detectors are checked
+per-table or per-view.
 
 This is the core calibration test. A failing test means a detector is broken,
 not that the test needs weakening.
 
-Injections targeting detectors that don't run at Zone 1 (temporal_drift,
-dimensional_entropy, derived_value) or detectors that don't exist yet
-(cross_table_consistency, derived_value_consistency) are skipped — they
-are kept in the strategy for Zone 2+ testing.
+Zone 2 detectors (temporal_drift, dimensional_entropy, etc.) are skipped
+if the pipeline only ran through quality_review. Run through analysis_review
+to test them. Detectors that don't exist yet (cross_table_consistency,
+derived_value_consistency) are always skipped.
 """
 
 from __future__ import annotations
@@ -72,9 +73,52 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
         metafunc.parametrize("injection", injections, ids=ids)
 
 
+def _find_score(
+    table: str,
+    column: str,
+    detector: str,
+    pipeline_scores: dict[tuple[str, str, str], float],
+    pipeline_table_scores: dict[tuple[str, str], float],
+    pipeline_view_scores: dict[tuple[str, str], float],
+) -> float | None:
+    """Find a detector score across column, table, and view scopes."""
+    # Column-scoped: exact (table, column, detector) match
+    score = pipeline_scores.get((table, column, detector))
+    if score is not None:
+        return score
+
+    # Table-scoped: (table, detector) match
+    score = pipeline_table_scores.get((table, detector))
+    if score is not None:
+        return score
+
+    # View-scoped: any view matching this detector
+    for (_, d), s in pipeline_view_scores.items():
+        if d == detector:
+            return s
+
+    return None
+
+
+def _has_any_score(
+    detector: str,
+    pipeline_scores: dict[tuple[str, str, str], float],
+    pipeline_table_scores: dict[tuple[str, str], float],
+    pipeline_view_scores: dict[tuple[str, str], float],
+) -> bool:
+    """Check if a detector produced any score at any scope."""
+    return (
+        any(d == detector for _, _, d in pipeline_scores)
+        or any(d == detector for _, d in pipeline_table_scores)
+        or any(d == detector for _, d in pipeline_view_scores)
+    )
+
+
 def test_injection_detected(
     injection: dict[str, Any],
     pipeline_scores: dict[tuple[str, str, str], float],
+    pipeline_table_scores: dict[tuple[str, str], float],
+    pipeline_view_scores: dict[tuple[str, str], float],
     clean_pipeline_scores: dict[tuple[str, str, str], float],
 ) -> None:
     """Each known injection must produce an elevated score for the affected column."""
@@ -88,8 +132,7 @@ def test_injection_detected(
 
     # Zone 2 detectors: skip if pipeline didn't run through analysis_review
     if detector in ZONE_2_DETECTORS:
-        has_zone2_scores = any(d == detector for _, _, d in pipeline_scores)
-        if not has_zone2_scores:
+        if not _has_any_score(detector, pipeline_scores, pipeline_table_scores, pipeline_view_scores):
             pytest.skip(f"{detector} needs Zone 2 — run pipeline through analysis_review")
 
     # Mark known-misaligned injections as expected failures
@@ -103,7 +146,7 @@ def test_injection_detected(
     if "/" in column:
         cols = column_lc.split("/")
         scores = [
-            pipeline_scores.get((table, c, detector))
+            _find_score(table, c, detector, pipeline_scores, pipeline_table_scores, pipeline_view_scores)
             for c in cols
         ]
         best = max((s for s in scores if s is not None), default=None)
@@ -117,14 +160,13 @@ def test_injection_detected(
         )
         return
 
-    key = (table, column_lc, detector)
-    score = pipeline_scores.get(key)
+    score = _find_score(table, column_lc, detector, pipeline_scores, pipeline_table_scores, pipeline_view_scores)
     assert score is not None, (
         f"{detector} produced no score for {table}.{column} — "
         f"detector didn't run or doesn't cover this injection type"
     )
 
-    clean = clean_pipeline_scores.get(key, 0.0)
+    clean = clean_pipeline_scores.get((table, column_lc, detector), 0.0)
     delta = score - clean
 
     assert score > DETECTION_THRESHOLD, (

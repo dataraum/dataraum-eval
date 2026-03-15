@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -32,12 +33,23 @@ def _load_yaml(path: Path) -> dict[str, Any]:
         return yaml.safe_load(f)
 
 
-def _load_gate_scores(db_path: Path) -> dict[tuple[str, str, str], float]:
+@dataclass
+class GateScores:
+    """Gate scores from PhaseLog, split by detector scope."""
+
+    # Column-scoped: (table, column, detector_id) → score
+    column: dict[tuple[str, str, str], float] = field(default_factory=dict)
+    # Table-scoped: (table, detector_id) → score
+    table: dict[tuple[str, str], float] = field(default_factory=dict)
+    # View-scoped: (view_name, detector_id) → score
+    view: dict[tuple[str, str], float] = field(default_factory=dict)
+
+
+def _load_gate_scores(db_path: Path) -> GateScores:
     """Load detector scores from gate measurement persisted in PhaseLog.
 
     Tries analysis_review (Gate 2) first — it has all detectors (Zone 1 + Zone 2).
     Falls back to quality_review (Gate 1) which has Zone 1 detectors only.
-    Returns dict of (table, column, detector_id) -> score.
     """
     if not db_path.exists():
         pytest.skip(f"No pipeline output at {db_path} — run pipeline first")
@@ -63,14 +75,13 @@ def _load_gate_scores(db_path: Path) -> dict[tuple[str, str, str], float]:
         pytest.skip("No quality_review/analysis_review phase log found — run pipeline first")
 
     outputs = json.loads(row[0]) if isinstance(row[0], str) else row[0]
-    column_details = outputs.get("gate_column_details")
-    if column_details is None:
-        pytest.skip("No gate_column_details in quality_review outputs — pipeline may need re-run")
 
     # Map dimension_path → detector_id (e.g. "value.distribution.benford_compliance" → "benford")
     id_map = outputs.get("detector_id_map", {})
+    result = GateScores()
 
-    scores: dict[tuple[str, str, str], float] = {}
+    # Column-scoped scores
+    column_details = outputs.get("gate_column_details", {})
     for dim_path, targets in column_details.items():
         detector_id = id_map.get(dim_path, dim_path.rsplit(".", 1)[-1])
         for target, score in targets.items():
@@ -80,11 +91,32 @@ def _load_gate_scores(db_path: Path) -> dict[tuple[str, str, str], float]:
             if len(parts) == 2:
                 table, column = parts
                 key = (table, column, detector_id)
-                # Keep highest score if multiple entries exist
-                if key not in scores or score > scores[key]:
-                    scores[key] = score
+                if key not in result.column or score > result.column[key]:
+                    result.column[key] = score
 
-    return scores
+    # Table-scoped scores
+    table_details = outputs.get("gate_table_details", {})
+    for dim_path, targets in table_details.items():
+        detector_id = id_map.get(dim_path, dim_path.rsplit(".", 1)[-1])
+        for target, score in targets.items():
+            # target: "table:table_name"
+            table = target.removeprefix("table:")
+            key = (table, detector_id)
+            if key not in result.table or score > result.table[key]:
+                result.table[key] = score
+
+    # View-scoped scores
+    view_details = outputs.get("gate_view_details", {})
+    for dim_path, targets in view_details.items():
+        detector_id = id_map.get(dim_path, dim_path.rsplit(".", 1)[-1])
+        for target, score in targets.items():
+            # target: "view:view_name"
+            view_name = target.removeprefix("view:")
+            key = (view_name, detector_id)
+            if key not in result.view or score > result.view[key]:
+                result.view[key] = score
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -147,9 +179,27 @@ def injections(entropy_map: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 @pytest.fixture(scope="session")
-def pipeline_scores(strategy_output_dir: Path) -> dict[tuple[str, str, str], float]:
-    """Detector scores from gate measurement for the current strategy."""
+def gate_scores(strategy_output_dir: Path) -> GateScores:
+    """All detector scores from gate measurement for the current strategy."""
     return _load_gate_scores(strategy_output_dir / "metadata.db")
+
+
+@pytest.fixture(scope="session")
+def pipeline_scores(gate_scores: GateScores) -> dict[tuple[str, str, str], float]:
+    """Column-scoped detector scores (backwards compatible)."""
+    return gate_scores.column
+
+
+@pytest.fixture(scope="session")
+def pipeline_table_scores(gate_scores: GateScores) -> dict[tuple[str, str], float]:
+    """Table-scoped detector scores: (table, detector_id) → score."""
+    return gate_scores.table
+
+
+@pytest.fixture(scope="session")
+def pipeline_view_scores(gate_scores: GateScores) -> dict[tuple[str, str], float]:
+    """View-scoped detector scores: (view_name, detector_id) → score."""
+    return gate_scores.view
 
 
 # ---------------------------------------------------------------------------
@@ -171,8 +221,8 @@ def fixed_output_dir(strategy_name: str) -> Path:
 
 @pytest.fixture(scope="session")
 def post_fix_scores(fixed_output_dir: Path) -> dict[tuple[str, str, str], float]:
-    """Detector scores after fix application."""
-    return _load_gate_scores(fixed_output_dir / "metadata.db")
+    """Detector scores after fix application (column-scoped)."""
+    return _load_gate_scores(fixed_output_dir / "metadata.db").column
 
 
 # ---------------------------------------------------------------------------
@@ -181,9 +231,15 @@ def post_fix_scores(fixed_output_dir: Path) -> dict[tuple[str, str, str], float]
 
 
 @pytest.fixture(scope="session")
-def clean_pipeline_scores() -> dict[tuple[str, str, str], float]:
-    """Detector scores from clean pipeline output (no injections)."""
+def clean_gate_scores() -> GateScores:
+    """All detector scores from clean pipeline output (no injections)."""
     return _load_gate_scores(OUTPUT_DIR / "clean" / "metadata.db")
+
+
+@pytest.fixture(scope="session")
+def clean_pipeline_scores(clean_gate_scores: GateScores) -> dict[tuple[str, str, str], float]:
+    """Clean column-scoped scores (backwards compatible)."""
+    return clean_gate_scores.column
 
 
 @pytest.fixture(scope="session")
