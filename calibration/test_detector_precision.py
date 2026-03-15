@@ -31,7 +31,8 @@ def _load_baseline() -> dict[str, float]:
         return {}
     with open(BASELINE_PATH) as f:
         data = yaml.safe_load(f) or {}
-    return data.get("scores", {})
+    result: dict[str, float] = data.get("scores", {})
+    return result
 
 
 def _score_key(table: str, column: str, detector: str) -> str:
@@ -91,7 +92,7 @@ def test_clean_scores_match_baseline(
             "pytest calibration/test_detector_precision.py "
             "--regen-baseline"
         )
-        assert False, "\n".join(lines)
+        raise AssertionError("\n".join(lines))
 
 
 def test_clean_average_below_threshold(

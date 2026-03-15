@@ -61,7 +61,8 @@ def _get_injections(strategy: str) -> list[dict[str, Any]]:
         return []
     with open(path) as f:
         data = yaml.safe_load(f)
-    return data.get("injections", [])
+    result: list[dict[str, Any]] = data.get("injections", [])
+    return result
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:

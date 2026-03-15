@@ -30,7 +30,8 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 def _load_yaml(path: Path) -> dict[str, Any]:
     with open(path) as f:
-        return yaml.safe_load(f)
+        result: dict[str, Any] = yaml.safe_load(f)
+    return result
 
 
 @dataclass
@@ -100,10 +101,10 @@ def _load_gate_scores(db_path: Path) -> GateScores:
         detector_id = id_map.get(dim_path, dim_path.rsplit(".", 1)[-1])
         for target, score in targets.items():
             # target: "table:table_name"
-            table = target.removeprefix("table:")
-            key = (table, detector_id)
-            if key not in result.table or score > result.table[key]:
-                result.table[key] = score
+            tbl = target.removeprefix("table:")
+            tbl_key = (tbl, detector_id)
+            if tbl_key not in result.table or score > result.table[tbl_key]:
+                result.table[tbl_key] = score
 
     # View-scoped scores
     view_details = outputs.get("gate_view_details", {})
@@ -111,10 +112,10 @@ def _load_gate_scores(db_path: Path) -> GateScores:
         detector_id = id_map.get(dim_path, dim_path.rsplit(".", 1)[-1])
         for target, score in targets.items():
             # target: "view:view_name"
-            view_name = target.removeprefix("view:")
-            key = (view_name, detector_id)
-            if key not in result.view or score > result.view[key]:
-                result.view[key] = score
+            vw = target.removeprefix("view:")
+            vw_key = (vw, detector_id)
+            if vw_key not in result.view or score > result.view[vw_key]:
+                result.view[vw_key] = score
 
     return result
 
@@ -127,7 +128,8 @@ def _load_gate_scores(db_path: Path) -> GateScores:
 @pytest.fixture(scope="session")
 def strategy_name(request: pytest.FixtureRequest) -> str:
     """The strategy being tested."""
-    return request.config.getoption("--strategy")
+    name: str = request.config.getoption("--strategy")
+    return name
 
 
 @pytest.fixture(scope="session")
@@ -175,7 +177,8 @@ def ground_truth(strategy_data_dir: Path) -> dict[str, Any]:
 @pytest.fixture(scope="session")
 def injections(entropy_map: dict[str, Any]) -> list[dict[str, Any]]:
     """List of injection dicts from entropy_map."""
-    return entropy_map.get("injections", [])
+    result: list[dict[str, Any]] = entropy_map.get("injections", [])
+    return result
 
 
 @pytest.fixture(scope="session")

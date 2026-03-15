@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
@@ -97,7 +97,7 @@ def generate_report(strategy: str) -> Path:
         if v > threshold
     ]
 
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
     report = {
         "strategy": strategy,
@@ -117,7 +117,8 @@ def generate_report(strategy: str) -> Path:
         yaml.dump(report, f, default_flow_style=False, sort_keys=False)
 
     print(f"Report: {path}")
-    print(f"Recall: {detected}/{testable} ({report['summary']['recall_rate']:.0%})")
+    recall_rate = round(detected / testable, 2) if testable else 0
+    print(f"Recall: {detected}/{testable} ({recall_rate:.0%})")
     print(f"Clean false alarms: {len(false_alarms)}/{len(clean_scores)}")
     return path
 

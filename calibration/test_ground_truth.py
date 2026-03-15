@@ -37,8 +37,8 @@ def test_invariants_hold(ground_truth: dict[str, Any]) -> None:
 @pytest.mark.skip(reason="Requires MCP query integration — DAT-133 Phase 2")
 def test_revenue_matches_ground_truth(ground_truth: dict[str, Any]) -> None:
     """Total revenue from pipeline query should match ground truth within tolerance."""
-    expected = ground_truth["annual"]["total_revenue"]
     # TODO: Use MCP query tool to compute actual revenue
+    # expected = ground_truth["annual"]["total_revenue"]
     # actual = mcp_query("SELECT SUM(amount) FROM invoices WHERE status != 'cancelled'")
     # tolerance = 0.01  # 1%
     # assert abs(actual - expected) / expected < tolerance

@@ -13,6 +13,9 @@ dataraum = { path = "vendor/dataraum-context", editable = true }
 dev = [
     "pytest>=8.0",
     "pyyaml>=6.0",
+    "ruff>=0.2.0",
+    "mypy>=1.8.0",
+    "python-dotenv>=1.0.0",
 ]
 
 [tool.pytest.ini_options]
@@ -25,3 +28,30 @@ packages = ["calibration"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["calibration"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+warn_return_any = true
+warn_unused_ignores = false
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = [
+    "dataraum.*",
+    "testdata.*",
+    "yaml.*",
+    "dotenv.*",
+]
+ignore_missing_imports = true

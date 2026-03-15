@@ -21,6 +21,10 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from calibration.fix_specs import FixSpec
 
 from dotenv import load_dotenv
 
@@ -159,7 +163,7 @@ def copy_output_for_fixes(strategy: str) -> Path:
     return dst
 
 
-def run_fix_pipeline(strategy: str, fix_specs: list | None = None) -> None:
+def run_fix_pipeline(strategy: str, fix_specs: list[FixSpec] | None = None) -> None:
     """Apply fixes and re-measure gate scores on fixed output.
 
     Delegates to ``dataraum.pipeline.fixes.api.apply_fixes`` which handles
