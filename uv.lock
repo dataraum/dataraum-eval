@@ -247,7 +247,6 @@ dev = [
     { name = "types-pyyaml", specifier = ">=6.0.12.20250915" },
     { name = "zensical", specifier = ">=0.0.24" },
 ]
-e2e = [{ name = "dataraum-testdata", editable = "vendor/dataraum-testdata" }]
 
 [[package]]
 name = "dataraum-eval"
