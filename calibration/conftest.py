@@ -35,7 +35,8 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 def _load_gate_scores(db_path: Path) -> dict[tuple[str, str, str], float]:
     """Load detector scores from gate measurement persisted in PhaseLog.
 
-    Reads gate_column_details from the quality_review PhaseLog outputs.
+    Tries analysis_review (Gate 2) first — it has all detectors (Zone 1 + Zone 2).
+    Falls back to quality_review (Gate 1) which has Zone 1 detectors only.
     Returns dict of (table, column, detector_id) -> score.
     """
     if not db_path.exists():
@@ -43,18 +44,23 @@ def _load_gate_scores(db_path: Path) -> dict[tuple[str, str, str], float]:
 
     conn = sqlite3.connect(str(db_path))
     try:
-        row = conn.execute(
-            "SELECT outputs FROM phase_logs "
-            "WHERE phase_name = 'quality_review' "
-            "ORDER BY completed_at DESC LIMIT 1"
-        ).fetchone()
+        # Try analysis_review first (Gate 2 — Zone 1 + Zone 2 scores)
+        row = None
+        for gate in ("analysis_review", "quality_review"):
+            row = conn.execute(
+                "SELECT outputs FROM phase_logs "
+                f"WHERE phase_name = '{gate}' "
+                "ORDER BY completed_at DESC LIMIT 1"
+            ).fetchone()
+            if row is not None and row[0] is not None:
+                break
     except sqlite3.OperationalError:
         pytest.skip("phase_logs table not found in metadata.db")
     finally:
         conn.close()
 
     if row is None or row[0] is None:
-        pytest.skip("No quality_review phase log found — run pipeline first")
+        pytest.skip("No quality_review/analysis_review phase log found — run pipeline first")
 
     outputs = json.loads(row[0]) if isinstance(row[0], str) else row[0]
     column_details = outputs.get("gate_column_details")

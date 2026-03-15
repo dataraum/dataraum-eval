@@ -26,15 +26,19 @@ DETECTION_THRESHOLD = 0.3
 
 EVAL_ROOT = Path(__file__).parent.parent
 
-# Detectors that don't run at Zone 1 (need Zone 2+ analyses or don't exist)
-NOT_AT_ZONE_1 = frozenset({
+# Zone 2 detectors — need enrichment analyses, skip if pipeline only ran to quality_review
+ZONE_2_DETECTORS = frozenset({
     "temporal_drift",       # Zone 2: needs DRIFT_SUMMARIES
     "dimensional_entropy",  # Zone 2: needs SLICE_VARIANCE
     "derived_value",        # Zone 2: needs CORRELATION
     "column_quality",       # Zone 2: needs COLUMN_QUALITY_REPORTS
     "dimension_coverage",   # Zone 2: needs ENRICHED_VIEW
-    "cross_table_consistency",    # Doesn't exist yet
-    "derived_value_consistency",  # Doesn't exist yet
+})
+
+# Detectors that don't exist yet — always skip
+NOT_IMPLEMENTED = frozenset({
+    "cross_table_consistency",
+    "derived_value_consistency",
 })
 
 # Detectors where the injection is known-misaligned (documents the gap)
@@ -78,9 +82,15 @@ def test_injection_detected(
     column = injection["target_column"]
     detector = injection["detector_id"]
 
-    # Skip detectors that don't run at Zone 1
-    if detector in NOT_AT_ZONE_1:
-        pytest.skip(f"{detector} not available at Zone 1")
+    # Always skip unimplemented detectors
+    if detector in NOT_IMPLEMENTED:
+        pytest.skip(f"{detector} not implemented yet")
+
+    # Zone 2 detectors: skip if pipeline didn't run through analysis_review
+    if detector in ZONE_2_DETECTORS:
+        has_zone2_scores = any(d == detector for _, _, d in pipeline_scores)
+        if not has_zone2_scores:
+            pytest.skip(f"{detector} needs Zone 2 — run pipeline through analysis_review")
 
     # Mark known-misaligned injections as expected failures
     if detector in KNOWN_MISALIGNED:

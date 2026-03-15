@@ -51,6 +51,15 @@ calibrate-fix-%: calibrate-%
 	uv run python -m calibration.runner $* --apply-fixes
 	uv run pytest calibration/test_fix_calibration.py --strategy $* -v
 
+# Zone 2: run pipeline through analysis_review (enrichment phases)
+pipeline-zone2-%:
+	uv run python -m calibration.runner $* --pipeline-only --target-phase analysis_review
+
+# Zone 2: full calibration (generate + pipeline through analysis_review + test)
+calibrate-zone2-%: generate-%
+	uv run python -m calibration.runner $* --pipeline-only --target-phase analysis_review
+	uv run pytest calibration/ --strategy $* -v
+
 # List available strategies
 list-strategies:
 	@ls strategies/*.yaml 2>/dev/null | xargs -I{} basename {} .yaml

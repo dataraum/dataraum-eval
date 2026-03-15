@@ -204,6 +204,8 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--generate-only", action="store_true")
     parser.add_argument("--pipeline-only", action="store_true")
+    parser.add_argument("--target-phase", default="quality_review",
+                        help="Pipeline target phase (default: quality_review, use analysis_review for Zone 2)")
     parser.add_argument("--apply-fixes", action="store_true",
                         help="Copy output, apply fixes, re-measure gate scores")
     args = parser.parse_args()
@@ -212,8 +214,8 @@ if __name__ == "__main__":
         copy_output_for_fixes(args.strategy)
         run_fix_pipeline(args.strategy)
     elif args.pipeline_only:
-        run_pipeline(args.strategy)
+        run_pipeline(args.strategy, target_phase=args.target_phase)
     elif args.generate_only:
         generate(args.strategy, seed=args.seed)
     else:
-        calibration_run(args.strategy, seed=args.seed)
+        calibration_run(args.strategy, seed=args.seed, target_phase=args.target_phase)
