@@ -245,6 +245,7 @@ dev = [
     { name = "ruff", specifier = ">=0.2.0" },
     { name = "scipy-stubs", specifier = ">=1.16.3.2" },
     { name = "types-pyyaml", specifier = ">=6.0.12.20250915" },
+    { name = "vulture", specifier = ">=2.15" },
     { name = "zensical", specifier = ">=0.0.24" },
 ]
 
