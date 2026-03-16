@@ -20,15 +20,11 @@ injections:
       shift_factor: 1.35
       severity: medium
 
-  # Dimensional entropy — debit/credit mutual exclusivity
-  # Requires: slicing → SLICE_VARIANCE
-  - injector: create_mutual_exclusivity
-    table: journal_lines
-    detector_id: dimensional_entropy
-    params:
-      col_a: debit
-      col_b: credit
-      severity: low
+  # NOTE: dimensional_entropy is NOT injection-testable. It measures
+  # undocumented cross-column patterns (e.g. debit/credit mutual exclusivity).
+  # Clean data already scores 0.7 because the pattern is natural in
+  # double-entry bookkeeping. The real test is fix calibration:
+  # document_business_rule → score drops.
 
   # Benford — round numbers in bank transactions (Zone 1 detector, but
   # included to verify Zone 1 detectors still fire at Gate 2)
@@ -48,6 +44,17 @@ injections:
       col: cost_center
       ratio: 0.40
       severity: high
+
+  # Derived value — formula drift in net_amount = debit - credit
+  # Requires: correlations → DerivedColumn detection
+  - injector: drift_formula
+    table: journal_lines
+    detector_id: derived_value
+    params:
+      derived_col: net_amount
+      source_cols: [debit, credit]
+      error_ratio: 0.10
+      severity: medium
 
   # Relationship entropy — orphaned payments
   - injector: break_referential_integrity

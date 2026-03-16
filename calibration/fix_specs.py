@@ -341,3 +341,123 @@ PHASE3_FIX_SPECS: list[FixSpec] = [
 ]
 
 ZONE1_FIX_SPECS: list[FixSpec] = PHASE1_FIX_SPECS + PHASE2_FIX_SPECS + PHASE3_FIX_SPECS
+
+
+# ---------------------------------------------------------------------------
+# Zone 2 Fix Specs
+# ---------------------------------------------------------------------------
+
+def _accept_finding_table_doc(
+    detector_id: str,
+    table: str,
+    dimension: str,
+) -> FixDocument:
+    """Build a FixDocument for accept_finding on a table-scoped detector."""
+    return FixDocument(
+        target="config",
+        action="accept_finding",
+        table_name=table,
+        column_name="",
+        dimension=dimension,
+        payload={
+            "config_path": "entropy/thresholds.yaml",
+            "key_path": ["detectors", detector_id, "accepted_tables"],
+            "operation": "append",
+            "value": table,
+        },
+        description=f"accept_finding: {table} for {detector_id}",
+    )
+
+
+# Phase 1: temporal_drift accept_finding (config-only, analysis_review re-measure)
+# TODO: Replace with real fix (document regime change or normalize data)
+ZONE2_PHASE1_FIX_SPECS: list[FixSpec] = [
+    FixSpec(
+        detector_id="temporal_drift",
+        table="bank_transactions",
+        column="amount",
+        action="accept_finding",
+        fix_documents=[
+            _accept_finding_doc(
+                "temporal_drift", "bank_transactions", "amount",
+                "value.temporal.temporal_drift",
+            ),
+        ],
+        expected_max_score=0.2,
+        requires_rerun="analysis_review",
+    ),
+]
+
+# Phase 3: data fix — recalculate derived column from its formula
+ZONE2_PHASE3_FIX_SPECS: list[FixSpec] = [
+    FixSpec(
+        detector_id="derived_value",
+        table="journal_lines",
+        # Score appears on debit (not net_amount) due to correlations dedup
+        # preferring sum (debit = net_amount + credit) over difference.
+        column="debit",
+        action="recalculate_derived_column",
+        fix_documents=[
+            FixDocument(
+                target="data",
+                action="recalculate_derived_column",
+                table_name="journal_lines",
+                column_name="net_amount",
+                dimension="computational.derived_values.formula_match",
+                payload={
+                    "sql": "UPDATE typed_journal_lines SET net_amount = debit - credit",
+                },
+                description="Recalculate net_amount = debit - credit to fix formula drift",
+            ),
+        ],
+        expected_max_score=0.05,
+        requires_rerun="correlations",
+        phase=3,
+    ),
+]
+
+# Phase 2: document_business_rule for dimensional_entropy (documentation debt)
+# Teaches the system that debit/credit mutual exclusivity is a known business rule
+ZONE2_PHASE2_FIX_SPECS: list[FixSpec] = [
+    FixSpec(
+        detector_id="dimensional_entropy",
+        table="journal_lines",
+        column="debit/credit",
+        action="document_business_rule",
+        fix_documents=[
+            FixDocument(
+                target="config",
+                action="document_business_rule",
+                table_name="journal_lines",
+                column_name="",
+                dimension="semantic.dimensional.cross_column_patterns",
+                payload={
+                    "config_path": "entropy/thresholds.yaml",
+                    "key_path": ["detectors", "dimensional_entropy", "documented_patterns"],
+                    "operation": "append",
+                    "value": {
+                        "table": "journal_lines",
+                        "columns": ["debit", "credit"],
+                        "pattern_type": "mutual_exclusivity",
+                        "description": (
+                            "Double-entry bookkeeping: each journal line has either "
+                            "a debit or a credit, never both."
+                        ),
+                    },
+                },
+                description=(
+                    "Document debit/credit mutual exclusivity as a known business "
+                    "rule in double-entry bookkeeping"
+                ),
+            ),
+        ],
+        # Score drops from 0.7 → 0.5: mutex pattern removed, but other
+        # undocumented patterns remain (correlated variance from net_amount).
+        # A complete fix would document all patterns.
+        expected_max_score=0.5,
+        requires_rerun="analysis_review",
+        phase=2,
+    ),
+]
+
+ZONE2_FIX_SPECS: list[FixSpec] = ZONE2_PHASE1_FIX_SPECS + ZONE2_PHASE2_FIX_SPECS + ZONE2_PHASE3_FIX_SPECS

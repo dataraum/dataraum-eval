@@ -102,7 +102,15 @@ def _find_score(
         if d == detector:
             return s
 
-    return None
+    # Column-scoped fallback: best score for this (table, detector) across all columns.
+    # Handles derived_value where injection on column A breaks a formula attributed
+    # to column B (correlations dedup picks sum over difference).
+    best = None
+    for (t, _, d), s in pipeline_scores.items():
+        if t == table and d == detector:
+            if best is None or s > best:
+                best = s
+    return best
 
 
 def _has_any_score(

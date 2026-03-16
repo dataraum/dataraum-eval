@@ -83,8 +83,29 @@ LLM-in-the-loop. Requires MCP `apply_fix` tool.
 
 ### Not testable at Zone 1
 
-temporal_drift, dimensional_entropy, cross_table_consistency,
-derived_value, derived_value_consistency — need Zone 2+ analyses.
+cross_table_consistency, derived_value_consistency — need Zone 3+.
+
+## Calibration Results (2026-03-16, zone2-detection-v1)
+
+**Zone 2 detection recall: 5/5 pass**
+
+### Injection-testable (score > 0.3)
+
+| Detector | Target | Score | Notes |
+|---|---|---|---|
+| temporal_drift | bank_transactions.amount | 1.000 | 1.35x shift after mid-year, JS divergence |
+| derived_value | journal_lines.net_amount | 0.708 | 10% formula drift, boost curve, scores on debit via formula chain |
+| benford (z1 baseline) | bank_transactions.amount | 0.833 | Zone 1 detector still fires at Gate 2 |
+| null_ratio (z1 baseline) | journal_lines.cost_center | 0.709 | Zone 1 detector still fires at Gate 2 |
+| relationship_entropy (z1 baseline) | payments.invoice_id | 0.447 | Zone 1 detector still fires at Gate 2 |
+
+### Documentation-debt detectors (tested via fix calibration, not injection recall)
+
+| Detector | Target | Clean | Injected | Notes |
+|---|---|---|---|---|
+| dimensional_entropy | journal_lines | 0.700 | 0.700 | Natural debit/credit mutex, zero injection delta |
+| column_quality | journal_lines | 0.300 | 0.420 | LLM grade noise, baseline at threshold |
+| dimension_coverage | enriched_payments | 0.000 | 0.200 | 20% FK orphans, below 0.3 threshold |
 
 ## Key Learnings
 
@@ -122,6 +143,19 @@ type conversion so non-matching values return NULL instead of erroring.
 The detector measures whether the pipeline identified and declared units
 (metadata completeness). The mix_units injection corrupts values. These are
 different things. The detector works — the injection doesn't test it.
+
+### Documentation-debt detectors need fix-loop testing
+dimensional_entropy and column_quality measure intrinsic data complexity, not
+injected corruption. Clean data scores 0.5-0.7 (dimensional_entropy) and
+0.28-0.30 (column_quality) because the patterns are real business rules.
+Injection delta is zero (dimensional_entropy) or noise (column_quality).
+The calibration test is: document_business_rule fix → score drops.
+
+### derived_value scoring uses boost + formula chain attribution
+The correlations dedup prefers sum over difference: `debit = net_amount + credit`
+wins over `net_amount = debit - credit`. Injecting drift on net_amount causes the
+debit formula to break, so the score appears on `debit`, not the injected column.
+The `_find_score` fallback handles this by checking all columns in the table.
 
 ## Strategy Design
 

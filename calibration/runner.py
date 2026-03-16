@@ -170,9 +170,13 @@ def run_fix_pipeline(strategy: str, fix_specs: list[FixSpec] | None = None) -> N
     fix application, cascade cleanup, pipeline re-run, and gate persistence.
     """
     if fix_specs is None:
-        from calibration.fix_specs import ZONE1_FIX_SPECS
+        from calibration.fix_specs import ZONE1_FIX_SPECS, ZONE2_FIX_SPECS
 
-        fix_specs = ZONE1_FIX_SPECS
+        # Use Zone 2 specs for zone2 strategies, Zone 1 otherwise
+        if "zone2" in strategy:
+            fix_specs = ZONE2_FIX_SPECS
+        else:
+            fix_specs = ZONE1_FIX_SPECS
 
     from dataraum.pipeline.fixes.api import apply_fixes
 
@@ -185,10 +189,14 @@ def run_fix_pipeline(strategy: str, fix_specs: list[FixSpec] | None = None) -> N
     all_docs = [d for spec in fix_specs for d in spec.fix_documents]
     data_dir = DATA_DIR / strategy
 
+    # Zone 2 fixes need analysis_review gate measurement
+    target_phase = "analysis_review" if "zone2" in strategy else "quality_review"
+
     result = apply_fixes(
         output_dir=fixed_dir,
         fix_documents=all_docs,
         source_path=data_dir if data_dir.exists() else None,
+        target_phase=target_phase,
     )
 
     if not result.success:

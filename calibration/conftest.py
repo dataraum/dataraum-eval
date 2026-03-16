@@ -223,9 +223,21 @@ def fixed_output_dir(strategy_name: str) -> Path:
 
 
 @pytest.fixture(scope="session")
-def post_fix_scores(fixed_output_dir: Path) -> dict[tuple[str, str, str], float]:
+def post_fix_gate_scores(fixed_output_dir: Path) -> GateScores:
+    """All gate scores after fix application."""
+    return _load_gate_scores(fixed_output_dir / "metadata.db")
+
+
+@pytest.fixture(scope="session")
+def post_fix_scores(post_fix_gate_scores: GateScores) -> dict[tuple[str, str, str], float]:
     """Detector scores after fix application (column-scoped)."""
-    return _load_gate_scores(fixed_output_dir / "metadata.db").column
+    return post_fix_gate_scores.column
+
+
+@pytest.fixture(scope="session")
+def post_fix_table_scores(post_fix_gate_scores: GateScores) -> dict[tuple[str, str], float]:
+    """Detector scores after fix application (table-scoped)."""
+    return post_fix_gate_scores.table
 
 
 # ---------------------------------------------------------------------------

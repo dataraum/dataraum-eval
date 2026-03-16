@@ -6,31 +6,52 @@ detector fires → fix applied → score drops.
 
 Phase 1: accept_finding fixes (config writes, re-measure at gate)
 Phase 2: metadata fixes (direct DB update, re-measure at gate)
+Phase 3: config fixes requiring phase re-run
 """
 
 from __future__ import annotations
 
 import pytest
 
-from calibration.fix_specs import ZONE1_FIX_SPECS, FixSpec
+from calibration.fix_specs import ZONE1_FIX_SPECS, ZONE2_FIX_SPECS, FixSpec
+
+# Table-scoped detectors — score lookup uses (table, detector) not (table, column, detector)
+TABLE_SCOPED_DETECTORS = frozenset({"dimensional_entropy", "column_quality"})
 
 
-def _get_fix_specs() -> list[FixSpec]:
+def _get_fix_specs(strategy: str) -> list[FixSpec]:
+    """Return fix specs matching the strategy."""
+    if "zone2" in strategy:
+        return ZONE2_FIX_SPECS
     return ZONE1_FIX_SPECS
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     """Dynamically parametrize fix tests from fix specs."""
     if "fix_spec" in metafunc.fixturenames:
-        specs = _get_fix_specs()
+        strategy = metafunc.config.getoption("--strategy", default="zone1-detection-v1")
+        specs = _get_fix_specs(strategy)
         ids = [spec.test_id for spec in specs]
         metafunc.parametrize("fix_spec", specs, ids=ids)
+
+
+def _lookup_score(
+    fix_spec: FixSpec,
+    column_scores: dict[tuple[str, str, str], float],
+    table_scores: dict[tuple[str, str], float],
+) -> float | None:
+    """Find score for a fix spec across column and table scopes."""
+    if fix_spec.detector_id in TABLE_SCOPED_DETECTORS:
+        return table_scores.get((fix_spec.table, fix_spec.detector_id))
+    return column_scores.get((fix_spec.table, fix_spec.column, fix_spec.detector_id))
 
 
 def test_fix_reduces_score(
     fix_spec: FixSpec,
     pipeline_scores: dict[tuple[str, str, str], float],
+    pipeline_table_scores: dict[tuple[str, str], float],
     post_fix_scores: dict[tuple[str, str, str], float],
+    post_fix_table_scores: dict[tuple[str, str], float],
 ) -> None:
     """Applying a fix must reduce the detector score for the affected column."""
     if fix_spec.xfail_reason:
@@ -39,15 +60,13 @@ def test_fix_reduces_score(
     if not fix_spec.fix_documents:
         pytest.skip(f"No fix documents defined for {fix_spec.test_id}")
 
-    key = (fix_spec.table, fix_spec.column, fix_spec.detector_id)
-
-    pre = pipeline_scores.get(key)
+    pre = _lookup_score(fix_spec, pipeline_scores, pipeline_table_scores)
     assert pre is not None, (
         f"No pre-fix score for {fix_spec.test_id} — "
-        f"detector didn't run or doesn't cover this column"
+        f"detector didn't run or doesn't cover this target"
     )
 
-    post = post_fix_scores.get(key)
+    post = _lookup_score(fix_spec, post_fix_scores, post_fix_table_scores)
     assert post is not None, (
         f"No post-fix score for {fix_spec.test_id} — "
         f"re-run may have failed"
