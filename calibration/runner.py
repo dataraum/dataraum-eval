@@ -32,7 +32,7 @@ from dotenv import load_dotenv
 EVAL_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(EVAL_ROOT / ".env")
 
-from dataraum.pipeline.runner import GateMode, RunConfig, RunResult  # noqa: E402
+from dataraum.pipeline.runner import RunConfig, RunResult  # noqa: E402
 from dataraum.pipeline.runner import run as pipeline_run  # noqa: E402
 from testdata.scenarios.runner import run_scenario  # noqa: E402
 
@@ -86,7 +86,6 @@ def run_pipeline(
     strategy: str,
     *,
     target_phase: str = "quality_review",
-    gate_mode: GateMode = GateMode.SKIP,
     contract: str | None = "aggregation_safe",
 ) -> RunResult:
     """Run the dataraum pipeline on generated test data.
@@ -106,7 +105,6 @@ def run_pipeline(
         source_path=data_dir,
         output_dir=output_dir,
         target_phase=target_phase,
-        gate_mode=gate_mode,
         contract=contract,
     )
 
@@ -124,7 +122,6 @@ def calibration_run(
     months: int | None = None,
     scenario: str = "month-end-close",
     target_phase: str = "quality_review",
-    gate_mode: GateMode = GateMode.SKIP,
     contract: str | None = "aggregation_safe",
 ) -> dict[str, Path | RunResult]:
     """Full calibration run: generate test data + run pipeline.
@@ -135,7 +132,6 @@ def calibration_run(
     run_result = run_pipeline(
         strategy,
         target_phase=target_phase,
-        gate_mode=gate_mode,
         contract=contract,
     )
     return {
