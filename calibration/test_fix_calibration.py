@@ -53,7 +53,11 @@ def test_fix_reduces_score(
     post_fix_scores: dict[tuple[str, str, str], float],
     post_fix_table_scores: dict[tuple[str, str], float],
 ) -> None:
-    """Applying a fix must reduce the detector score for the affected column."""
+    """Applying a fix must reduce the detector score for the affected column.
+
+    Exception: accept_finding keeps scores honest — the score stays unchanged
+    and the gate passes via contract overrule (accepted evidence flag).
+    """
     if fix_spec.xfail_reason:
         pytest.xfail(fix_spec.xfail_reason)
 
@@ -71,6 +75,15 @@ def test_fix_reduces_score(
         f"No post-fix score for {fix_spec.test_id} — "
         f"re-run may have failed"
     )
+
+    if fix_spec.action == "accept_finding":
+        # accept_finding keeps scores honest — contract overrule handles the gate.
+        # Score should be approximately unchanged (re-measurement may cause minor drift).
+        assert abs(post - pre) < 0.05, (
+            f"{fix_spec.test_id}: score changed unexpectedly after accept_finding — "
+            f"pre={pre:.3f} post={post:.3f} (expected honest score, ~unchanged)"
+        )
+        return
 
     assert post < pre, (
         f"{fix_spec.test_id}: score did not drop — "

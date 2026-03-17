@@ -83,7 +83,7 @@ LLM-in-the-loop. Requires MCP `apply_fix` tool.
 
 ### Not testable at Zone 1
 
-cross_table_consistency, derived_value_consistency — need Zone 3+.
+cross_table_consistency — needs Zone 3 (VALIDATION analysis). See zone-3 spec.
 
 ## Calibration Results (2026-03-16, zone2-detection-v1)
 
@@ -180,14 +180,17 @@ Raised rates vs baseline medium strategy:
 
 **Fix system: 8/10 pass, 2 xfail** (all expected)
 
-### Phase 1: accept_finding (config-only, re-measure at gate)
+### Phase 1: accept_finding (config-only, contract overrule)
 
-| Detector | Target | Pre | Post | Expected |
+Scores stay honest (no clamping). Gate passes via contract overrule:
+accepted targets are excluded from violation assessment.
+
+| Detector | Target | Pre | Post | Behavior |
 |---|---|---|---|---|
-| outlier_rate | journal_lines.credit | 1.000 | 0.200 | <= 0.2 |
-| benford | bank_transactions.amount | 0.803 | 0.200 | <= 0.2 |
-| null_ratio | journal_lines.cost_center | 0.711 | 0.100 | <= 0.1 |
-| relationship_entropy | payments.invoice_id | 0.447 | 0.200 | <= 0.2 |
+| outlier_rate | journal_lines.credit | 1.000 | ~1.000 | score unchanged, ACCEPTED label |
+| benford | bank_transactions.amount | 0.803 | ~0.803 | score unchanged, ACCEPTED label |
+| null_ratio | journal_lines.cost_center | 0.711 | ~0.711 | score unchanged, ACCEPTED label |
+| relationship_entropy | payments.invoice_id | 0.447 | ~0.447 | score unchanged, ACCEPTED label |
 
 ### Phase 2: metadata fixes (direct DB update, re-measure at gate)
 
@@ -233,11 +236,21 @@ cleanup deletes the rows that metadata fixes target).
 
 ## Backlog
 
-### Next: unit_entropy
-- Document that it measures metadata completeness, not value consistency
-- Either accept the misalignment or create a separate value-consistency injection
+### Next: Zone 3 calibration (see spec/03-zone-3-interpretation.md)
+- Implement `cross_table_consistency` detector (consumes ValidationResultRecord)
+- Implement `business_cycle_health` detector (consumes DetectedBusinessCycle)
+- Add `AnalysisKey.VALIDATION` and `AnalysisKey.BUSINESS_CYCLES`
+- Add `computation_review` gate phase (Gate 3)
+- Update network.yaml with new nodes + edges
+- Create zone3-detection-v1 strategy
+- Calibrate cross_table_consistency (injection recall)
+- Observe business_cycle_health (documentation-debt style)
+- Quick check: Bayesian network + entropy_interpretation
+- Ground truth metric verification (graph_execution vs ground_truth.yaml)
 
-### Future
-- Zone 2 calibration (temporal_drift, dimensional_entropy, derived_value)
-- cross_table_consistency detector (needs JOINs, Zone 2+)
+### Deferred
+- unit_entropy: measures metadata completeness, not value consistency — accept misalignment or create separate injection
+- DAT-144: entropy_interpretation may produce novel fix actions not in detector schemas
 - Push `measure_at_gate` re-measurement logic into dataraum-context for MCP exposure
+- Zone 2 fix schemas: wire FixSchemas for dimensional_entropy, temporal_drift, etc.
+- dimension_coverage: add sqrt boost (bundled with Zone 3 work, Step 0 in spec/03)
