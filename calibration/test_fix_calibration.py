@@ -61,9 +61,6 @@ def test_fix_reduces_score(
     if fix_spec.xfail_reason:
         pytest.xfail(fix_spec.xfail_reason)
 
-    if not fix_spec.fix_documents:
-        pytest.skip(f"No fix documents defined for {fix_spec.test_id}")
-
     pre = _lookup_score(fix_spec, pipeline_scores, pipeline_table_scores)
     assert pre is not None, (
         f"No pre-fix score for {fix_spec.test_id} — "
@@ -76,7 +73,7 @@ def test_fix_reduces_score(
         f"re-run may have failed"
     )
 
-    if fix_spec.action == "accept_finding":
+    if fix_spec.is_acceptance:
         # accept_finding keeps scores honest — contract overrule handles the gate.
         # Score should be approximately unchanged (re-measurement may cause minor drift).
         assert abs(post - pre) < 0.05, (

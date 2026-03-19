@@ -24,6 +24,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from dataraum.pipeline.fixes.models import FixDocument
+
     from calibration.fix_specs import FixSpec
 
 from dotenv import load_dotenv
@@ -159,11 +161,51 @@ def copy_output_for_fixes(strategy: str) -> Path:
     return dst
 
 
+def _specs_to_documents(
+    fix_specs: list[FixSpec],
+    *,
+    routing: str | None = None,
+) -> list[FixDocument]:
+    """Convert intent-only FixSpecs to FixDocuments via the bridge.
+
+    Args:
+        fix_specs: Specs to convert.
+        routing: If set, only include specs whose schema routing matches
+            (``"preprocess"`` or ``"postprocess"``).
+    """
+    from dataraum.entropy.fix_schemas import get_fix_schema
+    from dataraum.pipeline.fixes import FixInput
+    from dataraum.pipeline.fixes.bridge import build_fix_documents
+
+    all_docs: list[FixDocument] = []
+    for spec in fix_specs:
+        schema = get_fix_schema(spec.action)
+        if schema is None:
+            raise ValueError(f"No fix schema found for action {spec.action!r}")
+        if routing and schema.routing != routing:
+            continue
+        fix_input = FixInput(
+            action_name=spec.action,
+            dimension=schema.dimension_path,
+            parameters=spec.parameters,
+            affected_columns=[f"{spec.table}.{spec.column}"],
+        )
+        docs = build_fix_documents(
+            schema, fix_input, spec.table, spec.column or None, schema.dimension_path
+        )
+        all_docs.extend(docs)
+    return all_docs
+
+
 def run_fix_pipeline(strategy: str, fix_specs: list[FixSpec] | None = None) -> None:
     """Apply fixes and re-measure gate scores on fixed output.
 
-    Delegates to ``dataraum.pipeline.fixes.api.apply_fixes`` which handles
-    fix application, cascade cleanup, pipeline re-run, and gate persistence.
+    Two-pass application to respect fix sequencing:
+    1. Preprocess (config fixes) — triggers cascade cleanup + pipeline re-run
+    2. Postprocess (metadata fixes) — patches DB after re-run, re-measures gate
+
+    Metadata fixes must be applied AFTER re-run because cascade cleanup
+    deletes the rows they target (e.g. SemanticAnnotation).
     """
     if fix_specs is None:
         from calibration.fix_specs import ZONE1_FIX_SPECS, ZONE2_FIX_SPECS
@@ -182,25 +224,44 @@ def run_fix_pipeline(strategy: str, fix_specs: list[FixSpec] | None = None) -> N
             f"No fixed output at {fixed_dir}. Run copy_output_for_fixes first."
         )
 
-    all_docs = [d for spec in fix_specs for d in spec.fix_documents]
     data_dir = DATA_DIR / strategy
-
-    # Zone 2 fixes need analysis_review gate measurement
+    source_path = data_dir if data_dir.exists() else None
     target_phase = "analysis_review" if "zone2" in strategy else "quality_review"
 
-    result = apply_fixes(
-        output_dir=fixed_dir,
-        fix_documents=all_docs,
-        source_path=data_dir if data_dir.exists() else None,
-        target_phase=target_phase,
-    )
+    preprocess_docs = _specs_to_documents(fix_specs, routing="preprocess")
+    postprocess_docs = _specs_to_documents(fix_specs, routing="postprocess")
 
-    if not result.success:
-        raise RuntimeError(f"Fix pipeline failed: {result.error}")
+    total_applied = 0
+    phases_rerun: list[str] = []
+
+    # Pass 1: config fixes (preprocess) — cascade clean + re-run
+    if preprocess_docs:
+        result = apply_fixes(
+            output_dir=fixed_dir,
+            fix_documents=preprocess_docs,
+            source_path=source_path,
+            target_phase=target_phase,
+        )
+        if not result.success:
+            raise RuntimeError(f"Preprocess fix pipeline failed: {result.error}")
+        total_applied += len(result.applied_fixes)
+        phases_rerun = result.phases_rerun
+
+    # Pass 2: metadata fixes (postprocess) — patch DB + re-measure gate
+    if postprocess_docs:
+        result = apply_fixes(
+            output_dir=fixed_dir,
+            fix_documents=postprocess_docs,
+            source_path=source_path,
+            target_phase=target_phase,
+        )
+        if not result.success:
+            raise RuntimeError(f"Postprocess fix pipeline failed: {result.error}")
+        total_applied += len(result.applied_fixes)
 
     print(
-        f"[eval] Applied {len(result.applied_fixes)} fixes, "
-        f"phases re-run: {result.phases_rerun}"
+        f"[eval] Applied {total_applied} fixes, "
+        f"phases re-run: {phases_rerun}"
     )
 
 
