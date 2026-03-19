@@ -18,17 +18,219 @@ Entropy is measured redundantly:
 The same detector can execute 3-4 times with slightly different results.
 Measurement is scattered. No single source of truth.
 
+Pipeline configuration is split between YAML (phase list, orchestrator settings)
+and Python (dependencies, produces_analyses, is_quality_gate — all class properties).
+The YAML is just a phase list. Everything structural lives in code.
+
+## Pipeline YAML: The Standard Interface
+
+Move all structural declarations into `pipeline.yaml`. The scheduler reads one
+file and knows: what runs, in what order, what it produces, what entropy it
+measures, where the gates are.
+
+```yaml
+# Pipeline Configuration
+version: "2.0.0"
+
+phases:
+  # =========================================================================
+  # Zone 1: Foundation
+  # =========================================================================
+  import:
+    description: Load source data into raw tables
+    dependencies: []
+
+  typing:
+    description: Type inference and resolution
+    dependencies: [import]
+    produces: [TYPING]
+    detectors: [type_fidelity]
+
+  statistics:
+    description: Statistical profiling of typed tables
+    dependencies: [typing]
+    produces: [STATISTICS]
+    detectors: [null_ratio, outlier_rate, benford]
+
+  column_eligibility:
+    description: Column eligibility evaluation
+    dependencies: [statistics]
+
+  statistical_quality:
+    description: Benford and outlier analysis
+    dependencies: [column_eligibility]
+
+  relationships:
+    description: Cross-table relationship detection
+    dependencies: [column_eligibility]
+    produces: [RELATIONSHIPS]
+    detectors: [join_path_determinism, relationship_quality]
+
+  temporal:
+    description: Temporal pattern and trend analysis
+    dependencies: [column_eligibility]
+
+  semantic:
+    description: LLM semantic analysis (tier 1 + tier 2)
+    dependencies: [relationships]
+    produces: [SEMANTIC]
+    detectors: [business_meaning, temporal_entropy, unit_entropy]
+
+  quality_review:
+    description: Zone 1 quality checkpoint
+    dependencies: [semantic, statistical_quality]
+    gate: true
+
+  # =========================================================================
+  # Zone 2: Enrichment
+  # =========================================================================
+  enriched_views:
+    description: Create enriched views (fact + dimension JOINs)
+    dependencies: [quality_review]
+    produces: [ENRICHED_VIEW]
+    detectors: [dimension_coverage]
+
+  slicing:
+    description: LLM-powered slice dimension identification
+    dependencies: [enriched_views]
+
+  slicing_view:
+    description: Create slicing views with slice-relevant columns
+    dependencies: [slicing]
+
+  slice_analysis:
+    description: Execute slice SQL, analyze slice tables
+    dependencies: [slicing_view]
+    produces: [SLICE_VARIANCE]
+    detectors: [slice_variance, dimensional_entropy]
+
+  temporal_slice_analysis:
+    description: Distribution drift analysis on slices
+    dependencies: [slice_analysis, temporal]
+    produces: [DRIFT_SUMMARIES]
+    detectors: [temporal_drift]
+
+  correlations:
+    description: Within-table correlation analysis
+    dependencies: [enriched_views]
+    produces: [CORRELATION]
+    detectors: [derived_value]
+
+  quality_summary:
+    description: LLM quality report generation
+    dependencies: [slice_analysis, temporal_slice_analysis]
+    produces: [COLUMN_QUALITY_REPORTS]
+    detectors: [column_quality]
+
+  analysis_review:
+    description: Zone 2 quality checkpoint
+    dependencies: [correlations, quality_summary, temporal_slice_analysis]
+    gate: true
+
+  # =========================================================================
+  # Zone 3: Interpretation
+  # =========================================================================
+  business_cycles:
+    description: Expert LLM cycle detection
+    dependencies: [analysis_review, semantic, temporal, enriched_views, slicing, quality_summary]
+    produces: [BUSINESS_CYCLES]
+    detectors: [business_cycle_health]
+
+  validation:
+    description: LLM-powered cross-table validation checks
+    dependencies: [analysis_review, semantic, relationships, enriched_views, slicing]
+    produces: [VALIDATION]
+    detectors: [cross_table_consistency]
+
+  computation_review:
+    description: Zone 3 quality checkpoint
+    dependencies: [business_cycles, validation]
+    gate: true
+
+  entropy_interpretation:
+    description: LLM interpretation of entropy (narratives + resolution actions)
+    dependencies: [computation_review]
+
+  graph_execution:
+    description: Execute metric graphs (LLM-generated SQL)
+    dependencies: [entropy_interpretation]
+
+# Limits
+limits:
+  max_columns: 500
+
+# Pipeline orchestrator settings
+pipeline:
+  max_parallel: 4
+  fail_fast: true
+  skip_completed: true
+
+  retry:
+    max_retries: 2
+    backoff_base: 2.0
+
+# Business pattern filter (spec/04)
+pattern_filter:
+  enabled: true
+  model: haiku
+  confidence_threshold: 0.8
+  # Only filter findings with score above this minimum
+  min_score: 0.1
+```
+
+### What moves from Python to YAML
+
+| Property | Currently | Moves to |
+|---|---|---|
+| `dependencies` | `BasePhase.dependencies` property | `phases.<name>.dependencies` |
+| `produces_analyses` | `BasePhase.produces_analyses` property | `phases.<name>.produces` |
+| `is_quality_gate` | `BasePhase.is_quality_gate` property | `phases.<name>.gate: true` |
+| detector attachment | `required_analyses` on detector class | `phases.<name>.detectors` |
+| `description` | `BasePhase.description` property | `phases.<name>.description` |
+
+### What stays in Python
+
+- Phase `_run()` logic — the actual work
+- Phase `cleanup()` — cascade deletion
+- Phase `should_skip()` — skip conditions
+- Phase `db_models` — SQLAlchemy model registration
+- Detector `detect()` logic — the actual measurement
+- Detector `load_data()` — data loading for the detector
+- Detector `scope` — column, table, or view
+- Detector scoring, evidence, resolution options
+
+The YAML defines the DAG and the contracts. Python defines the behavior.
+
+### Phase class simplification
+
+Phase classes become simpler — they only need `name` and `_run()`:
+
+```python
+@analysis_phase
+class TypingPhase(BasePhase):
+    @property
+    def name(self) -> str:
+        return "typing"
+
+    def _run(self, ctx: PhaseContext) -> PhaseResult:
+        # ... actual typing logic ...
+```
+
+No more `dependencies`, `produces_analyses`, `description`, `is_quality_gate`
+properties. The scheduler reads these from YAML and injects them into the phase
+instance at registration time.
+
 ## Proposed Design
 
 ### Principle: Detectors run once, when their input data is ready
 
-Each detector declares `required_analyses` — the analyses it needs. When the last
-required analysis completes (the phase that produces it finishes), the detector runs
-and persists its score. Once. The score is an EntropyObjectRecord in metadata.db.
+Each detector is attached to a phase in YAML (`detectors: [...]`). When that
+phase completes, its detectors run as a post-step. The detector persists its
+score as an EntropyObjectRecord. Once.
 
-This is already how `required_analyses` + `produces_analyses` work conceptually.
-The change: instead of batching all detectors into an "entropy phase," detectors
-run as a post-step of the phase that completes their requirements.
+If a phase has `detectors: [null_ratio, outlier_rate, benford]`, all three run
+(potentially in parallel) after the phase's `_run()` succeeds. Their records
+are persisted in the same transaction.
 
 ### Principle: Business pattern filter runs per detector, at measurement time
 
@@ -36,6 +238,9 @@ When a detector produces `score > 0`, the business pattern filter runs immediate
 one Haiku call with the column's semantic context. The filter annotates the
 EntropyObject with `expected_business_pattern` before it's persisted. The score
 and the annotation are written together — one record, one truth.
+
+The filter only runs if `pattern_filter.enabled: true` in pipeline.yaml and
+semantic annotations exist (i.e., semantic phase has completed).
 
 ### Principle: The entropy network is a pure function over persisted records
 
@@ -51,7 +256,7 @@ interdependencies regardless of whether a pattern is "expected."
 ### Principle: Gates are ephemeral aggregation, not measurement
 
 Gates don't run detectors. They:
-1. Read persisted EntropyObjectRecords (already written by phases)
+1. Read persisted EntropyObjectRecords (already written by preceding phases)
 2. Call `compute_network()` to get the current network state
 3. Evaluate contracts against scores
 4. Respect `expected_business_pattern` annotations (exclude from violations)
@@ -60,113 +265,110 @@ Gates don't run detectors. They:
 No `measure_at_gate()`. No re-running detectors. Just aggregation of what's
 already been measured.
 
-## When Each Detector Runs
+## Scheduler Changes
 
-The detector runs as a post-step of the phase that completes its last
-required analysis. Using existing `required_analyses` declarations:
+The scheduler currently:
+1. Reads `pipeline.yaml` for the phase list
+2. Instantiates phase classes, reads their Python properties for dependencies
+3. Builds a dependency DAG
+4. Executes phases in topological order (parallel where possible)
+5. At gates: calls `measure_at_gate()` to run detectors
 
-| Detector | required_analyses | Runs after phase |
-|---|---|---|
-| type_fidelity | TYPING | typing |
-| null_ratio | STATISTICS | statistics |
-| outlier_rate | STATISTICS | statistics |
-| benford | STATISTICS | statistics |
-| business_meaning | SEMANTIC | semantic |
-| temporal_entropy | SEMANTIC | semantic |
-| unit_entropy | SEMANTIC | semantic |
-| join_path_determinism | RELATIONSHIPS | relationships |
-| relationship_quality | RELATIONSHIPS | relationships |
-| temporal_drift | DRIFT_SUMMARIES | temporal_slice_analysis |
-| derived_value | CORRELATION | correlations |
-| slice_variance | SLICE_VARIANCE | slice_analysis |
-| column_quality | COLUMN_QUALITY_REPORTS | quality_summary |
-| dimensional_entropy | SLICE_VARIANCE | slice_analysis |
-| dimension_coverage | ENRICHED_VIEW | enriched_views |
-| cross_table_consistency | VALIDATION | validation |
-| business_cycle_health | BUSINESS_CYCLES | business_cycles |
+New scheduler:
+1. Reads `pipeline.yaml` for everything: phases, dependencies, produces, detectors, gates
+2. Instantiates phase classes (matched by `name`)
+3. Builds a dependency DAG from YAML
+4. Executes phases in topological order
+5. After each phase with `detectors`: runs listed detectors, applies pattern filter, persists
+6. At gates (`gate: true`): aggregates persisted records, evaluates contracts
 
-Some detectors need multiple analyses (e.g., dimensional_entropy needs
-SLICE_VARIANCE + optionally temporal data). They run when ALL required
-analyses are available — i.e., after the last required phase completes.
+### Detector execution flow
+
+```
+Phase._run() succeeds
+  → scheduler reads phase.detectors from YAML
+  → for each detector_id:
+      → instantiate detector
+      → detector.load_data(context)
+      → objects = detector.detect(context)
+      → for each object with score > 0:
+          → if pattern_filter.enabled AND semantic annotations exist:
+              → verdict = pattern_filter.classify(object, semantic_context)
+              → object.expected_business_pattern = verdict.expected
+              → object.business_rule = verdict.business_rule
+              → object.filter_confidence = verdict.confidence
+      → persist all EntropyObjectRecords
+```
 
 ## What Happens to Existing Phases
 
-### Entropy phase → Network phase (or removed)
+### Entropy phase → removed
 
-Currently the entropy phase runs all detectors. In the new design, detectors
-run as post-steps of their input phases. The entropy phase becomes either:
+Detectors run as post-steps of their input phases. The entropy phase has no
+remaining purpose. `compute_network()` is callable on-demand.
 
-- **A network computation phase** — calls `compute_network()`, persists the
-  network snapshot for downstream consumers. No detector execution.
-- **Removed entirely** — `compute_network()` is callable on-demand.
-  entropy_interpretation and gates call it when they need it. No dedicated phase.
+The entropy phase currently also wipes all existing records at start (clean slate).
+In the new design, each detector wipes its own prior records before re-running
+(scoped by source_id + detector_id). This is more surgical and supports
+incremental re-runs after fixes.
 
-### entropy_interpretation — unchanged conceptually
+### entropy_interpretation — simplified
 
 Still runs LLM interpretation on entropy data. But it no longer needs
 `_run_quality_dependent_detectors` — those detectors already ran as post-steps
-of quality_summary and slice_analysis.
+of quality_summary and slice_analysis. It just reads persisted records and
+calls `compute_network()`.
 
 ### quality_summary — gets entropy context naturally
 
 Currently quality_summary depends on the entropy phase for network readiness
 filtering. In the new design, by the time quality_summary runs, the Zone 1
 detectors have already produced their scores (they ran after typing, statistics,
-semantic, relationships). The network function returns the Zone 1 picture.
+semantic, relationships). `compute_network()` returns the Zone 1 picture.
 quality_summary's network filter works without a dedicated entropy phase.
 
-## Business Pattern Filter Integration
+Note: quality_summary currently depends on `[slice_analysis, temporal_slice_analysis,
+entropy]`. The entropy dependency drops. Its detectors (`column_quality`) run
+after quality_summary completes, not before.
 
-The filter is NOT a phase. It's a function called inline when a detector
-produces a score > 0:
+## Migration Path
 
-```
-Phase completes → detector runs → score > 0? → pattern filter (Haiku) → annotated record persisted
-```
+### Phase 1: YAML-driven DAG (no detector changes)
+- Move dependencies, produces, gate, description to YAML
+- Scheduler reads from YAML instead of Python properties
+- Phase classes keep properties for backward compat (deprecated, YAML wins)
+- No functional change — same execution order, same results
 
-The filter has access to:
-- The detector's finding (score, evidence, pattern description)
-- Semantic annotations for the column (already in metadata.db)
-- Table entity description and grain (already in metadata.db)
-- Relationship context (already in metadata.db)
+### Phase 2: Detectors as post-steps
+- Scheduler runs detectors listed in `phases.<name>.detectors` after phase completes
+- Remove entropy phase
+- Remove `_run_quality_dependent_detectors` from entropy_interpretation
+- Remove `measure_at_gate()` — gates read persisted records
+- Update fix system's `apply_fixes` to read records instead of re-measuring
 
-No additional data loading needed — everything is already persisted by prior phases.
-
-### Filter placement per zone
-
-| Zone | Detectors that run | Filter available? |
-|---|---|---|
-| Zone 1 (after typing through semantic) | type_fidelity, null_ratio, outlier_rate, benford, business_meaning, temporal_entropy, unit_entropy, relationship_quality, join_path_determinism | Yes — semantic annotations exist |
-| Zone 2 (after enrichment) | temporal_drift, derived_value, slice_variance, dimensional_entropy, column_quality, dimension_coverage | Yes |
-| Zone 3 (after validation/cycles) | cross_table_consistency, business_cycle_health | Yes |
-
-The filter is available from Zone 1 onward because semantic annotations (the
-primary input) are produced before Gate 1.
+### Phase 3: Business pattern filter
+- Add pattern_filter config to YAML
+- Implement Haiku classification (spec/04)
+- Wire into post-step detector execution
+- Update gates to respect `expected_business_pattern` annotations
 
 ## Open Questions
 
-- **Detector as post-step: mechanism.** How does the scheduler know to run
-  detectors after a phase? Options: (a) each phase declares which detectors to
-  run as a post-step, (b) the scheduler checks all detectors after each phase
-  and runs those whose requirements are newly met, (c) detectors register
-  themselves with the phases that produce their analyses.
+- **Incremental vs clean-slate.** If typing re-runs (after a fix), do we wipe
+  only type_fidelity's records and re-run it? The cascade cleanup already knows
+  which phases to reset — detector cleanup follows the same cascade.
 
-- **Incremental vs clean-slate.** Current entropy phase wipes all records before
-  re-running. In the new design, if typing re-runs (after a fix), do we wipe
-  only type_fidelity's records and re-run it? This is more surgical but needs
-  careful cascade tracking.
+- **Filter cost on re-runs.** Each re-run costs ~20-40 Haiku calls. Acceptable
+  for fix loops (1-3 iterations). Cache by (column, detector, pattern_hash).
 
-- **Filter cost on re-runs.** If a phase re-runs after a fix, its detectors
-  re-run, the filter re-runs. Each re-run costs ~20-40 Haiku calls. Acceptable
-  for fix loops (usually 1-3 iterations) but could add up. Caching by
-  (column, detector, pattern_hash) would help.
+- **YAML validation.** The YAML becomes critical infrastructure. Need schema
+  validation: all detector_ids must exist in the registry, all phase names must
+  have a matching Python class, dependency cycles are rejected at load time.
 
-- **Network snapshot persistence.** If the entropy phase becomes a network phase,
-  it persists a snapshot. But the network changes every time a new detector runs.
-  Do we re-compute after each detector, or batch at gates? On-demand (via function)
-  is simplest — no persistence needed, just compute when asked.
+- **Per-phase config files.** Phase-specific config currently lives in
+  `config/phases/<name>.yaml`. These stay — they hold runtime parameters
+  (batch sizes, thresholds). The pipeline YAML holds structural declarations.
 
-- **Backward compatibility.** `measure_at_gate()` is used by the fix system's
-  `apply_fixes` API and the calibration runner's `measure_at_gate()` calls.
-  These would need to switch to reading persisted records + calling
-  `compute_network()`. Phase-by-phase migration possible.
+- **Backward compatibility.** Python properties on phase classes become
+  deprecated. They can coexist during migration (YAML wins if present,
+  fall back to Python property). Remove after migration is complete.
