@@ -36,9 +36,14 @@ ZONE_2_DETECTORS = frozenset({
     "dimension_coverage",   # Zone 2: needs ENRICHED_VIEW
 })
 
+# Zone 3 detectors — need validation/business_cycles analyses
+ZONE_3_DETECTORS = frozenset({
+    "cross_table_consistency",  # Zone 3: needs VALIDATION
+    "business_cycle_health",    # Zone 3: needs BUSINESS_CYCLES
+})
+
 # Detectors that don't exist yet — always skip
 NOT_IMPLEMENTED = frozenset({
-    "cross_table_consistency",
     "derived_value_consistency",
 })
 
@@ -143,10 +148,11 @@ def test_injection_detected(
     if detector in NOT_IMPLEMENTED:
         pytest.skip(f"{detector} not implemented yet")
 
-    # Zone 2 detectors: skip if pipeline didn't run through analysis_review
-    if detector in ZONE_2_DETECTORS:
+    # Zone 2+ detectors: skip if pipeline didn't produce scores for this detector
+    if detector in ZONE_2_DETECTORS or detector in ZONE_3_DETECTORS:
         if not _has_any_score(detector, pipeline_scores, pipeline_table_scores, pipeline_view_scores):
-            pytest.skip(f"{detector} needs Zone 2 — run pipeline through analysis_review")
+            zone = "Zone 3" if detector in ZONE_3_DETECTORS else "Zone 2"
+            pytest.skip(f"{detector} needs {zone} — run pipeline through computation_review")
 
     # Mark known-misaligned injections as expected failures
     if detector in KNOWN_MISALIGNED:

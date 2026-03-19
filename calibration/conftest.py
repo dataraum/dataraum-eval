@@ -49,8 +49,8 @@ class GateScores:
 def _load_gate_scores(db_path: Path) -> GateScores:
     """Load detector scores from gate measurement persisted in PhaseLog.
 
-    Tries analysis_review (Gate 2) first — it has all detectors (Zone 1 + Zone 2).
-    Falls back to quality_review (Gate 1) which has Zone 1 detectors only.
+    Tries computation_review (Gate 3) first — it has all detectors (Zone 1-3).
+    Falls back to analysis_review (Gate 2), then quality_review (Gate 1).
     """
     if not db_path.exists():
         pytest.skip(f"No pipeline output at {db_path} — run pipeline first")
@@ -59,7 +59,7 @@ def _load_gate_scores(db_path: Path) -> GateScores:
     try:
         # Try analysis_review first (Gate 2 — Zone 1 + Zone 2 scores)
         row = None
-        for gate in ("analysis_review", "quality_review"):
+        for gate in ("computation_review", "analysis_review", "quality_review"):
             row = conn.execute(
                 "SELECT outputs FROM phase_logs "
                 f"WHERE phase_name = '{gate}' "

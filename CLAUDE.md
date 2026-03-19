@@ -236,17 +236,22 @@ cleanup deletes the rows that metadata fixes target).
 
 ## Backlog
 
-### Next: Zone 3 calibration (see spec/03-zone-3-interpretation.md)
-- Implement `cross_table_consistency` detector (consumes ValidationResultRecord)
-- Implement `business_cycle_health` detector (consumes DetectedBusinessCycle)
-- Add `AnalysisKey.VALIDATION` and `AnalysisKey.BUSINESS_CYCLES`
-- Add `computation_review` gate phase (Gate 3)
-- Update network.yaml with new nodes + edges
+### Zone 3 calibration (see spec/03-zone-3-interpretation.md)
+
+**Done:**
+- ~~Implement `cross_table_consistency` detector~~ (scores 1.000 at Gate 3)
+- ~~Implement `business_cycle_health` detector~~ (scores 0.158 at Gate 3)
+- ~~Add `AnalysisKey.VALIDATION` and `AnalysisKey.BUSINESS_CYCLES`~~
+- ~~Add `computation_review` gate phase (Gate 3)~~
+- ~~Quick check: Bayesian network + entropy_interpretation~~ (quality context flows, 33 LLM + 24 static interpretations)
+
+**Remaining:**
+- Update network.yaml with new nodes + edges (cross_table, business_cycle nodes)
 - Create zone3-detection-v1 strategy
 - Calibrate cross_table_consistency (injection recall)
 - Observe business_cycle_health (documentation-debt style)
-- Quick check: Bayesian network + entropy_interpretation
 - Ground truth metric verification (graph_execution vs ground_truth.yaml)
+- computation_review not in graph_execution's dependency chain — Gate 3 only runs when explicitly targeted
 
 ### Deferred
 - unit_entropy: measures metadata completeness, not value consistency — accept misalignment or create separate injection
