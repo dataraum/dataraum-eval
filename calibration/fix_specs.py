@@ -180,7 +180,7 @@ ZONE2_FIX_SPECS: list[FixSpec] = [
         detector_id="dimensional_entropy",
         table="journal_lines",
         column="debit/credit",
-        action="document_business_rule",
+        action="confirm_expected_pattern",
         parameters={
             "table": "journal_lines",
             "columns": "debit,credit",
