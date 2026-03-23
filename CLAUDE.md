@@ -18,6 +18,68 @@ Three repos, vendored as git submodules under `vendor/`:
 Everything runs from this repo via direct Python API calls — no subprocess
 shelling out to sibling repos.
 
+## v0.2 Breaking Changes (DAT-183)
+
+The `dataraum-context` repo underwent a major structural cleanup. The calibration
+harness needs updating to work with v0.2. Key changes:
+
+### Deleted phases (6)
+- `quality_review`, `analysis_review`, `computation_review` (gate phases)
+- `quality_summary`, `entropy_interpretation`, `graph_execution` (interpretation phases)
+
+Pipeline now has 17 phases (was 23). No gate phases exist — the pipeline runs
+straight through without pausing.
+
+### Deleted detector
+- `column_quality` — was a circular intermediary (LLM re-graded what BBN already observed)
+
+15 detectors remain (was 16).
+
+### Renamed module: `gate.py` → `measurement.py`
+- `aggregate_at_gate()` → `measure_entropy()`
+- `assess_contracts()` → `check_contracts()`
+- `GateResult` → `MeasurementResult`
+- `ExitCheckIssue` → `ContractViolation`
+- `persist_gate_result()` → **DELETED** (no longer persists to PhaseLog)
+
+### Removed fields
+- `PhaseLog.entropy_scores` — removed from DB model
+- `PhaseLog.outputs` no longer contains gate data (`gate_column_details`, `gate_scores`, etc.)
+- `PipelineResult.deferred_issues` — removed
+- `is_quality_gate` — removed from Phase protocol
+
+### What this means for the calibration harness
+
+**`conftest.py:_load_gate_scores()`** — BROKEN. It reads `PhaseLog.outputs["gate_column_details"]`
+which was written by `persist_gate_result()`. That function is deleted. v0.2 pipelines will have
+no gate PhaseLog records at all.
+
+**Fix:** Replace `_load_gate_scores()` with a call to `measure_entropy()` from `dataraum.entropy.measurement`.
+This reads `EntropyObjectRecord` rows directly (which are still written by post-step detectors).
+
+```python
+from dataraum.entropy.measurement import measure_entropy
+from dataraum.entropy.detectors.base import get_default_registry
+
+# Get all detector IDs
+registry = get_default_registry()
+detector_ids = [d.detector_id for d in registry.get_all_detectors()]
+
+# Measure (equivalent to what aggregate_at_gate did)
+result = measure_entropy(session, source_id, detector_ids)
+# result.column_details: dict[dim_path, dict[target, score]]
+# result.scores: dict[dim_path, float]
+```
+
+**`runner.py:run_pipeline()`** — The `target_phase="quality_review"` default is wrong.
+Gate phases don't exist. Either:
+- Remove `target_phase` (run all 17 phases), or
+- Set to the last phase in the zone you're testing (e.g. `"temporal_slice_analysis"` for zone 1+2)
+
+**`runner.py:run_fix_pipeline()`** — Uses `apply_fixes()` from `fixes/api.py` which was updated
+to use `measure_entropy()` instead of `persist_gate_result()`. Should still work, but `target_phase`
+defaults need updating (same issue as above).
+
 ## Running Calibration
 
 ```bash
@@ -40,17 +102,16 @@ control injection parameters and detector_id overrides.
    detector_id override)
 2. **testdata** generates clean financial data, applies injections, writes
    `entropy_map.yaml` listing exactly what was injected
-3. **Pipeline** runs through Zone 1 phases to `quality_review` gate, persists
-   gate scores in `PhaseLog.outputs["gate_column_details"]`
-4. **conftest.py** reads gate scores from `metadata.db` as
-   `(table, column, detector_id) → score`
+3. **Pipeline** runs all phases, post-step detectors write `EntropyObjectRecord` rows
+4. **conftest.py** calls `measure_entropy()` to aggregate detector records into
+   `(table, column, detector_id) → score` (needs updating for v0.2)
 5. **test_detector_recall.py** asserts each injection's detector scores above
    `DETECTION_THRESHOLD` (0.3) for the affected column
 
 ## What We Test
 
 ### 4a: Detection calibration (current focus)
-Inject → run pipeline → read gate scores → assert thresholds.
+Inject → run pipeline → measure entropy → assert thresholds.
 Pure data, no LLM involvement in the test loop (LLM runs during pipeline's
 semantic phase, but tests only check scores).
 
@@ -95,17 +156,19 @@ cross_table_consistency — needs Zone 3 (VALIDATION analysis). See zone-3 spec.
 |---|---|---|---|
 | temporal_drift | bank_transactions.amount | 1.000 | 1.35x shift after mid-year, JS divergence |
 | derived_value | journal_lines.net_amount | 0.708 | 10% formula drift, boost curve, scores on debit via formula chain |
-| benford (z1 baseline) | bank_transactions.amount | 0.833 | Zone 1 detector still fires at Gate 2 |
-| null_ratio (z1 baseline) | journal_lines.cost_center | 0.709 | Zone 1 detector still fires at Gate 2 |
-| relationship_entropy (z1 baseline) | payments.invoice_id | 0.447 | Zone 1 detector still fires at Gate 2 |
+| benford (z1 baseline) | bank_transactions.amount | 0.833 | Zone 1 detector still fires |
+| null_ratio (z1 baseline) | journal_lines.cost_center | 0.709 | Zone 1 detector still fires |
+| relationship_entropy (z1 baseline) | payments.invoice_id | 0.447 | Zone 1 detector still fires |
 
 ### Documentation-debt detectors (tested via fix calibration, not injection recall)
 
 | Detector | Target | Clean | Injected | Notes |
 |---|---|---|---|---|
 | dimensional_entropy | journal_lines | 0.700 | 0.700 | Natural debit/credit mutex, zero injection delta |
-| column_quality | journal_lines | 0.300 | 0.420 | LLM grade noise, baseline at threshold |
 | dimension_coverage | enriched_payments | 0.000 | 0.200 | 20% FK orphans, below 0.3 threshold |
+
+Note: `column_quality` detector was deleted in v0.2 (DAT-183). It was a circular
+intermediary — BBN readiness replaces it.
 
 ## Key Learnings
 
@@ -145,11 +208,9 @@ The detector measures whether the pipeline identified and declared units
 different things. The detector works — the injection doesn't test it.
 
 ### Documentation-debt detectors need fix-loop testing
-dimensional_entropy and column_quality measure intrinsic data complexity, not
-injected corruption. Clean data scores 0.5-0.7 (dimensional_entropy) and
-0.28-0.30 (column_quality) because the patterns are real business rules.
-Injection delta is zero (dimensional_entropy) or noise (column_quality).
-The calibration test is: document_business_rule fix → score drops.
+dimensional_entropy measures intrinsic data complexity, not injected corruption.
+Clean data scores 0.5-0.7 because the patterns are real business rules.
+Injection delta is zero. The calibration test is: document_business_rule fix → score drops.
 
 ### derived_value scoring uses boost + formula chain attribution
 The correlations dedup prefers sum over difference: `debit = net_amount + credit`
@@ -182,7 +243,7 @@ Raised rates vs baseline medium strategy:
 
 ### Phase 1: accept_finding (config-only, contract overrule)
 
-Scores stay honest (no clamping). Gate passes via contract overrule:
+Scores stay honest (no clamping). Contract passes via overrule:
 accepted targets are excluded from violation assessment.
 
 | Detector | Target | Pre | Post | Behavior |
@@ -192,7 +253,7 @@ accepted targets are excluded from violation assessment.
 | null_ratio | journal_lines.cost_center | 0.711 | ~0.711 | score unchanged, ACCEPTED label |
 | relationship_entropy | payments.invoice_id | 0.447 | ~0.447 | score unchanged, ACCEPTED label |
 
-### Phase 2: metadata fixes (direct DB update, re-measure at gate)
+### Phase 2: metadata fixes (direct DB update, re-measure)
 
 | Detector | Target | Pre | Post | Expected |
 |---|---|---|---|---|
@@ -217,8 +278,8 @@ accepted targets are excluded from violation assessment.
 
 The calibration runner supports three fix phases:
 
-**Phase 1+2 (gate-only):** Config/metadata fixes that only need gate
-re-measurement. Applies fixes then calls `measure_at_gate()` directly.
+**Phase 1+2 (measurement-only):** Config/metadata fixes that only need
+re-measurement. Applies fixes then calls `measure_entropy()` directly.
 
 **Phase 3 (phase re-run):** Config fixes to typing.yaml or relationships.yaml
 that require the pipeline to re-run from the affected phase. The runner:
@@ -226,9 +287,9 @@ that require the pipeline to re-run from the affected phase. The runner:
 1. Copies output to `-fixed/` directory
 2. Cascade-cleans affected phase + all downstream phases
 3. Applies config fixes (typing.yaml, thresholds.yaml) before re-run
-4. Re-runs pipeline from the cleaned phase through quality_review
-5. Applies metadata fixes on the rebuilt DB, then re-measures gate
-6. Persists gate results to PhaseLog
+4. Re-runs pipeline from the cleaned phase
+5. Applies metadata fixes on the rebuilt DB, then re-measures
+6. Scores read via `measure_entropy()` (no longer persisted to PhaseLog)
 
 Key constraint: config fixes must be applied BEFORE pipeline re-run (typing
 needs forced_types/patterns). Metadata fixes must be applied AFTER (cascade
@@ -236,26 +297,29 @@ cleanup deletes the rows that metadata fixes target).
 
 ## Backlog
 
+### v0.2 harness adaptation (MUST DO before calibration runs)
+
+1. **`conftest.py`**: Replace `_load_gate_scores()` — call `measure_entropy()` from
+   `dataraum.entropy.measurement` instead of reading `PhaseLog.outputs`
+2. **`runner.py`**: Remove `target_phase="quality_review"` default — run all phases
+   (or set to last relevant phase for the zone being tested)
+3. **Zone 2 results**: Remove `column_quality` from documentation-debt table (detector deleted)
+4. **Fix runner**: Verify `apply_fixes()` still works with v0.2 `measure_entropy()` rename
+
 ### Zone 3 calibration (see spec/03-zone-3-interpretation.md)
 
 **Done:**
-- ~~Implement `cross_table_consistency` detector~~ (scores 1.000 at Gate 3)
-- ~~Implement `business_cycle_health` detector~~ (scores 0.158 at Gate 3)
+- ~~Implement `cross_table_consistency` detector~~ (scores 1.000)
+- ~~Implement `business_cycle_health` detector~~ (scores 0.158)
 - ~~Add `AnalysisKey.VALIDATION` and `AnalysisKey.BUSINESS_CYCLES`~~
-- ~~Add `computation_review` gate phase (Gate 3)~~
-- ~~Quick check: Bayesian network + entropy_interpretation~~ (quality context flows, 33 LLM + 24 static interpretations)
 
 **Remaining:**
 - Update network.yaml with new nodes + edges (cross_table, business_cycle nodes)
 - Create zone3-detection-v1 strategy
 - Calibrate cross_table_consistency (injection recall)
 - Observe business_cycle_health (documentation-debt style)
-- Ground truth metric verification (graph_execution vs ground_truth.yaml)
-- computation_review not in graph_execution's dependency chain — Gate 3 only runs when explicitly targeted
 
 ### Deferred
 - unit_entropy: measures metadata completeness, not value consistency — accept misalignment or create separate injection
-- DAT-144: entropy_interpretation may produce novel fix actions not in detector schemas
-- Push `measure_at_gate` re-measurement logic into dataraum-context for MCP exposure
 - Zone 2 fix schemas: wire FixSchemas for dimensional_entropy, temporal_drift, etc.
-- dimension_coverage: add sqrt boost (bundled with Zone 3 work, Step 0 in spec/03)
+- dimension_coverage: add sqrt boost
