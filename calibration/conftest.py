@@ -6,8 +6,6 @@ Strategy is configurable via --strategy flag (default: zone1-detection-v1).
 
 from __future__ import annotations
 
-import json
-import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -36,7 +34,7 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 @dataclass
 class GateScores:
-    """Gate scores from PhaseLog, split by detector scope."""
+    """Detector scores from measure_entropy(), split by scope."""
 
     # Column-scoped: (table, column, detector_id) → score
     column: dict[tuple[str, str, str], float] = field(default_factory=dict)
@@ -46,47 +44,54 @@ class GateScores:
     view: dict[tuple[str, str], float] = field(default_factory=dict)
 
 
-def _load_gate_scores(db_path: Path) -> GateScores:
-    """Load detector scores from gate measurement persisted in PhaseLog.
+def _load_gate_scores(output_dir: Path) -> GateScores:
+    """Load detector scores via measure_entropy().
 
-    Tries computation_review (Gate 3) first — it has all detectors (Zone 1-3).
-    Falls back to analysis_review (Gate 2), then quality_review (Gate 1).
+    Opens the pipeline output database, resolves the source, and calls
+    measure_entropy() to aggregate EntropyObjectRecord rows into scores.
     """
+    db_path = output_dir / "metadata.db"
     if not db_path.exists():
         pytest.skip(f"No pipeline output at {db_path} — run pipeline first")
 
-    conn = sqlite3.connect(str(db_path))
+    from dataraum.core.config import set_config_root
+    from dataraum.core.connections import ConnectionConfig, ConnectionManager
+    from dataraum.entropy.detectors.base import get_default_registry
+    from dataraum.entropy.measurement import measure_entropy
+    from dataraum.storage import Source
+    from sqlalchemy import select
+
+    config_root = output_dir / "config"
+    if config_root.exists():
+        set_config_root(config_root)
+
+    manager = ConnectionManager(ConnectionConfig.for_directory(output_dir))
+    manager.initialize()
+
     try:
-        # Try analysis_review first (Gate 2 — Zone 1 + Zone 2 scores)
-        row = None
-        for gate in ("computation_review", "analysis_review", "quality_review"):
-            row = conn.execute(
-                "SELECT outputs FROM phase_logs "
-                f"WHERE phase_name = '{gate}' "
-                "ORDER BY completed_at DESC LIMIT 1"
-            ).fetchone()
-            if row is not None and row[0] is not None:
-                break
-    except sqlite3.OperationalError:
-        pytest.skip("phase_logs table not found in metadata.db")
+        with manager.session_scope() as session:
+            source = session.execute(select(Source)).scalars().first()
+            if not source:
+                pytest.skip("No source found in output database")
+
+            registry = get_default_registry()
+            detector_ids = registry.get_detector_ids()
+
+            measurement = measure_entropy(session, source.source_id, detector_ids)
     finally:
-        conn.close()
+        manager.close()
 
-    if row is None or row[0] is None:
-        pytest.skip("No quality_review/analysis_review phase log found — run pipeline first")
-
-    outputs = json.loads(row[0]) if isinstance(row[0], str) else row[0]
-
-    # Map dimension_path → detector_id (e.g. "value.distribution.benford_compliance" → "benford")
-    id_map = outputs.get("detector_id_map", {})
     result = GateScores()
 
     # Column-scoped scores
-    column_details = outputs.get("gate_column_details", {})
-    for dim_path, targets in column_details.items():
-        detector_id = id_map.get(dim_path, dim_path.rsplit(".", 1)[-1])
+    for dim_path, targets in measurement.column_details.items():
+        detector_id = dim_path.rsplit(".", 1)[-1]
+        # Look up detector_id from registry by dimension_path
+        for det in registry.get_all_detectors():
+            if det.dimension_path == dim_path:
+                detector_id = det.detector_id
+                break
         for target, score in targets.items():
-            # target: "column:table_name.column_name"
             ref = target.removeprefix("column:")
             parts = ref.split(".", 1)
             if len(parts) == 2:
@@ -96,22 +101,26 @@ def _load_gate_scores(db_path: Path) -> GateScores:
                     result.column[key] = score
 
     # Table-scoped scores
-    table_details = outputs.get("gate_table_details", {})
-    for dim_path, targets in table_details.items():
-        detector_id = id_map.get(dim_path, dim_path.rsplit(".", 1)[-1])
+    for dim_path, targets in measurement.table_details.items():
+        detector_id = dim_path.rsplit(".", 1)[-1]
+        for det in registry.get_all_detectors():
+            if det.dimension_path == dim_path:
+                detector_id = det.detector_id
+                break
         for target, score in targets.items():
-            # target: "table:table_name"
             tbl = target.removeprefix("table:")
             tbl_key = (tbl, detector_id)
             if tbl_key not in result.table or score > result.table[tbl_key]:
                 result.table[tbl_key] = score
 
     # View-scoped scores
-    view_details = outputs.get("gate_view_details", {})
-    for dim_path, targets in view_details.items():
-        detector_id = id_map.get(dim_path, dim_path.rsplit(".", 1)[-1])
+    for dim_path, targets in measurement.view_details.items():
+        detector_id = dim_path.rsplit(".", 1)[-1]
+        for det in registry.get_all_detectors():
+            if det.dimension_path == dim_path:
+                detector_id = det.detector_id
+                break
         for target, score in targets.items():
-            # target: "view:view_name"
             vw = target.removeprefix("view:")
             vw_key = (vw, detector_id)
             if vw_key not in result.view or score > result.view[vw_key]:
@@ -183,8 +192,8 @@ def injections(entropy_map: dict[str, Any]) -> list[dict[str, Any]]:
 
 @pytest.fixture(scope="session")
 def gate_scores(strategy_output_dir: Path) -> GateScores:
-    """All detector scores from gate measurement for the current strategy."""
-    return _load_gate_scores(strategy_output_dir / "metadata.db")
+    """All detector scores from measure_entropy() for the current strategy."""
+    return _load_gate_scores(strategy_output_dir)
 
 
 @pytest.fixture(scope="session")
@@ -224,8 +233,8 @@ def fixed_output_dir(strategy_name: str) -> Path:
 
 @pytest.fixture(scope="session")
 def post_fix_gate_scores(fixed_output_dir: Path) -> GateScores:
-    """All gate scores after fix application."""
-    return _load_gate_scores(fixed_output_dir / "metadata.db")
+    """All detector scores after fix application."""
+    return _load_gate_scores(fixed_output_dir)
 
 
 @pytest.fixture(scope="session")
@@ -248,7 +257,7 @@ def post_fix_table_scores(post_fix_gate_scores: GateScores) -> dict[tuple[str, s
 @pytest.fixture(scope="session")
 def clean_gate_scores() -> GateScores:
     """All detector scores from clean pipeline output (no injections)."""
-    return _load_gate_scores(OUTPUT_DIR / "clean" / "metadata.db")
+    return _load_gate_scores(OUTPUT_DIR / "clean")
 
 
 @pytest.fixture(scope="session")

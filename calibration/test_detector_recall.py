@@ -32,7 +32,6 @@ ZONE_2_DETECTORS = frozenset({
     "temporal_drift",       # Zone 2: needs DRIFT_SUMMARIES
     "dimensional_entropy",  # Zone 2: needs SLICE_VARIANCE
     "derived_value",        # Zone 2: needs CORRELATION
-    "column_quality",       # Zone 2: needs COLUMN_QUALITY_REPORTS
     "dimension_coverage",   # Zone 2: needs ENRICHED_VIEW
 })
 
@@ -54,7 +53,12 @@ KNOWN_MISALIGNED = frozenset({
 
 # Injections where the detector can't see the specific target column.
 # Key: (detector_id, table, column). Reason documented inline.
-KNOWN_DETECTOR_GAPS: dict[tuple[str, str, str], str] = {}
+KNOWN_DETECTOR_GAPS: dict[tuple[str, str, str], str] = {
+    ("derived_value", "trial_balance", "debit_balance"): (
+        "Cross-table aggregate formula (SUM(journal_lines.debit) GROUP BY account, period) — "
+        "out of scope for within-table correlation detector"
+    ),
+}
 
 
 def _injection_id(injection: dict[str, Any]) -> str:

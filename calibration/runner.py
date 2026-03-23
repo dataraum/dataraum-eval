@@ -87,7 +87,7 @@ def generate(
 def run_pipeline(
     strategy: str,
     *,
-    target_phase: str = "quality_review",
+    target_phase: str | None = None,
     contract: str | None = "aggregation_safe",
 ) -> RunResult:
     """Run the dataraum pipeline on generated test data.
@@ -123,7 +123,7 @@ def calibration_run(
     seed: int = 42,
     months: int | None = None,
     scenario: str = "month-end-close",
-    target_phase: str = "quality_review",
+    target_phase: str | None = None,
     contract: str | None = "aggregation_safe",
 ) -> dict[str, Path | RunResult]:
     """Full calibration run: generate test data + run pipeline.
@@ -226,7 +226,9 @@ def run_fix_pipeline(strategy: str, fix_specs: list[FixSpec] | None = None) -> N
 
     data_dir = DATA_DIR / strategy
     source_path = data_dir if data_dir.exists() else None
-    target_phase = "analysis_review" if "zone2" in strategy else "quality_review"
+    # v0.2: gate phases removed. apply_fixes needs a real phase name
+    # for _detector_ids_for_gate(); "validation" is the last phase (all detectors).
+    target_phase = "validation"
 
     preprocess_docs = _specs_to_documents(fix_specs, routing="preprocess")
     postprocess_docs = _specs_to_documents(fix_specs, routing="postprocess")
@@ -273,8 +275,8 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--generate-only", action="store_true")
     parser.add_argument("--pipeline-only", action="store_true")
-    parser.add_argument("--target-phase", default="quality_review",
-                        help="Pipeline target phase (default: quality_review, use analysis_review for Zone 2)")
+    parser.add_argument("--target-phase", default=None,
+                        help="Pipeline target phase (default: all phases)")
     parser.add_argument("--apply-fixes", action="store_true",
                         help="Copy output, apply fixes, re-measure gate scores")
     args = parser.parse_args()
