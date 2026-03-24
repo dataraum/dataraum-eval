@@ -15,6 +15,7 @@ scores:
   outlier_rate:journal_lines.debit: 1.0
   outlier_rate:payments.amount: 1.0
   outlier_rate:trial_balance.debit_balance: 1.0
+  relationship_entropy:chart_of_accounts.account_id: 0.2
   relationship_entropy:chart_of_accounts.parent_id: 0.2
   slice_variance:fx_rates.to_ccy: 0.375
   slice_variance:invoices.payment_terms: 0.375
@@ -22,5 +23,5 @@ scores:
   slice_variance:journal_entries.status: 0.5
   slice_variance:journal_lines.cost_center: 1.0
   temporal_drift:journal_entries.description: 0.932
-  temporal_drift:trial_balance.credit_balance: 0.425
-  temporal_drift:trial_balance.debit_balance: 0.618
+  temporal_drift:trial_balance.credit_balance: 0.447
+  temporal_drift:trial_balance.debit_balance: 0.535

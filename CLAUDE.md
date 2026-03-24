@@ -18,31 +18,20 @@ Three repos, vendored as git submodules under `vendor/`:
 Everything runs from this repo via direct Python API calls — no subprocess
 shelling out to sibling repos.
 
-## v0.2 Breaking Changes (DAT-183)
-
-The `dataraum-context` repo underwent a major structural cleanup (DAT-183).
-
-- **6 phases deleted**: gate phases (`quality_review`, `analysis_review`,
-  `computation_review`) and interpretation phases (`quality_summary`,
-  `entropy_interpretation`, `graph_execution`). Pipeline now has 17 phases,
-  runs straight through without pausing.
-- **`column_quality` detector deleted** — was circular (LLM re-graded what BBN
-  already observed). 15 detectors remain.
-- **`gate.py` → `measurement.py`**: `measure_entropy()` replaces
-  `aggregate_at_gate()`. No more gate persistence to PhaseLog.
-- **Harness adapted**: `conftest.py` uses `measure_entropy()` directly.
-  `runner.py` uses `target_phase=None` (all phases).
-
 ## Running Calibration
 
 ```bash
 # Full run: generate + pipeline + test
-make calibrate-zone1-detection-v1
+make calibrate                         # detection-v1 (comprehensive)
+make calibrate-typing                  # detection-typing-v1 (type-breaking only)
 
 # Or step by step:
-make generate-zone1-detection-v1      # testdata → data/zone1-detection-v1/
-make pipeline-zone1-detection-v1      # pipeline → output/zone1-detection-v1/
-uv run pytest calibration/ --strategy zone1-detection-v1 -v
+make generate-detection-v1             # testdata → data/detection-v1/
+make pipeline-detection-v1             # pipeline → output/detection-v1/
+uv run pytest calibration/ --strategy detection-v1 -v
+
+# Clean everything
+make clean
 ```
 
 The runner (`calibration/runner.py`) calls `testdata.scenarios.runner.run_scenario`
@@ -57,7 +46,7 @@ control injection parameters and detector_id overrides.
    `entropy_map.yaml` listing exactly what was injected
 3. **Pipeline** runs all phases, post-step detectors write `EntropyObjectRecord` rows
 4. **conftest.py** calls `measure_entropy()` to aggregate detector records into
-   `(table, column, detector_id) → score` (needs updating for v0.2)
+   `(table, column, detector_id) → score`
 5. **test_detector_recall.py** asserts each injection's detector scores above
    `DETECTION_THRESHOLD` (0.3) for the affected column
 
@@ -68,112 +57,33 @@ Inject → run pipeline → measure entropy → assert thresholds.
 Pure data, no LLM involvement in the test loop (LLM runs during pipeline's
 semantic phase, but tests only check scores).
 
-### 4b: Fix calibration (next)
+### 4b: Fix calibration
 Detector fires → agent proposes fix → fix applied → score drops.
 LLM-in-the-loop. Requires MCP `apply_fix` tool.
 
-## Calibration Results (2026-03-12, zone1-detection-v1)
-
-**Zone 1 detection recall: 8/9 pass** (all except unit_entropy which is misaligned)
-
-### Passing (score > 0.3)
-
-| Detector | Target | Score | Notes |
-|---|---|---|---|
-| type_fidelity | journal_lines.debit | 0.585 | Boost function on 8% quarantine rate |
-| null_ratio | journal_lines.cost_center | 0.711 | 40% injection rate |
-| outlier_rate | journal_lines.credit | 1.000 | 5% at 10x multiplier |
-| benford | bank_transactions.amount | 0.803 | 60% round numbers |
-| business_meaning | invoices.rrflp_11_zp00 | 0.375 | LLM confidence 0.25 on garbage name |
-| business_meaning | invoices.xq_v7kl | 0.350 | LLM confidence 0.30 on garbage name |
-| temporal_entropy | payments.date | 0.800 | Corrupt dates → VARCHAR → type/role mismatch |
-| relationship_entropy | payments.invoice_id | 0.447 | sqrt-boosted 20% orphan rate |
-
-### Known misaligned (xfail)
-
-| Detector | Target | Score | Root cause |
-|---|---|---|---|
-| unit_entropy | invoices.amount | ~0.1 | Measures metadata completeness, not value consistency. Injection targets values |
-
-### Not testable at Zone 1
-
-cross_table_consistency — needs Zone 3 (VALIDATION analysis). See zone-3 spec.
-
-## Calibration Results (2026-03-16, zone2-detection-v1)
-
-**Zone 2 detection recall: 5/5 pass**
-
-### Injection-testable (score > 0.3)
-
-| Detector | Target | Score | Notes |
-|---|---|---|---|
-| temporal_drift | bank_transactions.amount | 1.000 | 1.35x shift after mid-year, JS divergence |
-| derived_value | journal_lines.net_amount | 0.708 | 10% formula drift, boost curve, scores on debit via formula chain |
-| benford (z1 baseline) | bank_transactions.amount | 0.833 | Zone 1 detector still fires |
-| null_ratio (z1 baseline) | journal_lines.cost_center | 0.709 | Zone 1 detector still fires |
-| relationship_entropy (z1 baseline) | payments.invoice_id | 0.447 | Zone 1 detector still fires |
-
-### Documentation-debt detectors (tested via fix calibration, not injection recall)
-
-| Detector | Target | Clean | Injected | Notes |
-|---|---|---|---|---|
-| dimensional_entropy | journal_lines | 0.700 | 0.700 | Natural debit/credit mutex, zero injection delta |
-| dimension_coverage | enriched_payments | 0.000 | 0.200 | 20% FK orphans, below 0.3 threshold |
-
-Note: `column_quality` detector was deleted in v0.2 (DAT-183). It was a circular
-intermediary — BBN readiness replaces it.
-
-## Key Learnings
-
-### Detector scoring needs non-linear amplification
-Linear `score = rate` under-weights real problems. 8% quarantine means 8% of
-your data is broken — that's not 0.08 severity. The `_boost_rate()` function
-in type_fidelity uses `((1+rate)²/-log₁₀(rate))-0.5` to map small rates to
-scores that match actual severity.
-
-### LLM confidence must be calibrated at both tiers
-The business_meaning detector relies on LLM confidence to catch garbage column
-names. Without guidance, LLMs report 0.85-0.90 confidence on garbage names
-because they infer meaning from data. The fix: add `<confidence_guidance>` to
-BOTH tier 1 and tier 2 prompts, update the Pydantic field description, and
-tell tier 2 to PRESERVE (not UPGRADE) confidence reflecting name readability.
-Tier 2 was the main problem — it "upgraded" low tier-1 confidence to high.
-
-### Weighted average composites hide problems
-relationship_entropy's weighted average (0.5 RI + 0.3 cardinality + 0.2 semantic)
-made 20% orphan rates invisible. Max aggregation with sqrt-boosted RI is direct:
-the worst problem drives the score.
-
-### Injector dispatch must match strategy format names
-The corrupt_dates injector uses human-readable format names (`DD/MM/YYYY`) for
-dispatch. The strategy had strftime format strings (`%d/%m/%Y`). Nothing matched
-→ fallback to isoformat → zero corruption. **Always verify injector output.**
-
-### COALESCE expressions need TRY_CAST for safe fallthrough
-Strategy 1b combines multiple date patterns via COALESCE. It converts STRPTIME
-to TRY_STRPTIME (NULL on failure), but non-STRPTIME expressions (like epoch
-`CAST(col AS BIGINT)`) must also be error-safe. Use `TRY_CAST` for any inner
-type conversion so non-matching values return NULL instead of erroring.
-
-### unit_entropy is correctly misaligned
-The detector measures whether the pipeline identified and declared units
-(metadata completeness). The mix_units injection corrupts values. These are
-different things. The detector works — the injection doesn't test it.
-
-### Documentation-debt detectors need fix-loop testing
-dimensional_entropy measures intrinsic data complexity, not injected corruption.
-Clean data scores 0.5-0.7 because the patterns are real business rules.
-Injection delta is zero. The calibration test is: document_business_rule fix → score drops.
-
-### derived_value scoring uses boost + formula chain attribution
-The correlations dedup prefers sum over difference: `debit = net_amount + credit`
-wins over `net_amount = debit - credit`. Injecting drift on net_amount causes the
-debit formula to break, so the score appears on `debit`, not the injected column.
-The `_find_score` fallback handles this by checking all columns in the table.
-
 ## Strategy Design
 
-Strategies in `strategies/` control what gets injected. Key parameters:
+Two strategies, split by data source type:
+
+### detection-v1 (comprehensive)
+
+All detectors except type-breaking. No `corrupt_types` or `corrupt_dates`
+injections, so all columns retain proper types. This allows temporal, dimensional,
+cross-table, and derived-value detectors to work without interference.
+
+14 injections covering: null_ratio, outlier_rate, benford, temporal_drift,
+unit_entropy, business_meaning, relationship_entropy, dimensional_entropy,
+derived_value, cross_table_consistency (3 validations), slice_variance.
+
+### detection-typing-v1 (type-breaking)
+
+Type-breaking injections only: `corrupt_types` (journal_lines.debit) +
+`corrupt_dates` (payments.date). Only relevant for text-based sources
+(CSV, Excel, SQLite) where the pipeline must infer types.
+
+Tests: type_fidelity, temporal_entropy.
+
+### Strategy parameters
 
 - `detector_id`: override which detector this injection targets (used in
   entropy_map.yaml for test assertions)
@@ -181,14 +91,40 @@ Strategies in `strategies/` control what gets injected. Key parameters:
   curve to cross threshold
 - `formats` (corrupt_dates): must use injector's dispatch names, not strftime
 
-### Current strategy: zone1-detection-v1
+## Detection Calibration Results (2026-03-24, detection-v1)
 
-Raised rates vs baseline medium strategy:
-- null_ratio: 15% → 40% (was below 0.3 threshold)
-- corrupt_types: 3% → 15% (was invisible to type inference)
-- break_ref_integrity: 5% → 20% (composite diluted signal)
-- column names: abbreviations → garbage (`rrFlp_11_zp00`)
-- corrupt_dates: formats fixed to use injector dispatch names + epoch
+**Detection recall: 12/14 pass, 2 xfail**
+
+### Passing (score > 0.3)
+
+| Detector | Target | Score | Notes |
+|---|---|---|---|
+| null_ratio | journal_lines.cost_center | ~0.71 | 40% injection rate |
+| outlier_rate | journal_lines.credit | 1.000 | 5% at 10x multiplier |
+| benford | bank_transactions.amount | ~0.80 | 60% round numbers |
+| temporal_drift | bank_transactions.amount | 1.000 | 1.35x shift after mid-year |
+| business_meaning | invoices.rrflp_11_zp00 | ~0.38 | LLM confidence on garbage name |
+| business_meaning | invoices.xq_v7kl | ~0.35 | LLM confidence on garbage name |
+| relationship_entropy | payments.invoice_id | ~0.45 | sqrt-boosted 20% orphan rate |
+| dimensional_entropy | journal_lines.debit/credit | ~0.70 | Natural debit/credit mutex |
+| derived_value | journal_lines.net_amount | ~0.71 | 10% formula drift, boost curve |
+| cross_table (gl_invoice) | invoices.amount | pass | 15% amount corruption, FK join |
+| cross_table (payment_bank) | payments.amount | pass | 15% amount corruption, FK join |
+| cross_table (trial_balance) | trial_balance.credit_balance | pass | 10% balance corruption |
+
+### Known misaligned (xfail)
+
+| Detector | Target | Root cause |
+|---|---|---|
+| unit_entropy | invoices.amount | Measures metadata completeness, not value consistency. Injection targets values |
+| derived_value | trial_balance.debit_balance | Cross-table aggregate (TB vs GL), not within-table formula. Out of scope for derived_value |
+
+### Detection-typing-v1 results (type-breaking)
+
+| Detector | Target | Score | Notes |
+|---|---|---|---|
+| type_fidelity | journal_lines.debit | 0.585 | Boost function on 8% quarantine rate |
+| temporal_entropy | payments.date | 0.800 | Corrupt dates → VARCHAR → type/role mismatch |
 
 ## Fix Calibration Results (4b)
 
@@ -248,22 +184,67 @@ Key constraint: config fixes must be applied BEFORE pipeline re-run (typing
 needs forced_types/patterns). Metadata fixes must be applied AFTER (cascade
 cleanup deletes the rows that metadata fixes target).
 
+## Key Learnings
+
+### Detector scoring needs non-linear amplification
+Linear `score = rate` under-weights real problems. 8% quarantine means 8% of
+your data is broken — that's not 0.08 severity. The `_boost_rate()` function
+in type_fidelity uses `((1+rate)^2/-log10(rate))-0.5` to map small rates to
+scores that match actual severity.
+
+### LLM confidence must be calibrated at both tiers
+The business_meaning detector relies on LLM confidence to catch garbage column
+names. Without guidance, LLMs report 0.85-0.90 confidence on garbage names
+because they infer meaning from data. The fix: add `<confidence_guidance>` to
+BOTH tier 1 and tier 2 prompts, update the Pydantic field description, and
+tell tier 2 to PRESERVE (not UPGRADE) confidence reflecting name readability.
+Tier 2 was the main problem — it "upgraded" low tier-1 confidence to high.
+
+### Weighted average composites hide problems
+relationship_entropy's weighted average (0.5 RI + 0.3 cardinality + 0.2 semantic)
+made 20% orphan rates invisible. Max aggregation with sqrt-boosted RI is direct:
+the worst problem drives the score.
+
+### Injector dispatch must match strategy format names
+The corrupt_dates injector uses human-readable format names (`DD/MM/YYYY`) for
+dispatch. The strategy had strftime format strings (`%d/%m/%Y`). Nothing matched
+→ fallback to isoformat → zero corruption. **Always verify injector output.**
+
+### unit_entropy is correctly misaligned
+The detector measures whether the pipeline identified and declared units
+(metadata completeness). The mix_units injection corrupts values. These are
+different things. The detector works — the injection doesn't test it.
+
+### Documentation-debt detectors need fix-loop testing
+dimensional_entropy measures intrinsic data complexity, not injected corruption.
+Clean data scores 0.5-0.7 because the patterns are real business rules.
+Injection delta is zero. The calibration test is: document_business_rule fix → score drops.
+
+### derived_value scoring uses boost + formula chain attribution
+The correlations dedup prefers sum over difference: `debit = net_amount + credit`
+wins over `net_amount = debit - credit`. Injecting drift on net_amount causes the
+debit formula to break, so the score appears on `debit`, not the injected column.
+The `_find_score` fallback handles this by checking all columns in the table.
+
+### Cross-table validations need explicit FK join paths
+LLM agents fall back to fuzzy date+amount matching when FK paths aren't obvious,
+masking corruption. Testdata must include explicit FK columns (e.g., Invoice.entry_id,
+BankTransaction.payment_id) and validation specs must mandate FK-first join strategy.
+
+### Aggregate evaluator must check rates against tolerance
+The validation agent's aggregate handler was returning `passed=True` unconditionally.
+Must extract orphan_rate/violation_rate from results and compare against the
+tolerance parameter. Otherwise cross-table validations never fail.
+
 ## Backlog
 
-### Zone 3 calibration (see spec/03-zone-3-interpretation.md)
-
-**Done:**
-- ~~Implement `cross_table_consistency` detector~~ (scores 1.000)
-- ~~Implement `business_cycle_health` detector~~ (scores 0.158)
-- ~~Add `AnalysisKey.VALIDATION` and `AnalysisKey.BUSINESS_CYCLES`~~
-
-**Remaining:**
-- Update network.yaml with new nodes + edges (cross_table, business_cycle nodes)
-- Create zone3-detection-v1 strategy
-- Calibrate cross_table_consistency (injection recall)
-- Observe business_cycle_health (documentation-debt style)
-
-### Deferred
-- unit_entropy: measures metadata completeness, not value consistency — accept misalignment or create separate injection
-- Zone 2 fix schemas: wire FixSchemas for dimensional_entropy, temporal_drift, etc.
+### Calibration improvements
+- Update network.yaml with cross_table and business_cycle nodes + edges
+- Wire fix schemas for dimensional_entropy, temporal_drift, etc.
 - dimension_coverage: add sqrt boost
+- unit_entropy: accept misalignment or create separate injection
+
+### Roadmap (see [Pipeline Redesign](https://linear.app/dataraum/project/pipeline-redesign-yaml-driven-dag-entropy-measurement-9c6b0d33aa5c))
+- Business pattern filter — LLM classification to distinguish expected patterns from real issues
+- Pipeline YAML redesign — single source of truth, post-step declarations
+- Showcase playbooks — real-world test scenarios for demo
