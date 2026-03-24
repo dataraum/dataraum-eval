@@ -9,8 +9,6 @@ Run after tests: uv run pytest calibration/ -v && uv run python -m calibration.t
 
 from __future__ import annotations
 
-import json
-import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -22,29 +20,16 @@ OUTPUT_DIR = EVAL_ROOT / "output"
 REPORTS_DIR = EVAL_ROOT / "calibration" / "reports"
 
 
-def _load_gate_scores(db_path: Path) -> dict[str, float]:
-    """Load gate scores, keyed as 'detector:table.column'."""
-    conn = sqlite3.connect(str(db_path))
-    row = conn.execute(
-        "SELECT outputs FROM phase_logs "
-        "WHERE phase_name = 'quality_review' "
-        "ORDER BY completed_at DESC LIMIT 1"
-    ).fetchone()
-    conn.close()
+def _load_scores(output_dir: Path) -> dict[str, float]:
+    """Load detector scores via measure_entropy(), keyed as 'detector:table.column'."""
+    from calibration.conftest import _load_scores
 
-    if not row or not row[0]:
-        return {}
-
-    outputs = json.loads(row[0])
-    column_details = outputs.get("gate_column_details", {})
-    id_map = outputs.get("detector_id_map", {})
-
+    gate = _load_scores(output_dir)
     scores: dict[str, float] = {}
-    for dim_path, targets in column_details.items():
-        detector_id = id_map.get(dim_path, dim_path.rsplit(".", 1)[-1])
-        for target, score in targets.items():
-            ref = target.removeprefix("column:")
-            scores[f"{detector_id}:{ref}"] = round(score, 3)
+    for (table, column, detector), score in gate.column.items():
+        scores[f"{detector}:{table}.{column}"] = round(score, 3)
+    for (table, detector), score in gate.table.items():
+        scores[f"{detector}:{table}"] = round(score, 3)
     return scores
 
 
@@ -58,9 +43,9 @@ def generate_report(strategy: str) -> Path:
         emap = yaml.safe_load(f)
 
     # Load injected and clean scores
-    injected_scores = _load_gate_scores(OUTPUT_DIR / strategy / "metadata.db")
-    clean_db = OUTPUT_DIR / "clean" / "metadata.db"
-    clean_scores = _load_gate_scores(clean_db) if clean_db.exists() else {}
+    injected_scores = _load_scores(OUTPUT_DIR / strategy)
+    clean_dir = OUTPUT_DIR / "clean"
+    clean_scores = _load_scores(clean_dir) if (clean_dir / "metadata.db").exists() else {}
 
     # Compute recall per injection
     threshold = 0.3

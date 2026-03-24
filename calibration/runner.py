@@ -198,11 +198,11 @@ def _specs_to_documents(
 
 
 def run_fix_pipeline(strategy: str, fix_specs: list[FixSpec] | None = None) -> None:
-    """Apply fixes and re-measure gate scores on fixed output.
+    """Apply fixes and re-measure entropy scores on fixed output.
 
     Two-pass application to respect fix sequencing:
     1. Preprocess (config fixes) — triggers cascade cleanup + pipeline re-run
-    2. Postprocess (metadata fixes) — patches DB after re-run, re-measures gate
+    2. Postprocess (metadata fixes) — patches DB after re-run, re-measures
 
     Metadata fixes must be applied AFTER re-run because cascade cleanup
     deletes the rows they target (e.g. SemanticAnnotation).
@@ -226,8 +226,8 @@ def run_fix_pipeline(strategy: str, fix_specs: list[FixSpec] | None = None) -> N
 
     data_dir = DATA_DIR / strategy
     source_path = data_dir if data_dir.exists() else None
-    # v0.2: gate phases removed. apply_fixes needs a real phase name
-    # for _detector_ids_for_gate(); "validation" is the last phase (all detectors).
+    # apply_fixes needs a phase name for _detector_ids_for_gate();
+    # "validation" is the last phase (collects all detectors).
     target_phase = "validation"
 
     preprocess_docs = _specs_to_documents(fix_specs, routing="preprocess")
@@ -249,7 +249,7 @@ def run_fix_pipeline(strategy: str, fix_specs: list[FixSpec] | None = None) -> N
         total_applied += len(result.applied_fixes)
         phases_rerun = result.phases_rerun
 
-    # Pass 2: metadata fixes (postprocess) — patch DB + re-measure gate
+    # Pass 2: metadata fixes (postprocess) — patch DB + re-measure
     if postprocess_docs:
         result = apply_fixes(
             output_dir=fixed_dir,
@@ -278,7 +278,7 @@ if __name__ == "__main__":
     parser.add_argument("--target-phase", default=None,
                         help="Pipeline target phase (default: all phases)")
     parser.add_argument("--apply-fixes", action="store_true",
-                        help="Copy output, apply fixes, re-measure gate scores")
+                        help="Copy output, apply fixes, re-measure scores")
     args = parser.parse_args()
 
     if args.apply_fixes:

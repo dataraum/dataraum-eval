@@ -1,8 +1,7 @@
 # Zone 2: Enrichment
 
-> Zone 2 runs from enriched views through quality summary. It ends at the
-> `analysis_review` gate (Gate 2). This zone joins data across tables,
-> detects cross-column patterns, and measures drift.
+> Zone 2 runs from enriched views through temporal slice analysis. This zone
+> joins data across tables, detects cross-column patterns, and measures drift.
 
 ## Phases
 
@@ -10,14 +9,12 @@
 enriched_views (LLM — creates fact+dim JOINs)
   → correlations (detects derived columns/formulas)
   → slicing (LLM — selects categorical dimensions)
-  → slicing_view (creates DuckDB slice tables)
+  → slicing_view (creates DuckDB slice views)
   → slice_analysis (profiles slices, produces SLICE_VARIANCE)
   → temporal_slice_analysis (period-over-period drift, produces DRIFT_SUMMARIES)
-  → quality_summary (LLM — grades column quality across slices, produces COLUMN_QUALITY_REPORTS)
-  → analysis_review [GATE 2]
 ```
 
-## Additional Analyses at Gate 2
+## Zone 2 Analyses
 
 | AnalysisKey | Phase | What it contains |
 |---|---|---|
@@ -25,15 +22,12 @@ enriched_views (LLM — creates fact+dim JOINs)
 | CORRELATION | correlations | DerivedColumn records: formulas, match rates, source columns |
 | SLICE_VARIANCE | slice_analysis | Per-slice statistical profiles, variance across categories |
 | DRIFT_SUMMARIES | temporal_slice_analysis | ColumnDriftSummary: JS divergence per period, drift evidence |
-| COLUMN_QUALITY_REPORTS | quality_summary | ColumnQualityReport: LLM quality grades per column per slice |
-
-## Additional Detectors at Gate 2
+## Zone 2 Detectors
 
 | Detector | Measures | Scope | Required analyses | Injection-testable? |
 |---|---|---|---|---|
 | temporal_drift | Period-over-period distribution shift (JS divergence) | column | DRIFT_SUMMARIES, SEMANTIC | Yes |
 | dimensional_entropy | Undocumented cross-column patterns (mutual exclusivity, correlations) | table | SLICE_VARIANCE | No — measures documentation debt |
-| column_quality | LLM quality grades inverted to entropy | table | COLUMN_QUALITY_REPORTS | No — high baseline noise |
 | dimension_coverage | NULL rate in enriched view dimension columns | view | ENRICHED_VIEW | Yes (via FK orphans) |
 | derived_value | Formula match rate from correlation analysis | column | CORRELATION | Yes |
 
@@ -46,7 +40,6 @@ enriched_views (LLM — creates fact+dim JOINs)
 
 **Documentation-debt detectors** (fix test: document rule → score drops):
 - `dimensional_entropy`: Detects undocumented cross-column patterns (e.g. debit/credit mutual exclusivity). Clean data already scores 0.5-0.7 because the patterns are real business rules. The test is: `document_business_rule` fix → score drops.
-- `column_quality`: Aggregates LLM quality grades. Clean baseline is 0.28-0.30 (at threshold). Injections raise it only ~0.12. The signal is too noisy for recall testing. The test is: improve quality → score drops.
 
 ## Calibration Results (zone2-detection-v1)
 
@@ -66,7 +59,6 @@ enriched_views (LLM — creates fact+dim JOINs)
 |---|---|---|---|---|
 | dimensional_entropy | journal_lines | 0.700 | 0.700 | Natural debit/credit mutex |
 | dimensional_entropy | trial_balance | 0.500 | 0.500 | Natural balance patterns |
-| column_quality | journal_lines | 0.300 | 0.420 | LLM grade noise |
 | dimension_coverage | enriched_payments | 0.000 | 0.200 | 20% FK orphans |
 
 ### Scoring Curves
@@ -85,22 +77,21 @@ mismatch 0.15 → score 1.00 (severe)
 |---|---|---|---|
 | inject_temporal_drift | temporal_drift | 1.35x shift after 2025-07-01 | Column-scoped, high signal |
 | drift_formula | derived_value | 10% error in net_amount = debit - credit | Requires correlations to detect formula first |
-| break_benford | benford | 60% round numbers | Zone 1 baseline check at Gate 2 |
-| introduce_nulls | null_ratio | 40% on cost_center | Zone 1 baseline check at Gate 2 |
+| break_benford | benford | 60% round numbers | Zone 1 baseline check at Zone 2 |
+| introduce_nulls | null_ratio | 40% on cost_center | Zone 1 baseline check at Zone 2 |
 | break_referential_integrity | relationship_entropy | 20% orphans on invoice_id | Also creates dimension_coverage signal (0.2) |
 
 ### Removed Injections
 
 - `create_mutual_exclusivity` (debit/credit): Removed — clean data already has natural mutual exclusivity (score 0.7). Injection added zero delta.
 
-## Fix Schemas at Gate 2
+## Fix Schemas (Zone 2)
 
 Inherits all Zone 1 config fixes. Zone 2-specific fix schemas are not yet implemented (4b scope). Planned:
 
 - `dimensional_entropy` → `create_constraint` (metadata target → SemanticAnnotation)
 - `dimensional_entropy` → `document_business_rule` (config target → semantic.yaml)
 - `temporal_drift` → `investigate_drift`, `transform_add_time_filter` (resolution hints exist, no FixSchema yet)
-- `column_quality` → `investigate_quality_issues` (resolution hint, no FixSchema yet)
 - `dimension_coverage` → `investigate_relationship` (resolution hint, no FixSchema yet)
 - `derived_value` → `document_formula`, `investigate_formula_mismatches` (resolution hints, no FixSchema yet)
 
@@ -113,7 +104,7 @@ Inherits all Zone 1 config fixes. Zone 2-specific fix schemas are not yet implem
 ## Key Learnings
 
 ### Documentation-debt detectors need fix-loop testing, not injection recall
-dimensional_entropy and column_quality measure intrinsic data complexity and LLM quality perception. Clean data scores high because the patterns/quality issues are real. The calibration test is: apply `document_business_rule` fix → score drops, not inject → score rises.
+dimensional_entropy measures intrinsic data complexity. Clean data scores high because the patterns are real business rules. The calibration test is: apply `document_business_rule` fix → score drops, not inject → score rises.
 
 ### derived_value needs non-linear scoring
 Linear `score = 1 - match_rate` requires 30%+ formula errors to cross 0.3 threshold. The boost function (same as type_fidelity) maps 5% errors to score 0.35, matching actual severity: 5% of your derived values being wrong is a real problem.

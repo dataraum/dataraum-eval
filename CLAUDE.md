@@ -20,65 +20,18 @@ shelling out to sibling repos.
 
 ## v0.2 Breaking Changes (DAT-183)
 
-The `dataraum-context` repo underwent a major structural cleanup. The calibration
-harness needs updating to work with v0.2. Key changes:
+The `dataraum-context` repo underwent a major structural cleanup (DAT-183).
 
-### Deleted phases (6)
-- `quality_review`, `analysis_review`, `computation_review` (gate phases)
-- `quality_summary`, `entropy_interpretation`, `graph_execution` (interpretation phases)
-
-Pipeline now has 17 phases (was 23). No gate phases exist — the pipeline runs
-straight through without pausing.
-
-### Deleted detector
-- `column_quality` — was a circular intermediary (LLM re-graded what BBN already observed)
-
-15 detectors remain (was 16).
-
-### Renamed module: `gate.py` → `measurement.py`
-- `aggregate_at_gate()` → `measure_entropy()`
-- `assess_contracts()` → `check_contracts()`
-- `GateResult` → `MeasurementResult`
-- `ExitCheckIssue` → `ContractViolation`
-- `persist_gate_result()` → **DELETED** (no longer persists to PhaseLog)
-
-### Removed fields
-- `PhaseLog.entropy_scores` — removed from DB model
-- `PhaseLog.outputs` no longer contains gate data (`gate_column_details`, `gate_scores`, etc.)
-- `PipelineResult.deferred_issues` — removed
-- `is_quality_gate` — removed from Phase protocol
-
-### What this means for the calibration harness
-
-**`conftest.py:_load_gate_scores()`** — BROKEN. It reads `PhaseLog.outputs["gate_column_details"]`
-which was written by `persist_gate_result()`. That function is deleted. v0.2 pipelines will have
-no gate PhaseLog records at all.
-
-**Fix:** Replace `_load_gate_scores()` with a call to `measure_entropy()` from `dataraum.entropy.measurement`.
-This reads `EntropyObjectRecord` rows directly (which are still written by post-step detectors).
-
-```python
-from dataraum.entropy.measurement import measure_entropy
-from dataraum.entropy.detectors.base import get_default_registry
-
-# Get all detector IDs
-registry = get_default_registry()
-detector_ids = [d.detector_id for d in registry.get_all_detectors()]
-
-# Measure (equivalent to what aggregate_at_gate did)
-result = measure_entropy(session, source_id, detector_ids)
-# result.column_details: dict[dim_path, dict[target, score]]
-# result.scores: dict[dim_path, float]
-```
-
-**`runner.py:run_pipeline()`** — The `target_phase="quality_review"` default is wrong.
-Gate phases don't exist. Either:
-- Remove `target_phase` (run all 17 phases), or
-- Set to the last phase in the zone you're testing (e.g. `"temporal_slice_analysis"` for zone 1+2)
-
-**`runner.py:run_fix_pipeline()`** — Uses `apply_fixes()` from `fixes/api.py` which was updated
-to use `measure_entropy()` instead of `persist_gate_result()`. Should still work, but `target_phase`
-defaults need updating (same issue as above).
+- **6 phases deleted**: gate phases (`quality_review`, `analysis_review`,
+  `computation_review`) and interpretation phases (`quality_summary`,
+  `entropy_interpretation`, `graph_execution`). Pipeline now has 17 phases,
+  runs straight through without pausing.
+- **`column_quality` detector deleted** — was circular (LLM re-graded what BBN
+  already observed). 15 detectors remain.
+- **`gate.py` → `measurement.py`**: `measure_entropy()` replaces
+  `aggregate_at_gate()`. No more gate persistence to PhaseLog.
+- **Harness adapted**: `conftest.py` uses `measure_entropy()` directly.
+  `runner.py` uses `target_phase=None` (all phases).
 
 ## Running Calibration
 
@@ -296,15 +249,6 @@ needs forced_types/patterns). Metadata fixes must be applied AFTER (cascade
 cleanup deletes the rows that metadata fixes target).
 
 ## Backlog
-
-### v0.2 harness adaptation (MUST DO before calibration runs)
-
-1. **`conftest.py`**: Replace `_load_gate_scores()` — call `measure_entropy()` from
-   `dataraum.entropy.measurement` instead of reading `PhaseLog.outputs`
-2. **`runner.py`**: Remove `target_phase="quality_review"` default — run all phases
-   (or set to last relevant phase for the zone being tested)
-3. **Zone 2 results**: Remove `column_quality` from documentation-debt table (detector deleted)
-4. **Fix runner**: Verify `apply_fixes()` still works with v0.2 `measure_entropy()` rename
 
 ### Zone 3 calibration (see spec/03-zone-3-interpretation.md)
 

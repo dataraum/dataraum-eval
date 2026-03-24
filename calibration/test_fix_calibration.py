@@ -4,8 +4,8 @@ For each fix spec, the detector must produce a lower score after the fix
 is applied. This proves the complete fix system works end-to-end:
 detector fires → fix applied → score drops.
 
-Phase 1: accept_finding fixes (config writes, re-measure at gate)
-Phase 2: metadata fixes (direct DB update, re-measure at gate)
+Phase 1: accept_finding fixes (config writes, re-measure)
+Phase 2: metadata fixes (direct DB update, re-measure)
 Phase 3: config fixes requiring phase re-run
 """
 
@@ -56,7 +56,7 @@ def test_fix_reduces_score(
     """Applying a fix must reduce the detector score for the affected column.
 
     Exception: accept_finding keeps scores honest — the score stays unchanged
-    and the gate passes via contract overrule (accepted evidence flag).
+    and the contract passes via overrule (accepted evidence flag).
     """
     if fix_spec.xfail_reason:
         pytest.xfail(fix_spec.xfail_reason)
@@ -74,7 +74,7 @@ def test_fix_reduces_score(
     )
 
     if fix_spec.is_acceptance:
-        # accept_finding keeps scores honest — contract overrule handles the gate.
+        # accept_finding keeps scores honest — contract overrule handles compliance.
         # Score should be approximately unchanged (re-measurement may cause minor drift).
         assert abs(post - pre) < 0.05, (
             f"{fix_spec.test_id}: score changed unexpectedly after accept_finding — "
