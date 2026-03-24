@@ -8,10 +8,10 @@ per-table or per-view.
 This is the core calibration test. A failing test means a detector is broken,
 not that the test needs weakening.
 
-Zone 2 detectors (temporal_drift, dimensional_entropy, etc.) are skipped
-if the pipeline only ran through quality_review. Run through analysis_review
-to test them. Detectors that don't exist yet (cross_table_consistency,
-derived_value_consistency) are always skipped.
+Two strategies cover all 15 detectors:
+- detection-v1: comprehensive (no type-breaking). 13 detectors.
+- detection-typing-v1: type_fidelity + temporal_entropy (breaks types,
+  run separately to avoid interference with downstream detectors).
 """
 
 from __future__ import annotations
@@ -26,20 +26,6 @@ import yaml
 DETECTION_THRESHOLD = 0.3
 
 EVAL_ROOT = Path(__file__).parent.parent
-
-# Zone 2 detectors — need enrichment analyses, skip if pipeline only ran to quality_review
-ZONE_2_DETECTORS = frozenset({
-    "temporal_drift",       # Zone 2: needs DRIFT_SUMMARIES
-    "dimensional_entropy",  # Zone 2: needs SLICE_VARIANCE
-    "derived_value",        # Zone 2: needs CORRELATION
-    "dimension_coverage",   # Zone 2: needs ENRICHED_VIEW
-})
-
-# Zone 3 detectors — need validation/business_cycles analyses
-ZONE_3_DETECTORS = frozenset({
-    "cross_table_consistency",  # Zone 3: needs VALIDATION
-    "business_cycle_health",    # Zone 3: needs BUSINESS_CYCLES
-})
 
 # Detectors that don't exist yet — always skip
 NOT_IMPLEMENTED = frozenset({
@@ -57,14 +43,6 @@ KNOWN_DETECTOR_GAPS: dict[tuple[str, str, str], str] = {
     ("derived_value", "trial_balance", "debit_balance"): (
         "Cross-table aggregate formula (SUM(journal_lines.debit) GROUP BY account, period) — "
         "out of scope for within-table correlation detector"
-    ),
-    ("cross_table_consistency", "invoices", "amount"): (
-        "No validation spec tests invoice↔GL reconciliation. "
-        "Needs a new validation YAML comparing invoice amounts to journal line totals."
-    ),
-    ("cross_table_consistency", "payments", "amount"): (
-        "No validation spec tests payment↔bank reconciliation. "
-        "Needs a new validation YAML comparing payment amounts to bank transaction amounts."
     ),
 }
 
@@ -89,7 +67,7 @@ def _get_injections(strategy: str) -> list[dict[str, Any]]:
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     """Dynamically parametrize injection tests based on --strategy."""
     if "injection" in metafunc.fixturenames:
-        strategy = metafunc.config.getoption("--strategy", default="zone1-detection-v1")
+        strategy = metafunc.config.getoption("--strategy", default="detection-v1")
         injections = _get_injections(strategy)
         ids = [_injection_id(inj) for inj in injections]
         metafunc.parametrize("injection", injections, ids=ids)
@@ -130,20 +108,6 @@ def _find_score(
     return best
 
 
-def _has_any_score(
-    detector: str,
-    pipeline_scores: dict[tuple[str, str, str], float],
-    pipeline_table_scores: dict[tuple[str, str], float],
-    pipeline_view_scores: dict[tuple[str, str], float],
-) -> bool:
-    """Check if a detector produced any score at any scope."""
-    return (
-        any(d == detector for _, _, d in pipeline_scores)
-        or any(d == detector for _, d in pipeline_table_scores)
-        or any(d == detector for _, d in pipeline_view_scores)
-    )
-
-
 def test_injection_detected(
     injection: dict[str, Any],
     pipeline_scores: dict[tuple[str, str, str], float],
@@ -159,12 +123,6 @@ def test_injection_detected(
     # Always skip unimplemented detectors
     if detector in NOT_IMPLEMENTED:
         pytest.skip(f"{detector} not implemented yet")
-
-    # Zone 2+ detectors: skip if pipeline didn't produce scores for this detector
-    if detector in ZONE_2_DETECTORS or detector in ZONE_3_DETECTORS:
-        if not _has_any_score(detector, pipeline_scores, pipeline_table_scores, pipeline_view_scores):
-            zone = "Zone 3" if detector in ZONE_3_DETECTORS else "Zone 2"
-            pytest.skip(f"{detector} needs {zone} — run pipeline through computation_review")
 
     # Mark known-misaligned injections as expected failures
     if detector in KNOWN_MISALIGNED:

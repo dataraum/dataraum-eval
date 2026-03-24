@@ -1,7 +1,7 @@
 """Calibration test fixtures.
 
 Loads entropy_map.yaml, ground_truth.yaml, and pipeline output for assertions.
-Strategy is configurable via --strategy flag (default: zone1-detection-v1).
+Strategy is configurable via --strategy flag (default: detection-v1).
 """
 
 from __future__ import annotations
@@ -21,8 +21,8 @@ OUTPUT_DIR = EVAL_ROOT / "output"
 def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption(
         "--strategy",
-        default="zone1-detection-v1",
-        help="Strategy name to test against (default: zone1-detection-v1)",
+        default="detection-v1",
+        help="Strategy name to test against (default: detection-v1)",
     )
 
 

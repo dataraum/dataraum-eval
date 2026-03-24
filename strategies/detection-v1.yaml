@@ -1,0 +1,141 @@
+name: detection-v1
+level: high
+description: >
+  Comprehensive detection calibration — all detectors except type-breaking.
+  No corrupt_types or corrupt_dates injections, so all columns retain their
+  proper types. This allows temporal, dimensional, cross-table, and
+  derived-value detectors to work without interference.
+
+# Detectors tested: null_ratio, outlier_rate, benford, temporal_drift,
+# unit_entropy, business_meaning, relationship_entropy, dimensional_entropy,
+# derived_value, cross_table_consistency, slice_variance
+#
+# NOT tested here (see detection-typing-v1):
+# type_fidelity, temporal_entropy
+
+injections:
+  # --- Value layer ---
+
+  - injector: introduce_nulls
+    table: journal_lines
+    detector_id: null_ratio
+    params:
+      col: cost_center
+      ratio: 0.40
+      severity: high
+
+  - injector: inject_outliers
+    table: journal_lines
+    detector_id: outlier_rate
+    params:
+      col: credit
+      ratio: 0.05
+      factor: 10.0
+      severity: medium
+
+  - injector: break_benford
+    table: bank_transactions
+    detector_id: benford
+    params:
+      col: amount
+      method: round_numbers
+      severity: medium
+
+  - injector: inject_temporal_drift
+    table: bank_transactions
+    detector_id: temporal_drift
+    params:
+      value_col: amount
+      time_col: date
+      shift_date: "2025-09-01"
+      shift_factor: 1.35
+      severity: medium
+
+  # --- Semantic layer ---
+
+  - injector: mix_units
+    table: invoices
+    detector_id: unit_entropy
+    params:
+      col: amount
+      alt_currency: EUR
+      ratio: 0.10
+      fx_rate: 1.1
+      severity: medium
+
+  - injector: obscure_column_names
+    table: invoices
+    detector_id: business_meaning
+    params:
+      mapping:
+        vendor_id: rrFlp_11_zp00
+        payment_terms: xQ_v7kL
+      severity: high
+
+  # --- Structural layer ---
+
+  - injector: break_referential_integrity
+    table: payments
+    detector_id: relationship_entropy
+    params:
+      fk_col: invoice_id
+      ratio: 0.20
+      severity: high
+
+  - injector: create_mutual_exclusivity
+    table: journal_lines
+    detector_id: dimensional_entropy
+    params:
+      col_a: debit
+      col_b: credit
+      severity: low
+
+  # --- Derived / computational layer ---
+
+  - injector: drift_formula
+    table: journal_lines
+    detector_id: derived_value
+    params:
+      derived_col: net_amount
+      source_cols: [debit, credit]
+      error_ratio: 0.10
+      severity: medium
+
+  # --- Cross-table consistency ---
+
+  - injector: break_gl_invoice_match
+    table: invoices
+    detector_id: cross_table_consistency
+    params:
+      col: amount
+      ratio: 0.15
+      severity: medium
+
+  - injector: break_payment_bank_match
+    table: payments
+    detector_id: cross_table_consistency
+    params:
+      col: amount
+      ratio: 0.15
+      severity: medium
+
+  - injector: break_trial_balance
+    table: trial_balance
+    detector_id: cross_table_consistency
+    params:
+      col: credit_balance
+      ratio: 0.10
+      severity: medium
+
+  # --- Computational layer (known gaps) ---
+
+  - injector: drift_formula
+    table: trial_balance
+    detector_id: derived_value
+    params:
+      derived_col: debit_balance
+      source_cols:
+        - account_id
+        - period
+      error_ratio: 0.02
+      severity: medium

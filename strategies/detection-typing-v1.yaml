@@ -1,0 +1,31 @@
+name: detection-typing-v1
+level: high
+description: >
+  Type-breaking detection calibration — tests type_fidelity and temporal_entropy.
+  These injections corrupt column types (VARCHAR garbage in numeric columns,
+  unparseable date formats) which breaks downstream analysis. Run separately
+  from detection-v1 to avoid interference.
+  Only relevant for text-based sources (CSV, Excel, SQLite) where type
+  information is inferred, not declared.
+
+# Detectors tested: type_fidelity, temporal_entropy
+
+injections:
+  - injector: corrupt_types
+    table: journal_lines
+    detector_id: type_fidelity
+    params:
+      col: debit
+      ratio: 0.15
+      severity: high
+
+  - injector: corrupt_dates
+    table: payments
+    detector_id: temporal_entropy
+    params:
+      col: date
+      formats:
+        - "DD-Mon-YY"
+        - "Mon DD, YYYY"
+        - "epoch"
+      severity: high
