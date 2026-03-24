@@ -58,6 +58,14 @@ KNOWN_DETECTOR_GAPS: dict[tuple[str, str, str], str] = {
         "Cross-table aggregate formula (SUM(journal_lines.debit) GROUP BY account, period) — "
         "out of scope for within-table correlation detector"
     ),
+    ("cross_table_consistency", "invoices", "amount"): (
+        "No validation spec tests invoice↔GL reconciliation. "
+        "Needs a new validation YAML comparing invoice amounts to journal line totals."
+    ),
+    ("cross_table_consistency", "payments", "amount"): (
+        "No validation spec tests payment↔bank reconciliation. "
+        "Needs a new validation YAML comparing payment amounts to bank transaction amounts."
+    ),
 }
 
 
