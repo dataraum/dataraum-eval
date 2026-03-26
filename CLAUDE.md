@@ -236,6 +236,38 @@ The validation agent's aggregate handler was returning `passed=True` uncondition
 Must extract orphan_rate/violation_rate from results and compare against the
 tolerance parameter. Otherwise cross-table validations never fail.
 
+## Tool Surface Validation (DAT-191)
+
+After each phase of the MCP Practitioner API (DAT-173), we run tool-level eval tests
+against the same ground truth data used for detector calibration. See
+[DAT-191](https://linear.app/dataraum/issue/DAT-191/eval-tool-surface-validation-per-phase-ground-truth-regression)
+for the full plan.
+
+Tests live in `calibration/tools/` and assert against `ground_truth.yaml` (exact
+financial figures) and `entropy_map.yaml` (known injections). One round per phase:
+
+| Round | After phase | Tests |
+|---|---|---|
+| 1 | look + measure + why + run_sql | Schema correctness, evidence targeting, SQL enrichment |
+| 2 | compare + validate + report + query | Financial accuracy, ground truth query regression |
+| 3 | hypothesize + fix | BBN predictions, fix loop (hypothesis → validate → fix → measure) |
+| 4 | teach | Goodhart firewall, assumption integration |
+| 5 | session protocol | End-to-end investigation → deliver flow |
+
+`query` tests are LLM-in-the-loop (mark `@pytest.mark.llm`). All others are
+deterministic. Each round is additive — Round 2 re-runs Round 1 tests.
+
+```bash
+# After Phase 1:
+uv run pytest calibration/tools/test_look.py calibration/tools/test_why.py -v
+
+# After Phase 2 (includes Round 1):
+uv run pytest calibration/tools/ -k "not hypothesize and not fix_loop and not goodhart and not teach and not session" -v
+
+# Full tool surface (after all phases):
+uv run pytest calibration/tools/ -v
+```
+
 ## Backlog
 
 ### Calibration improvements

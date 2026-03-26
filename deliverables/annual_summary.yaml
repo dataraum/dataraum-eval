@@ -1,0 +1,90 @@
+# Annual Financial Summary — expected deliverable for detection-v1 strategy
+#
+# Ground truth values from data/detection-v1/ground_truth.yaml.
+# The agent must produce these answers despite injected data quality issues
+# (nulls, outliers, temporal drift, orphan FKs, formula drift, etc.)
+#
+# This is the simplest deliverable: "can the MCP surface answer basic
+# financial questions correctly on corrupted data?"
+
+name: annual_financial_summary
+description: >
+  Board-level annual financial summary for FY2025.
+  The agent should detect data quality issues, fix or accept them
+  with documented assumptions, then produce correct metrics.
+source_strategy: detection-v1
+ground_truth: data/detection-v1/ground_truth.yaml
+entropy_map: data/detection-v1/entropy_map.yaml
+
+metrics:
+  - id: total_revenue
+    question: "What is total revenue for fiscal year 2025?"
+    expected: 51766199.72
+    tolerance_pct: 1.0
+    notes: >
+      Revenue is computed from journal_lines (credit entries to revenue accounts).
+      Injections affecting this: outlier_rate on journal_lines.credit (5% at 10x),
+      null_ratio on journal_lines.cost_center (40%, shouldn't affect revenue sum
+      but may confuse grouping). The agent must account for outliers.
+
+  - id: total_expenses
+    question: "What is total expenses for fiscal year 2025?"
+    expected: 23527077.59
+    tolerance_pct: 1.0
+    notes: >
+      Expenses from journal_lines (debit entries to expense accounts).
+      Same outlier/null injections apply.
+
+  - id: gross_profit
+    question: "What is gross profit for fiscal year 2025?"
+    expected: 28239122.13
+    tolerance_pct: 1.0
+    notes: >
+      Revenue minus expenses. If the agent gets revenue and expenses right,
+      this should follow. Tests arithmetic consistency.
+
+  - id: ending_ar_balance
+    question: "What is the ending accounts receivable balance as of December 2025?"
+    expected: 13070114.83
+    tolerance_pct: 1.0
+    notes: >
+      AR balance from open invoices. Injections: relationship_entropy on
+      payments.invoice_id (20% orphans), cross_table on invoices.amount (15%).
+      The agent must recognize and handle these.
+
+  - id: annual_dso
+    question: "What are the days sales outstanding (DSO) for fiscal year 2025?"
+    expected: 92.2
+    tolerance_abs: 3.0
+    notes: >
+      DSO = (ending AR / total revenue) * 365. Compound metric — requires
+      both AR and revenue to be correct. Higher tolerance because the
+      formula depends on two potentially affected values.
+
+  - id: ending_cash_balance
+    question: "What is the ending cash balance as of December 2025?"
+    expected: 18327138.82
+    tolerance_pct: 1.5
+    notes: >
+      Cash from bank_transactions. Affected by temporal_drift injection
+      (1.35x shift after mid-year) and benford injection (60% round numbers).
+      Wider tolerance — the temporal drift deliberately corrupts amounts.
+
+  - id: journal_balanced
+    question: "Are all journal entries balanced (total debits equal total credits)?"
+    expected: true
+    type: boolean
+    notes: >
+      Fundamental accounting invariant. Should be true even with injections,
+      since outliers affect amounts but not the debit=credit constraint.
+      If the agent reports false, it may be double-counting.
+
+quality_requirements:
+  - id: issues_surfaced
+    description: >
+      The agent should identify at least 3 data quality issues via get_quality
+      or entropy scores before answering financial questions.
+  - id: assumptions_declared
+    description: >
+      Every query response should include non-empty assumptions or
+      decisions_made explaining how data quality was handled.
