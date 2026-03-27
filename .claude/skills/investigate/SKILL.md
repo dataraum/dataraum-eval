@@ -15,17 +15,29 @@ Read `data/$0/ground_truth.yaml` — the correct financial metrics (computed fro
 
 Read `data/$0/entropy_map.yaml` — the known injections with target columns and detector IDs. Only read the first ~100 lines to get the injection summary (the file is large due to row indices). Focus on the `injection_id`, `target_file`, `target_column`, `detector_id`, and `parameters` fields.
 
-## Step 2: Check data quality via MCP
+## Step 2: Start session and look at the data
 
-Call the `get_quality` MCP tool (no arguments needed) to get entropy scores and contract status.
+Call `begin_session` to initialize. Note the contract and sources info.
+
+Call `look` (no target) to get the full schema overview — tables, columns, types, roles.
+
+For 2-3 tables that have known injections, call `look` with a target to see column profiles and distributions. Check: does the metadata make sense? Are injected columns showing signs of corruption?
+
+## Step 3: Measure entropy
+
+Call `measure` (no target) to get all measurement points, BBN readiness, and pipeline status.
 
 For each injection in entropy_map, check:
-- Does the corresponding detector show a score > 0.3 for the target column?
-- Record: injection_id, detector_id, target, expected score > 0.3, actual score, pass/fail
+- Is there a measurement point for the target column + expected dimension?
+- Is the score > 0.3?
+- What is the BBN readiness for the column? (should be "investigate" or "blocked" for injected columns)
+- Record: injection_id, detector_id, target, expected score > 0.3, actual score, readiness, pass/fail
 
-## Step 3: Check financial accuracy via MCP
+Call `measure` with `target` on specific tables to drill into per-column detail when the dataset-level view is ambiguous.
 
-Call the `query` MCP tool for these key metrics from ground_truth:
+## Step 4: Check financial accuracy
+
+Use `query` for these key metrics from ground_truth:
 
 1. "What is total revenue for fiscal year 2025?"
 2. "What is total expenses for fiscal year 2025?"
@@ -33,11 +45,11 @@ Call the `query` MCP tool for these key metrics from ground_truth:
 4. "What is the ending cash balance as of December 2025?"
 5. "Are all journal entries balanced (total debits equal total credits)?"
 
-For each: record the question, expected value (from ground_truth), actual value from MCP, deviation percentage, and any assumptions the query agent applied.
+For each: record the question, expected value (from ground_truth), actual value from MCP, deviation percentage, confidence level, and any assumptions the query agent applied.
 
-If `query` is not available or errors, fall back to `run_sql` with direct SQL against the DuckDB tables.
+If `query` errors, fall back to `run_sql` with direct SQL against the DuckDB tables.
 
-## Step 4: Write findings
+## Step 5: Write findings
 
 Write the results to `output/$0/findings.yaml` with this structure:
 
@@ -57,6 +69,7 @@ detector_recall:
       target: journal_lines.cost_center
       expected_min: 0.3
       actual: <score>
+      readiness: <ready|investigate|blocked>
       passed: true/false
 
 metric_accuracy:
@@ -71,21 +84,26 @@ metric_accuracy:
       deviation_pct: <pct>
       tolerance_pct: 1.0
       passed: true/false
+      confidence: <from query response>
       assumptions: [<list from query response>]
 
 quality_state:
-  contract_status: <from get_quality>
-  top_issues: [<list of highest entropy scores>]
-  fixable_issues: [<list of issues with available fix actions>]
+  pipeline_status: <from measure>
+  overall_readiness: <from measure BBN>
+  columns_blocked: <N>
+  columns_investigate: <N>
+  columns_ready: <N>
+  top_issues: [<highest scoring measurement points>]
 
 tool_observations:
   - <any observations about tool behavior, errors, gaps>
 ```
 
-## Step 5: Summarize
+## Step 6: Summarize
 
 Print a concise summary table showing:
 - Detector recall: X/Y pass
 - Metric accuracy: X/Y within tolerance
+- BBN readiness: X blocked, Y investigate, Z ready
 - Top issues found
 - Key observations about tool surface gaps (if any)
