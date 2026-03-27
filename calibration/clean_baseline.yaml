@@ -4,22 +4,15 @@ scores:
   benford:bank_transactions.amount: 0.717
   null_ratio:bank_transactions.payment_id: 0.53
   relationship_entropy:chart_of_accounts.parent_id: 0.2
-  slice_variance:fx_rates.to_ccy: 0.375
   benford:invoices.amount: 0.746
-  outlier_rate:invoices.amount: 1.0
   slice_variance:invoices.payment_terms: 0.375
   slice_variance:invoices.status: 0.5
-  slice_variance:invoices.vendor_id: 1.0
   slice_variance:journal_entries.status: 0.5
   null_ratio:journal_lines.cost_center: 0.519
   slice_variance:journal_lines.cost_center: 1.0
   benford:journal_lines.credit: 0.711
-  outlier_rate:journal_lines.credit: 0.902
-  outlier_rate:journal_lines.debit: 1.0
   benford:payments.amount: 0.743
-  outlier_rate:payments.amount: 1.0
   benford:trial_balance.credit_balance: 0.805
   temporal_drift:trial_balance.credit_balance: 0.447
   benford:trial_balance.debit_balance: 0.815
-  outlier_rate:trial_balance.debit_balance: 1.0
   temporal_drift:trial_balance.debit_balance: 0.535
