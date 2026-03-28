@@ -246,6 +246,29 @@ class TestRunSql:
         assert len(result["rows"]) == 5
         assert result.get("truncated") is True
 
+    def test_truncation_signaling(self, db_session: Any, duckdb_cursor: Any) -> None:
+        """run_sql should report row_count and rows_returned for truncated results."""
+        result = _run_sql(
+            db_session, duckdb_cursor, sql="SELECT * FROM typed_invoices", limit=3
+        )
+        assert "error" not in result
+        assert result.get("truncated") is True
+        assert result.get("rows_returned", len(result["rows"])) <= 3
+        # row_count should reflect total rows (more than limit)
+        total = result.get("row_count", len(result["rows"]))
+        assert total >= 3
+
+    def test_export_sql_present(self, db_session: Any, duckdb_cursor: Any) -> None:
+        """run_sql should include _export_sql for export-capable results."""
+        result = _run_sql(
+            db_session, duckdb_cursor, sql="SELECT COUNT(*) AS cnt FROM typed_invoices"
+        )
+        assert "error" not in result
+        # _export_sql is internal — call_tool pops it for export. Direct calls see it.
+        assert "_export_sql" in result, (
+            f"Expected _export_sql key for export. Keys: {sorted(result.keys())}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # query (LLM-dependent)
@@ -259,7 +282,10 @@ class TestQuery:
     ) -> None:
         from dataraum.mcp.server import _query
 
-        result = _query(db_session, duckdb_cursor, "What is the total revenue for fiscal year 2025?")
+        # _query returns (result_dict, query_result_object) since Package D
+        result, _qr = _query(
+            db_session, duckdb_cursor, "What is the total revenue for fiscal year 2025?"
+        )
         assert "error" not in result, f"Query error: {result.get('error')}"
         assert "answer" in result
         assert "confidence" in result
