@@ -83,6 +83,12 @@ def _load_scores(output_dir: Path) -> DetectorScores:
 
     result = DetectorScores()
 
+    def _strip_source_prefix(name: str) -> str:
+        """Strip source_name__ prefix from table names (e.g. detection_v1__invoices → invoices)."""
+        if "__" in name:
+            return name.split("__", 1)[1]
+        return name
+
     # Column-scoped scores
     for dim_path, targets in measurement.column_details.items():
         detector_id = dim_path.rsplit(".", 1)[-1]
@@ -96,6 +102,7 @@ def _load_scores(output_dir: Path) -> DetectorScores:
             parts = ref.split(".", 1)
             if len(parts) == 2:
                 table, column = parts
+                table = _strip_source_prefix(table)
                 key = (table, column, detector_id)
                 if key not in result.column or score > result.column[key]:
                     result.column[key] = score
@@ -109,6 +116,7 @@ def _load_scores(output_dir: Path) -> DetectorScores:
                 break
         for target, score in targets.items():
             tbl = target.removeprefix("table:")
+            tbl = _strip_source_prefix(tbl)
             tbl_key = (tbl, detector_id)
             if tbl_key not in result.table or score > result.table[tbl_key]:
                 result.table[tbl_key] = score

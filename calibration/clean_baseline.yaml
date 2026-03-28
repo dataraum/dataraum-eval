@@ -11,7 +11,6 @@ scores:
   null_ratio:journal_lines.cost_center: 0.519
   relationship_entropy:chart_of_accounts.account_id: 0.2
   relationship_entropy:chart_of_accounts.parent_id: 0.2
-  slice_variance:fx_rates.from_ccy: 0.375
   slice_variance:fx_rates.to_ccy: 0.375
   slice_variance:invoices.payment_terms: 0.375
   slice_variance:invoices.status: 0.5

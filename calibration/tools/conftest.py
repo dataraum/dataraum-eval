@@ -74,3 +74,29 @@ def known_tables(tool_manager: ConnectionManager) -> list[str]:
             select(Table.table_name).where(Table.layer == "typed")
         ).scalars().all()
         return list(tables)
+
+
+@pytest.fixture(scope="session")
+def typed_tables(tool_manager: ConnectionManager) -> dict[str, str]:
+    """Map short table names to DuckDB typed view names.
+
+    Pipeline may prefix tables with source_name (e.g. ``detection_v1__invoices``).
+    DuckDB views are ``typed_{table_name}``. This fixture maps the short suffix
+    (``invoices``) to the full DuckDB view name (``typed_detection_v1__invoices``).
+    """
+    from dataraum.storage import Table
+    from sqlalchemy import select
+
+    with tool_manager.session_scope() as session:
+        table_names = list(
+            session.execute(
+                select(Table.table_name).where(Table.layer == "typed")
+            ).scalars().all()
+        )
+
+    mapping: dict[str, str] = {}
+    for full_name in table_names:
+        # Short name is the part after the last "__", or the full name if no prefix
+        short = full_name.rsplit("__", 1)[-1] if "__" in full_name else full_name
+        mapping[short] = f"typed_{full_name}"
+    return mapping

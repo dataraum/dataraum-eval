@@ -45,7 +45,8 @@ class TestOutputTables:
 
         table_set = set(tables)
         for expected in self.EXPECTED_TABLES:
-            assert expected in table_set, f"Missing typed table: {expected}"
+            found = any(t == expected or t.endswith(f"__{expected}") for t in table_set)
+            assert found, f"Missing typed table: {expected} (available: {table_set})"
 
     def test_has_source(self, tool_manager: ConnectionManager) -> None:
         from dataraum.storage import Source

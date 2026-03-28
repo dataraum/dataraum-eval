@@ -44,7 +44,9 @@ class TestLookDataset:
         result = _look(db_session)
         table_names = {t["name"] for t in result["tables"]}
         for expected in EXPECTED_TABLES:
-            assert expected in table_names, f"Missing table: {expected}"
+            # Table names may be prefixed (e.g. "detection_v1__invoices")
+            found = any(name == expected or name.endswith(f"__{expected}") for name in table_names)
+            assert found, f"Missing table: {expected} (available: {table_names})"
 
     def test_table_entries_have_columns(self, db_session: Any) -> None:
         result = _look(db_session)
@@ -140,7 +142,10 @@ class TestMeasureFilter:
         result = _measure(db_session, target="invoices.amount")
         assert "error" not in result
         for point in result["points"]:
-            assert point["target"] == "column:invoices.amount"
+            # Table names may be prefixed (e.g. "column:detection_v1__invoices.amount")
+            assert point["target"].endswith("invoices.amount"), (
+                f"Unexpected target: {point['target']}"
+            )
 
 
 class TestMeasureConsistency:
@@ -168,7 +173,11 @@ class TestMeasureConsistency:
                 ref = target.removeprefix("column:")
                 parts = ref.split(".", 1)
                 if len(parts) == 2:
-                    measure_targets.add((parts[0], parts[1]))
+                    table = parts[0]
+                    # Strip source prefix (e.g. "detection_v1__invoices" → "invoices")
+                    if "__" in table:
+                        table = table.split("__", 1)[1]
+                    measure_targets.add((table, parts[1]))
 
         # Every (table, column) that scores > threshold in calibration should also
         # appear with a high score in at least one measure point
@@ -198,37 +207,49 @@ class TestMeasureConsistency:
 
 
 class TestRunSql:
-    def test_basic_count(self, db_session: Any, duckdb_cursor: Any) -> None:
-        result = _run_sql(db_session, duckdb_cursor, sql="SELECT COUNT(*) AS cnt FROM typed_invoices")
+    def test_basic_count(
+        self, db_session: Any, duckdb_cursor: Any, typed_tables: dict[str, str]
+    ) -> None:
+        inv = typed_tables["invoices"]
+        result = _run_sql(db_session, duckdb_cursor, sql=f"SELECT COUNT(*) AS cnt FROM {inv}")
         assert "error" not in result, f"SQL error: {result.get('error')}"
         assert "rows" in result
         assert len(result["rows"]) == 1
         assert result["rows"][0]["cnt"] > 0
 
-    def test_columns_metadata(self, db_session: Any, duckdb_cursor: Any) -> None:
-        result = _run_sql(db_session, duckdb_cursor, sql="SELECT invoice_id, amount FROM typed_invoices LIMIT 3")
+    def test_columns_metadata(
+        self, db_session: Any, duckdb_cursor: Any, typed_tables: dict[str, str]
+    ) -> None:
+        inv = typed_tables["invoices"]
+        result = _run_sql(db_session, duckdb_cursor, sql=f"SELECT invoice_id, amount FROM {inv} LIMIT 3")
         assert "error" not in result
         assert "columns" in result
         assert "invoice_id" in result["columns"]
         assert "amount" in result["columns"]
 
     def test_revenue_order_of_magnitude(
-        self, db_session: Any, duckdb_cursor: Any, ground_truth: dict[str, Any]
+        self,
+        db_session: Any,
+        duckdb_cursor: Any,
+        ground_truth: dict[str, Any],
+        typed_tables: dict[str, str],
     ) -> None:
         """SQL revenue query returns a result in the right ballpark.
 
         Injections (outlier_rate, null_ratio) shift amounts, so we only check
         order of magnitude. Financial accuracy is tested by the /deliver skill.
         """
+        jl = typed_tables["journal_lines"]
+        coa = typed_tables["chart_of_accounts"]
         expected = ground_truth["annual"]["total_revenue"]
         result = _run_sql(
             db_session,
             duckdb_cursor,
             sql=(
-                "SELECT SUM(jl.credit) AS total_revenue "
-                "FROM typed_journal_lines jl "
-                "JOIN typed_chart_of_accounts coa ON jl.account_id = coa.account_id "
-                "WHERE coa.account_type = 'revenue' AND jl.credit > 0"
+                f"SELECT SUM(jl.credit) AS total_revenue "
+                f"FROM {jl} jl "
+                f"JOIN {coa} coa ON jl.account_id = coa.account_id "
+                f"WHERE coa.account_type = 'revenue' AND jl.credit > 0"
             ),
         )
         assert "error" not in result, f"SQL error: {result.get('error')}"
@@ -238,19 +259,21 @@ class TestRunSql:
         assert actual > expected * 0.5, f"Revenue too low: {actual:.0f} vs expected {expected:.0f}"
         assert actual < expected * 2.0, f"Revenue too high: {actual:.0f} vs expected {expected:.0f}"
 
-    def test_row_limit(self, db_session: Any, duckdb_cursor: Any) -> None:
-        result = _run_sql(
-            db_session, duckdb_cursor, sql="SELECT * FROM typed_invoices", limit=5
-        )
+    def test_row_limit(
+        self, db_session: Any, duckdb_cursor: Any, typed_tables: dict[str, str]
+    ) -> None:
+        inv = typed_tables["invoices"]
+        result = _run_sql(db_session, duckdb_cursor, sql=f"SELECT * FROM {inv}", limit=5)
         assert "error" not in result
         assert len(result["rows"]) == 5
         assert result.get("truncated") is True
 
-    def test_truncation_signaling(self, db_session: Any, duckdb_cursor: Any) -> None:
+    def test_truncation_signaling(
+        self, db_session: Any, duckdb_cursor: Any, typed_tables: dict[str, str]
+    ) -> None:
         """run_sql should report row_count and rows_returned for truncated results."""
-        result = _run_sql(
-            db_session, duckdb_cursor, sql="SELECT * FROM typed_invoices", limit=3
-        )
+        inv = typed_tables["invoices"]
+        result = _run_sql(db_session, duckdb_cursor, sql=f"SELECT * FROM {inv}", limit=3)
         assert "error" not in result
         assert result.get("truncated") is True
         assert result.get("rows_returned", len(result["rows"])) <= 3
@@ -258,11 +281,12 @@ class TestRunSql:
         total = result.get("row_count", len(result["rows"]))
         assert total >= 3
 
-    def test_export_sql_present(self, db_session: Any, duckdb_cursor: Any) -> None:
+    def test_export_sql_present(
+        self, db_session: Any, duckdb_cursor: Any, typed_tables: dict[str, str]
+    ) -> None:
         """run_sql should include _export_sql for export-capable results."""
-        result = _run_sql(
-            db_session, duckdb_cursor, sql="SELECT COUNT(*) AS cnt FROM typed_invoices"
-        )
+        inv = typed_tables["invoices"]
+        result = _run_sql(db_session, duckdb_cursor, sql=f"SELECT COUNT(*) AS cnt FROM {inv}")
         assert "error" not in result
         # _export_sql is internal — call_tool pops it for export. Direct calls see it.
         assert "_export_sql" in result, (
