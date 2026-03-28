@@ -89,3 +89,17 @@ class TestParquetFormat:
     def test_parquet_pipeline_completed(self, tmp_path: Path) -> None:
         count = _run_format_pipeline(DATA_DIR / "clean-parquet", tmp_path / "output")
         assert count >= EXPECTED_TABLE_COUNT, f"Expected ≥{EXPECTED_TABLE_COUNT} tables, got {count}"
+
+
+@pytest.mark.slow
+@pytest.mark.xfail(
+    reason="Pipeline directory loader picks single format (CSV fallback). "
+    "Mixed-format directories need multi-pass loading — not yet implemented.",
+    strict=True,
+)
+class TestMixedDirectoryFormat:
+    """Mixed-format directory — CSV, JSON, and Parquet files in one folder."""
+
+    def test_mixed_directory_pipeline_completed(self, tmp_path: Path) -> None:
+        count = _run_format_pipeline(DATA_DIR / "clean-mixed", tmp_path / "output")
+        assert count >= EXPECTED_TABLE_COUNT, f"Expected ≥{EXPECTED_TABLE_COUNT} tables, got {count}"
