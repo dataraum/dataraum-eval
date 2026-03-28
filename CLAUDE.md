@@ -236,13 +236,83 @@ The validation agent's aggregate handler was returning `passed=True` uncondition
 Must extract orphan_rate/violation_rate from results and compare against the
 tolerance parameter. Otherwise cross-table validations never fail.
 
+## Tool Surface Validation (DAT-191)
+
+After each phase of the MCP Practitioner API (DAT-173), we run tool-level eval tests
+against the same ground truth data used for detector calibration. See
+[DAT-191](https://linear.app/dataraum/issue/DAT-191/eval-tool-surface-validation-per-phase-ground-truth-regression)
+for the full plan.
+
+### MCP Tool Surface (Phase 1 shipped)
+
+9 active tools, 6 deferred. See `vendor/dataraum-context/plans/mcp-interface-design/`
+for full design docs.
+
+| Tool | Verb | Status |
+|---|---|---|
+| `look` | "What am I looking at?" | Phase 1 ✅ |
+| `measure` | "How much entropy?" | Phase 1 ✅ |
+| `begin_session` | "Start investigation" | Phase 1 ✅ |
+| `query` | "Answer my question" (LLM) | Phase 1 ✅ |
+| `run_sql` | "Execute this SQL" | Phase 1 ✅ |
+| `add_source` | "Register data source" | Phase 1 ✅ |
+| `why` | "Why this score?" (LLM) | Phase 2 |
+| `hypothesize` | "What if X?" (BBN) | Phase 3 |
+| `teach` | "Tell the system something" | Phase 3 |
+
+Retired tools: `get_quality`, `apply_fix`, `get_context`, `analyze`,
+`continue_pipeline`, `discover_sources`, `export`. `fix` absorbed into `teach`.
+
+### Eval skills (mothership)
+
+Skills in `.claude/skills/` exercise the MCP surface against ground truth:
+
+| Skill | Purpose |
+|---|---|
+| `/investigate` | Check detector recall + financial accuracy via look → measure → query |
+| `/deliver` | Fix issues via teach, produce deliverable, validate against ground truth |
+| `/accept` | Product acceptance — exercise tools as a practitioner, devil's advocate |
+
+Deliverable specs in `deliverables/` define expected output metrics with tolerances.
+Design doc: [Eval as Mothership](https://linear.app/dataraum/document/eval-as-mothership-skill-driven-development-harness-for-dataraum-0a61a28363c0)
+
+### Handoff protocol
+
+`vendor/dataraum-context/.claude/handoff.md` is updated by `/implement` sessions
+in the context repo and consumed by `/accept` in this repo. Each entry describes
+what changed, what it affects, and what to calibrate.
+
+### Test rounds
+
+Tests live in `calibration/tools/` and assert against `ground_truth.yaml` (exact
+financial figures) and `entropy_map.yaml` (known injections). One round per phase:
+
+| Round | After phase | Tests |
+|---|---|---|
+| 1 | look + measure + begin_session + run_sql | Schema correctness, measurement points, SQL enrichment |
+| 2 | why + query | Evidence targeting, financial accuracy, ground truth regression |
+| 3 | hypothesize + teach | BBN predictions, teach loop (hypothesize → teach → measure) |
+| 4 | deliver + report + session lifecycle | Goodhart firewall, assumption integration, end-to-end flow |
+
+`query` and `why` tests are LLM-in-the-loop (mark `@pytest.mark.llm`). All others
+are deterministic. Each round is additive.
+
+```bash
+# After Phase 1:
+uv run pytest calibration/tools/test_look.py calibration/tools/test_measure.py -v
+
+# Full tool surface (after all phases):
+uv run pytest calibration/tools/ -v
+```
+
 ## Backlog
 
 ### Calibration improvements
 - Update network.yaml with cross_table and business_cycle nodes + edges
-- Wire fix schemas for dimensional_entropy, temporal_drift, etc.
 - dimension_coverage: add sqrt boost
 - unit_entropy: accept misalignment or create separate injection
+- Verify outlier_rate 1.0 scores on 5 columns (handoff concern: false positives?)
+- Verify temporal_drift 1.0 on bank_transactions.amount
 
 ### Roadmap (see [Pipeline Redesign](https://linear.app/dataraum/project/pipeline-redesign-yaml-driven-dag-entropy-measurement-9c6b0d33aa5c))
 - Business pattern filter — LLM classification to distinguish expected patterns from real issues

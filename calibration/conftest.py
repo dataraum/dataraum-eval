@@ -83,6 +83,12 @@ def _load_scores(output_dir: Path) -> DetectorScores:
 
     result = DetectorScores()
 
+    def _strip_source_prefix(name: str) -> str:
+        """Strip source_name__ prefix from table names (e.g. detection_v1__invoices → invoices)."""
+        if "__" in name:
+            return name.split("__", 1)[1]
+        return name
+
     # Column-scoped scores
     for dim_path, targets in measurement.column_details.items():
         detector_id = dim_path.rsplit(".", 1)[-1]
@@ -96,6 +102,7 @@ def _load_scores(output_dir: Path) -> DetectorScores:
             parts = ref.split(".", 1)
             if len(parts) == 2:
                 table, column = parts
+                table = _strip_source_prefix(table)
                 key = (table, column, detector_id)
                 if key not in result.column or score > result.column[key]:
                     result.column[key] = score
@@ -109,6 +116,7 @@ def _load_scores(output_dir: Path) -> DetectorScores:
                 break
         for target, score in targets.items():
             tbl = target.removeprefix("table:")
+            tbl = _strip_source_prefix(tbl)
             tbl_key = (tbl, detector_id)
             if tbl_key not in result.table or score > result.table[tbl_key]:
                 result.table[tbl_key] = score
@@ -212,6 +220,71 @@ def pipeline_table_scores(detector_scores: DetectorScores) -> dict[tuple[str, st
 def pipeline_view_scores(detector_scores: DetectorScores) -> dict[tuple[str, str], float]:
     """View-scoped detector scores: (view_name, detector_id) → score."""
     return detector_scores.view
+
+
+# ---------------------------------------------------------------------------
+# MCP tool fixtures (shared across calibration/ and calibration/tools/)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def tool_manager(strategy_output_dir: Path) -> Any:
+    """Session-scoped ConnectionManager for MCP tool tests."""
+
+    from dataraum.core.config import set_config_root
+    from dataraum.core.connections import ConnectionConfig, ConnectionManager
+
+    db_path = strategy_output_dir / "metadata.db"
+    if not db_path.exists():
+        pytest.skip(f"No pipeline output at {db_path} -- run 'make calibrate' first")
+
+    config_root = strategy_output_dir / "config"
+    if config_root.exists():
+        set_config_root(config_root)
+
+    config = ConnectionConfig.for_directory(strategy_output_dir)
+    manager = ConnectionManager(config)
+    manager.initialize()
+    yield manager
+    manager.close()
+
+
+@pytest.fixture
+def db_session(tool_manager: Any) -> Any:
+    """Function-scoped SQLAlchemy session."""
+    with tool_manager.session_scope() as session:
+        yield session
+
+
+@pytest.fixture
+def duckdb_cursor(tool_manager: Any) -> Any:
+    """Function-scoped DuckDB cursor."""
+    with tool_manager.duckdb_cursor() as cursor:
+        yield cursor
+
+
+@pytest.fixture(scope="session")
+def typed_tables(tool_manager: Any) -> dict[str, str]:
+    """Map short table names to DuckDB typed view names.
+
+    Pipeline prefixes tables with source_name (e.g. ``detection_v1__invoices``).
+    This maps the short suffix (``invoices``) to the full DuckDB view name.
+    """
+    from dataraum.storage import Table
+    from sqlalchemy import select
+
+    with tool_manager.session_scope() as session:
+        table_names = list(
+            session.execute(
+                select(Table.table_name).where(Table.layer == "typed")
+            ).scalars().all()
+        )
+
+    mapping: dict[str, str] = {}
+    for full_name in table_names:
+        short = full_name.rsplit("__", 1)[-1] if "__" in full_name else full_name
+        mapping[short] = f"typed_{full_name}"
+    return mapping
 
 
 # ---------------------------------------------------------------------------
