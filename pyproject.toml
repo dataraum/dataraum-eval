@@ -21,6 +21,10 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["calibration"]
 addopts = "-v --tb=short"
+markers = [
+    "llm: tests that call an LLM (deselect with -m 'not llm')",
+    "slow: slow tests that run a full pipeline (deselect with -m 'not slow')",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["calibration"]
