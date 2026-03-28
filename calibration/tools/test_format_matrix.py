@@ -92,11 +92,6 @@ class TestParquetFormat:
 
 
 @pytest.mark.slow
-@pytest.mark.xfail(
-    reason="Mixed-format loading only works via MCP add_source (registered sources path). "
-    "RunConfig(source_path=...) still falls back to CSV-only via _detect_source_type.",
-    strict=True,
-)
 class TestMixedDirectoryFormat:
     """Mixed-format directory — CSV, JSON, and Parquet files in one folder."""
 
