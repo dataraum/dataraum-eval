@@ -2,17 +2,20 @@ description: Clean data baseline scores. Scores above noise floor (0.15) are tra
   here. Regenerate after detector changes.
 scores:
   benford:bank_transactions.amount: 0.717
-  null_ratio:bank_transactions.payment_id: 0.53
-  relationship_entropy:chart_of_accounts.parent_id: 0.2
   benford:invoices.amount: 0.746
-  slice_variance:invoices.payment_terms: 0.375
-  slice_variance:invoices.status: 0.5
-  slice_variance:journal_entries.status: 0.5
-  null_ratio:journal_lines.cost_center: 0.519
-  slice_variance:journal_lines.cost_center: 1.0
   benford:journal_lines.credit: 0.711
   benford:payments.amount: 0.743
   benford:trial_balance.credit_balance: 0.805
-  temporal_drift:trial_balance.credit_balance: 0.447
   benford:trial_balance.debit_balance: 0.815
+  null_ratio:bank_transactions.payment_id: 0.53
+  null_ratio:journal_lines.cost_center: 0.519
+  relationship_entropy:chart_of_accounts.account_id: 0.2
+  relationship_entropy:chart_of_accounts.parent_id: 0.2
+  slice_variance:fx_rates.from_ccy: 0.375
+  slice_variance:fx_rates.to_ccy: 0.375
+  slice_variance:invoices.payment_terms: 0.375
+  slice_variance:invoices.status: 0.5
+  slice_variance:journal_entries.status: 0.5
+  slice_variance:journal_lines.cost_center: 1.0
+  temporal_drift:trial_balance.credit_balance: 0.447
   temporal_drift:trial_balance.debit_balance: 0.535
