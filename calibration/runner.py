@@ -21,12 +21,6 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from dataraum.pipeline.fixes.models import FixDocument
-
-    from calibration.fix_specs import FixSpec
 
 from dotenv import load_dotenv
 
@@ -161,112 +155,6 @@ def copy_output_for_fixes(strategy: str) -> Path:
     return dst
 
 
-def _specs_to_documents(
-    fix_specs: list[FixSpec],
-    *,
-    routing: str | None = None,
-) -> list[FixDocument]:
-    """Convert intent-only FixSpecs to FixDocuments via the bridge.
-
-    Args:
-        fix_specs: Specs to convert.
-        routing: If set, only include specs whose schema routing matches
-            (``"preprocess"`` or ``"postprocess"``).
-    """
-    from dataraum.entropy.fix_schemas import get_fix_schema
-    from dataraum.pipeline.fixes import FixInput
-    from dataraum.pipeline.fixes.bridge import build_fix_documents
-
-    all_docs: list[FixDocument] = []
-    for spec in fix_specs:
-        schema = get_fix_schema(spec.action)
-        if schema is None:
-            raise ValueError(f"No fix schema found for action {spec.action!r}")
-        if routing and schema.routing != routing:
-            continue
-        fix_input = FixInput(
-            action_name=spec.action,
-            dimension=schema.dimension_path,
-            parameters=spec.parameters,
-            affected_columns=[f"{spec.table}.{spec.column}"],
-        )
-        docs = build_fix_documents(
-            schema, fix_input, spec.table, spec.column or None, schema.dimension_path
-        )
-        all_docs.extend(docs)
-    return all_docs
-
-
-def run_fix_pipeline(strategy: str, fix_specs: list[FixSpec] | None = None) -> None:
-    """Apply fixes and re-measure entropy scores on fixed output.
-
-    Two-pass application to respect fix sequencing:
-    1. Preprocess (config fixes) — triggers cascade cleanup + pipeline re-run
-    2. Postprocess (metadata fixes) — patches DB after re-run, re-measures
-
-    Metadata fixes must be applied AFTER re-run because cascade cleanup
-    deletes the rows they target (e.g. SemanticAnnotation).
-    """
-    if fix_specs is None:
-        from calibration.fix_specs import ZONE1_FIX_SPECS, ZONE2_FIX_SPECS
-
-        # Use Zone 2 specs for zone2 strategies, Zone 1 otherwise
-        if "zone2" in strategy:
-            fix_specs = ZONE2_FIX_SPECS
-        else:
-            fix_specs = ZONE1_FIX_SPECS
-
-    from dataraum.pipeline.fixes.api import apply_fixes
-
-    fixed_dir = OUTPUT_DIR / f"{strategy}-fixed"
-    if not fixed_dir.exists():
-        raise FileNotFoundError(
-            f"No fixed output at {fixed_dir}. Run copy_output_for_fixes first."
-        )
-
-    data_dir = DATA_DIR / strategy
-    source_path = data_dir if data_dir.exists() else None
-    # apply_fixes needs a phase name for _detector_ids_for_gate();
-    # "validation" is the last phase (collects all detectors).
-    target_phase = "validation"
-
-    preprocess_docs = _specs_to_documents(fix_specs, routing="preprocess")
-    postprocess_docs = _specs_to_documents(fix_specs, routing="postprocess")
-
-    total_applied = 0
-    phases_rerun: list[str] = []
-
-    # Pass 1: config fixes (preprocess) — cascade clean + re-run
-    if preprocess_docs:
-        result = apply_fixes(
-            output_dir=fixed_dir,
-            fix_documents=preprocess_docs,
-            source_path=source_path,
-            target_phase=target_phase,
-        )
-        if not result.success:
-            raise RuntimeError(f"Preprocess fix pipeline failed: {result.error}")
-        total_applied += len(result.applied_fixes)
-        phases_rerun = result.phases_rerun
-
-    # Pass 2: metadata fixes (postprocess) — patch DB + re-measure
-    if postprocess_docs:
-        result = apply_fixes(
-            output_dir=fixed_dir,
-            fix_documents=postprocess_docs,
-            source_path=source_path,
-            target_phase=target_phase,
-        )
-        if not result.success:
-            raise RuntimeError(f"Postprocess fix pipeline failed: {result.error}")
-        total_applied += len(result.applied_fixes)
-
-    print(
-        f"[eval] Applied {total_applied} fixes, "
-        f"phases re-run: {phases_rerun}"
-    )
-
-
 if __name__ == "__main__":
     import argparse
 
@@ -277,14 +165,9 @@ if __name__ == "__main__":
     parser.add_argument("--pipeline-only", action="store_true")
     parser.add_argument("--target-phase", default=None,
                         help="Pipeline target phase (default: all phases)")
-    parser.add_argument("--apply-fixes", action="store_true",
-                        help="Copy output, apply fixes, re-measure scores")
     args = parser.parse_args()
 
-    if args.apply_fixes:
-        copy_output_for_fixes(args.strategy)
-        run_fix_pipeline(args.strategy)
-    elif args.pipeline_only:
+    if args.pipeline_only:
         run_pipeline(args.strategy, target_phase=args.target_phase)
     elif args.generate_only:
         generate(args.strategy, seed=args.seed)
