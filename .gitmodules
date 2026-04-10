@@ -3,4 +3,4 @@
 	url = ../dataraum-testdata
 [submodule "vendor/dataraum-context"]
 	path = vendor/dataraum-context
-	url = ../dataraum-context
+	url = ../dataraum
