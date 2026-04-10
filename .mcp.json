@@ -3,9 +3,7 @@
     "dataraum": {
       "command": "uv",
       "args": ["run", "dataraum-mcp"],
-      "env": {
-        "DATARAUM_OUTPUT_DIR": "./output/detection-v1"
-      }
+      "env": {}
     }
   }
 }
