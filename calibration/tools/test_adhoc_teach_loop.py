@@ -126,7 +126,8 @@ async def _call(client: ClientSession, name: str, arguments: dict[str, Any]) -> 
     result = await client.call_tool(name, arguments)
     for content in result.content:
         if hasattr(content, "text"):
-            return json.loads(content.text)
+            parsed: dict[str, Any] = json.loads(content.text)
+            return parsed
     return {"error": "No text content in response"}
 
 
