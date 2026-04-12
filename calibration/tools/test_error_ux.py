@@ -38,9 +38,15 @@ class TestMeasureErrors:
 
 
 class TestRunSqlErrors:
-    def test_invalid_sql(self, db_session: Any, duckdb_cursor: Any) -> None:
+    def test_invalid_sql_repaired(self, db_session: Any, duckdb_cursor: Any) -> None:
+        """Invalid SQL is either repaired by LLM or returns an error."""
         result = _run_sql(db_session, duckdb_cursor, sql="SELECT FROM WHERE INVALID")
-        assert "error" in result
+        if "error" in result:
+            # No LLM available — original error returned
+            assert isinstance(result["error"], str)
+        else:
+            # LLM repair succeeded — verify we got rows back
+            assert "rows" in result or "columns" in result
 
     def test_no_input(self, db_session: Any, duckdb_cursor: Any) -> None:
         result = _run_sql(db_session, duckdb_cursor)

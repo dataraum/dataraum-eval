@@ -102,6 +102,7 @@ def run_pipeline(
         output_dir=output_dir,
         target_phase=target_phase,
         contract=contract,
+        vertical="finance",
     )
 
     print(f"[eval] Running pipeline: data={data_dir} output={output_dir}")
