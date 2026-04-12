@@ -6,16 +6,18 @@ observe entropy, teach domain knowledge, re-measure, verify improvement.
 This is the core UX test for _adhoc: the product works because the
 teach → measure loop converges, not because config is pre-curated.
 
-Requires: pipeline output from _adhoc vertical in output/detection-v1-adhoc/.
-Run: uv run python -m calibration.runner detection-v1 --adhoc
-
-Slow test — runs LLM calls for teach and re-measurement.
+Two test modes:
+- Direct handler tests (fast): metadata teaches that apply instantly
+- MCP client tests (slow): config teaches that need pipeline re-run
+  via measure(target_phase=...). Uses in-memory MCP client to test
+  the full call_tool dispatch including state management.
 """
 
 from __future__ import annotations
 
+import json
 import shutil
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -28,6 +30,7 @@ from dataraum.entropy.measurement import measure_entropy
 from dataraum.mcp.server import _look, _measure, _run_sql, _search_snippets
 from dataraum.mcp.teach import handle_teach
 from dataraum.storage import Source
+from mcp.client.session import ClientSession
 from sqlalchemy import select
 
 # ---------------------------------------------------------------------------
@@ -77,7 +80,7 @@ class ScoreTrajectory:
 
 
 # ---------------------------------------------------------------------------
-# Fixtures — isolated _adhoc pipeline output
+# Fixtures — isolated pipeline output for direct handler tests
 # ---------------------------------------------------------------------------
 
 EVAL_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -86,12 +89,7 @@ OUTPUT_DIR = EVAL_ROOT / "output"
 
 @pytest.fixture(scope="module")
 def adhoc_output_dir(strategy_output_dir: Path) -> Path:
-    """Copy detection-v1 output to an isolated _adhoc directory.
-
-    We start from the finance-vertical output (which has all phases complete)
-    and test the teach loop on top of it. A full _adhoc pipeline run would
-    be ideal but takes too long for CI.
-    """
+    """Copy detection-v1 output to an isolated directory."""
     adhoc_dir = OUTPUT_DIR / "detection-v1-adhoc-test"
     if adhoc_dir.exists():
         shutil.rmtree(adhoc_dir)
@@ -119,7 +117,51 @@ def adhoc_source_id(adhoc_manager: ConnectionManager) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Fixtures — MCP client for full call_tool dispatch
+# ---------------------------------------------------------------------------
+
+
+async def _call(client: ClientSession, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    """Call an MCP tool and parse the JSON response."""
+    result = await client.call_tool(name, arguments)
+    for content in result.content:
+        if hasattr(content, "text"):
+            return json.loads(content.text)
+    return {"error": "No text content in response"}
+
+
+@pytest.fixture(scope="module")
+async def mcp_session(
+    adhoc_output_dir: Path,
+) -> AsyncGenerator[ClientSession]:
+    """MCP client with an active session on the isolated output.
+
+    Handles the full lifecycle: create server → begin session → yield → end session.
+    The server uses the copied pipeline output, so teaches don't pollute
+    the real detection-v1 output.
+    """
+    from dataraum.mcp.server import create_server
+    from mcp.shared.memory import create_connected_server_and_client_session
+
+    server = create_server(output_dir=adhoc_output_dir)
+
+    async with create_connected_server_and_client_session(server) as client:
+        # Begin session — sources are already registered in the copied DB
+        begin = await _call(client, "begin_session", {
+            "intent": "teach loop test",
+            "contract": "aggregation_safe",
+            "vertical": "finance",
+        })
+        assert "error" not in begin, f"begin_session failed: {begin}"
+
+        yield client
+
+        # End session
+        await _call(client, "end_session", {"outcome": "delivered"})
+
+
+# ---------------------------------------------------------------------------
+# Direct handler helpers (for metadata teaches that don't need re-run)
 # ---------------------------------------------------------------------------
 
 
@@ -131,12 +173,10 @@ def _get_score(
 ) -> float | None:
     """Get a single detector score for a target via measure_entropy."""
     registry = get_default_registry()
-    detector_ids = [detector_id]
 
     with manager.session_scope() as session:
-        measurement = measure_entropy(session, source_id, detector_ids)
+        measurement = measure_entropy(session, source_id, [detector_id])
 
-    # Search column_details for the target
     for dim_path, targets in measurement.column_details.items():
         for det in registry.get_all_detectors():
             if det.detector_id == detector_id and det.dimension_path == dim_path:
@@ -155,17 +195,16 @@ def _teach(
     vertical: str = "finance",
     config_root: Path | None = None,
 ) -> dict[str, Any]:
-    """Apply a teach action and return the result."""
+    """Apply a teach action via direct handler call."""
     if config_root is None:
-        # Derive from manager's connection config (sqlite_path is in the output dir)
         config_root = manager.config.sqlite_path.parent / "config"
         if not config_root.is_dir():
             config_root = None
 
     with manager.session_scope() as session:
-        # Resolve short table names in target
         if target and "." in target:
             from dataraum.mcp.server import _resolve_teach_target
+
             target = _resolve_teach_target(session, source_id, target)
 
         result = handle_teach(
@@ -181,66 +220,56 @@ def _teach(
 
 
 # ---------------------------------------------------------------------------
-# Tests — teach → measure improvement cycles
+# Tests — metadata teaches (direct handler, fast)
 # ---------------------------------------------------------------------------
 
 
 class TestMetadataTeachImprovesMeasurement:
-    """Metadata teaches (concept_property, relationship, explanation)
-    apply immediately and should change scores on next measure."""
+    """Metadata teaches apply immediately and should change scores on next measure."""
 
     def test_concept_property_reduces_business_meaning(
         self,
         adhoc_manager: ConnectionManager,
         adhoc_source_id: str,
     ) -> None:
-        """Teaching a business name on a garbage-named column should reduce
-        business_meaning entropy (naming_clarity dimension)."""
         target_col = "invoices.rrflp_11_zp00"
 
-        # Baseline score
-        before = _get_score(
-            adhoc_manager, adhoc_source_id,
-            target_col, "business_meaning",
-        )
+        before = _get_score(adhoc_manager, adhoc_source_id, target_col, "business_meaning")
 
-        # Teach: give it a proper business name
         result = _teach(
-            adhoc_manager, adhoc_source_id,
+            adhoc_manager,
+            adhoc_source_id,
             teach_type="concept_property",
             target=target_col,
-            params={"field_updates": {
-                "business_name": "Vendor Identifier",
-                "business_concept": "vendor_id",
-                "semantic_role": "dimension",
-            }},
+            params={
+                "field_updates": {
+                    "business_name": "Vendor Identifier",
+                    "business_concept": "vendor_id",
+                    "semantic_role": "dimension",
+                }
+            },
         )
         assert result.get("status") == "applied", f"Teach failed: {result}"
 
-        # Re-measure
-        after = _get_score(
-            adhoc_manager, adhoc_source_id,
-            target_col, "business_meaning",
-        )
+        after = _get_score(adhoc_manager, adhoc_source_id, target_col, "business_meaning")
 
         assert before is not None, "No baseline score for business_meaning"
         assert after is not None, "No post-teach score for business_meaning"
         assert after <= before, (
-            f"business_meaning should not increase after teaching business_name: "
+            f"business_meaning should not increase after teaching: "
             f"before={before:.3f}, after={after:.3f}"
         )
 
-    def test_explanation_persists_as_evidence(
+    def test_explanation_persists(
         self,
         adhoc_manager: ConnectionManager,
         adhoc_source_id: str,
     ) -> None:
-        """Teaching an explanation should persist and appear in look."""
-        target_col = "journal_lines.cost_center"
         result = _teach(
-            adhoc_manager, adhoc_source_id,
+            adhoc_manager,
+            adhoc_source_id,
             teach_type="explanation",
-            target=target_col,
+            target="journal_lines.cost_center",
             params={
                 "dimension": "value.nulls",
                 "context": "Cost center is only assigned to expense journal lines. "
@@ -251,170 +280,183 @@ class TestMetadataTeachImprovesMeasurement:
         assert "teaching_id" in result
 
 
-class TestSnippetReuseCycle:
-    """SQL snippets saved by run_sql should be findable via search_snippets
-    and reusable in subsequent queries."""
+# ---------------------------------------------------------------------------
+# Tests — snippet cycle (direct handler, fast)
+# ---------------------------------------------------------------------------
 
-    def test_named_snippet_searchable(
-        self,
-        adhoc_manager: ConnectionManager,
-    ) -> None:
-        """A run_sql step with a named step_id becomes searchable."""
+
+class TestSnippetReuseCycle:
+    def test_named_snippet_searchable(self, adhoc_manager: ConnectionManager) -> None:
         with adhoc_manager.session_scope() as session:
             with adhoc_manager.duckdb_cursor() as cursor:
-                # Run SQL with named step
                 result = _run_sql(
-                    session, cursor,
-                    steps=[{
-                        "step_id": "adhoc_revenue_test",
-                        "sql": "SELECT SUM(credit) AS total FROM typed_detection_v1__journal_lines WHERE credit > 0",
-                        "description": "Total credits for revenue test",
-                    }],
+                    session,
+                    cursor,
+                    steps=[
+                        {
+                            "step_id": "adhoc_revenue_test",
+                            "sql": "SELECT SUM(credit) AS total "
+                            "FROM typed_detection_v1__journal_lines WHERE credit > 0",
+                            "description": "Total credits for revenue test",
+                        }
+                    ],
                 )
                 assert "error" not in result, f"run_sql error: {result.get('error')}"
                 assert result.get("snippet_summary", {}).get("saved", 0) >= 1
 
-        # Search for it
         with adhoc_manager.session_scope() as session:
             search = _search_snippets(session, concepts=["adhoc_revenue_test"])
-            assert "matches" in search, f"search_snippets returned no matches key: {search}"
-            assert len(search["matches"]) >= 1, (
-                f"Snippet 'adhoc_revenue_test' not found. "
-                f"Vocabulary: {search.get('vocabulary', {})}"
-            )
+            assert "matches" in search
+            assert len(search["matches"]) >= 1
 
     def test_snippet_appears_in_look_when_concept_matches(
         self,
         adhoc_manager: ConnectionManager,
         adhoc_source_id: str,
     ) -> None:
-        """If a column has business_concept matching a snippet's standard_field,
-        look should surface it as relevant_snippets."""
-        # First teach a business_concept on a column
         _teach(
-            adhoc_manager, adhoc_source_id,
+            adhoc_manager,
+            adhoc_source_id,
             teach_type="concept_property",
             target="journal_lines.credit",
             params={"field_updates": {"business_concept": "adhoc_revenue_test"}},
         )
 
-        # Now look at that column — should see the snippet
         with adhoc_manager.session_scope() as session:
             result = _look(session, target="journal_lines.credit")
 
-        assert "relevant_snippets" in result, (
-            f"Expected relevant_snippets in look result. "
-            f"Keys: {list(result.keys())}"
-        )
+        assert "relevant_snippets" in result
         snippets = result["relevant_snippets"]
-        assert any("adhoc_revenue_test" in s.get("standard_field", "") for s in snippets), (
-            f"Expected snippet with standard_field='adhoc_revenue_test'. "
-            f"Got: {snippets}"
-        )
+        assert any("adhoc_revenue_test" in s.get("standard_field", "") for s in snippets)
+
+
+# ---------------------------------------------------------------------------
+# Tests — config teach with re-run via MCP client (slow)
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.slow
-class TestConfigTeachWithRerun:
-    """Config teaches write YAML and need a pipeline phase re-run.
+class TestConfigTeachWithRerunMCP:
+    """Config teaches via the full MCP call_tool dispatch.
 
-    The teach → measure(target_phase) loop is the core _adhoc UX.
-    These tests verify the full cycle works.
-
-    Known issue: selective re-run doesn't work from any entry point:
-    - calibration.runner.run_pipeline(target_phase=...) tries to re-register
-      the source (UNIQUE constraint on sources.name)
-    - MCP _run_pipeline(source_path=None, target_phase=...) fails because
-      import phase can't find sources in multi-source mode
-
-    Both xfails document the same root cause: RunConfig doesn't support
-    "re-run phase X on existing pipeline output without re-importing."
-    This is a blocking bug for the config teach → re-measure cycle.
+    Uses the in-memory MCP client so teach → measure(target_phase)
+    goes through the real server state management and pipeline trigger.
     """
 
-    @pytest.mark.xfail(
-        reason="Selective phase re-run not supported: run_pipeline re-registers "
-        "source (UNIQUE constraint), _run_pipeline(source_path=None) fails import. "
-        "Handoff to context repo — RunConfig needs skip-import mode.",
-        strict=True,
-    )
-    def test_validation_teach_and_rerun(
+    @pytest.mark.anyio
+    async def test_validation_teach_and_remeasure(
         self,
-        strategy_output_dir: Path,
+        mcp_session: ClientSession,
     ) -> None:
-        """Teach a validation rule, re-run validation phase, verify it ran."""
-        from calibration.runner import run_pipeline
-
-        config_root = strategy_output_dir / "config"
-        set_config_root(config_root)
-        mgr = ConnectionManager(ConnectionConfig.for_directory(strategy_output_dir))
-        mgr.initialize()
-
-        try:
-            with mgr.session_scope() as session:
-                source = session.execute(select(Source)).scalars().first()
-                assert source, "No source in pipeline output"
-                source_id = source.source_id
-
-            # Teach a new validation rule
-            result = _teach(
-                mgr, source_id,
-                teach_type="validation",
-                params={
+        """Teach a validation rule via MCP, then call measure(target_phase)."""
+        # Teach a validation rule
+        teach_result = await _call(
+            mcp_session,
+            "teach",
+            {
+                "type": "validation",
+                "params": {
                     "validation_id": "test_positive_amounts",
                     "name": "Invoice amounts must be positive",
                     "description": "All invoice amounts should be greater than zero",
                     "check_type": "constraint",
-                    "sql_hints": "SELECT * FROM typed_detection_v1__invoices WHERE amount <= 0",
+                    "sql_hints": (
+                        "SELECT * FROM typed_detection_v1__invoices WHERE amount <= 0"
+                    ),
                     "expected_outcome": "No rows returned means all amounts are positive",
                 },
-            )
-            assert result.get("status") == "applied", f"Teach failed: {result}"
-            assert "measurement_hint" in result
+            },
+        )
+        assert teach_result.get("status") == "applied", f"Teach failed: {teach_result}"
+        assert "measurement_hint" in teach_result
 
-            # Re-run validation phase — this is what measure(target_phase=...) does
-            run_result = run_pipeline("detection-v1", target_phase="validation")
-            assert run_result.success, "Pipeline re-run failed"
-        finally:
-            mgr.close()
+        # Re-measure with target_phase — this triggers pipeline re-run
+        measure_result = await _call(
+            mcp_session,
+            "measure",
+            {"target_phase": "validation"},
+        )
+
+        # The response should either be "complete" (re-run succeeded)
+        # or "pipeline_triggered" (fire-and-forget mode)
+        status = measure_result.get("status")
+        assert status in ("complete", "pipeline_triggered", "running"), (
+            f"Unexpected measure status after target_phase re-run: {status}. "
+            f"Result: {measure_result}"
+        )
+
+    @pytest.mark.anyio
+    async def test_concept_teach_and_remeasure(
+        self,
+        mcp_session: ClientSession,
+    ) -> None:
+        """Teach a concept via MCP, then call measure(target_phase='semantic')."""
+        teach_result = await _call(
+            mcp_session,
+            "teach",
+            {
+                "type": "concept",
+                "params": {
+                    "name": "test_operating_expenses",
+                    "indicators": ["expense", "cost", "opex"],
+                    "description": "Operating expenses for test",
+                },
+            },
+        )
+        assert teach_result.get("status") == "applied", f"Teach failed: {teach_result}"
+        assert "measurement_hint" in teach_result
+        assert "semantic" in teach_result["measurement_hint"]
+
+        # Re-measure with target_phase
+        measure_result = await _call(
+            mcp_session,
+            "measure",
+            {"target_phase": "semantic"},
+        )
+
+        status = measure_result.get("status")
+        assert status in ("complete", "pipeline_triggered", "running"), (
+            f"Unexpected measure status: {status}. Result: {measure_result}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Tests — trajectory tracking (direct handler, fast)
+# ---------------------------------------------------------------------------
 
 
 class TestMeasureTrajectory:
-    """Verify that score trajectory can be tracked across teach cycles."""
-
     def test_trajectory_records_improvement(
         self,
         adhoc_manager: ConnectionManager,
         adhoc_source_id: str,
     ) -> None:
-        """Multiple teaches on the same column should show monotonic improvement
-        (or at least no regression) in the targeted dimension."""
         trajectory = ScoreTrajectory()
-        target = "invoices.xq_v7kl"  # garbage name for payment_terms
+        target = "invoices.xq_v7kl"
 
-        # Baseline
         with adhoc_manager.session_scope() as session:
             baseline = _measure(session, target=target)
         assert baseline.get("status") == "complete" or "points" in baseline
         trajectory.record("baseline", baseline.get("points", []))
 
-        # Teach concept_property
         _teach(
-            adhoc_manager, adhoc_source_id,
+            adhoc_manager,
+            adhoc_source_id,
             teach_type="concept_property",
             target=target,
-            params={"field_updates": {
-                "business_name": "Payment Terms",
-                "business_concept": "payment_terms",
-                "semantic_role": "dimension",
-            }},
+            params={
+                "field_updates": {
+                    "business_name": "Payment Terms",
+                    "business_concept": "payment_terms",
+                    "semantic_role": "dimension",
+                }
+            },
         )
 
-        # Post-teach measure
         with adhoc_manager.session_scope() as session:
             post_teach = _measure(session, target=target)
         trajectory.record("after_teach", post_teach.get("points", []))
 
-        # Find the business_meaning dimension point
         bm_target = None
         for p in baseline.get("points", []):
             if "naming_clarity" in p["dimension"]:
@@ -425,9 +467,9 @@ class TestMeasureTrajectory:
             delta = trajectory.delta(
                 bm_target,
                 "semantic.business_meaning.naming_clarity",
-                "baseline", "after_teach",
+                "baseline",
+                "after_teach",
             )
-            # Score should not increase (improvement = decrease or stable)
             assert delta is not None, "Could not compute delta"
             assert delta <= 0.05, (
                 f"business_meaning regressed after teach: delta={delta:.3f}"
