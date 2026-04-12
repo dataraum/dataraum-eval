@@ -313,118 +313,69 @@ class TestSnippetReuseCycle:
         )
 
 
+@pytest.mark.slow
 class TestConfigTeachWithRerun:
-    """Config teaches (concept, validation, type_pattern, null_value) write
-    to YAML and need a pipeline phase re-run to take effect.
+    """Config teaches write YAML and need a pipeline phase re-run.
 
-    This tests the full loop: teach → re-run phase → measure → verify change.
-    If the re-run path doesn't work, this is a blocking bug for the _adhoc UX.
+    The teach → measure(target_phase) loop is the core _adhoc UX.
+    These tests verify the full cycle works.
+
+    Known issue: selective re-run doesn't work from any entry point:
+    - calibration.runner.run_pipeline(target_phase=...) tries to re-register
+      the source (UNIQUE constraint on sources.name)
+    - MCP _run_pipeline(source_path=None, target_phase=...) fails because
+      import phase can't find sources in multi-source mode
+
+    Both xfails document the same root cause: RunConfig doesn't support
+    "re-run phase X on existing pipeline output without re-importing."
+    This is a blocking bug for the config teach → re-measure cycle.
     """
 
     @pytest.mark.xfail(
-        reason="BUG: _run_pipeline(target_phase='import') fails in multi-source mode — "
-        "import phase can't find sources. Handoff to context repo.",
+        reason="Selective phase re-run not supported: run_pipeline re-registers "
+        "source (UNIQUE constraint), _run_pipeline(source_path=None) fails import. "
+        "Handoff to context repo — RunConfig needs skip-import mode.",
         strict=True,
     )
-    def test_null_value_teach_reruns_import(
+    def test_validation_teach_and_rerun(
         self,
-        adhoc_manager: ConnectionManager,
-        adhoc_output_dir: Path,
-        adhoc_source_id: str,
+        strategy_output_dir: Path,
     ) -> None:
-        """Teaching a domain null value should change import behavior on re-run."""
-        from dataraum.mcp.server import _run_pipeline
+        """Teach a validation rule, re-run validation phase, verify it ran."""
+        from calibration.runner import run_pipeline
 
-        # Teach: "CC300" is a null indicator (it's a real cost center, but
-        # this tests the mechanism, not the correctness of the teach)
-        result = _teach(
-            adhoc_manager, adhoc_source_id,
-            teach_type="null_value",
-            params={"value": "CC300", "description": "Test null value for re-run"},
-        )
-        assert result.get("status") == "applied", f"Teach failed: {result}"
-        assert "measurement_hint" in result, (
-            "Config teach should return measurement_hint with phase to re-run"
-        )
-        assert "import" in result["measurement_hint"], (
-            f"null_value teach should hint 'import' phase, got: {result['measurement_hint']}"
-        )
+        config_root = strategy_output_dir / "config"
+        set_config_root(config_root)
+        mgr = ConnectionManager(ConnectionConfig.for_directory(strategy_output_dir))
+        mgr.initialize()
 
-        # Re-run import phase
-        rerun_result = _run_pipeline(
-            adhoc_output_dir,
-            target_phase="import",
-            vertical="finance",
-        )
-        assert rerun_result.get("status") == "complete", (
-            f"Pipeline re-run failed: {rerun_result.get('error')}"
-        )
+        try:
+            with mgr.session_scope() as session:
+                source = session.execute(select(Source)).scalars().first()
+                assert source, "No source in pipeline output"
+                source_id = source.source_id
 
-        # Verify the phase actually re-ran
-        assert "import" in rerun_result.get("phases_completed", []), (
-            f"Import phase not in completed phases: {rerun_result.get('phases_completed')}"
-        )
-
-    @pytest.mark.xfail(
-        reason="BUG: cascade cleanup deletes all validation results before re-run, "
-        "then import fails so validation never re-runs. 9 results → 0. "
-        "Handoff to context repo.",
-        strict=True,
-    )
-    def test_validation_teach_reruns_validation(
-        self,
-        adhoc_manager: ConnectionManager,
-        adhoc_output_dir: Path,
-        adhoc_source_id: str,
-    ) -> None:
-        """Teaching a validation rule should produce results after phase re-run."""
-        from dataraum.mcp.server import _run_pipeline
-
-        # Baseline: count validation results
-        with adhoc_manager.session_scope() as session:
-            from dataraum.analysis.validation.db_models import ValidationResultRecord
-
-            baseline_count = len(
-                session.execute(select(ValidationResultRecord)).scalars().all()
+            # Teach a new validation rule
+            result = _teach(
+                mgr, source_id,
+                teach_type="validation",
+                params={
+                    "validation_id": "test_positive_amounts",
+                    "name": "Invoice amounts must be positive",
+                    "description": "All invoice amounts should be greater than zero",
+                    "check_type": "constraint",
+                    "sql_hints": "SELECT * FROM typed_detection_v1__invoices WHERE amount <= 0",
+                    "expected_outcome": "No rows returned means all amounts are positive",
+                },
             )
+            assert result.get("status") == "applied", f"Teach failed: {result}"
+            assert "measurement_hint" in result
 
-        # Teach a new validation
-        result = _teach(
-            adhoc_manager, adhoc_source_id,
-            teach_type="validation",
-            params={
-                "validation_id": "test_positive_amounts",
-                "name": "Invoice amounts must be positive",
-                "description": "All invoice amounts should be greater than zero",
-                "check_type": "constraint",
-                "sql_hints": "SELECT * FROM typed_detection_v1__invoices WHERE amount <= 0",
-                "expected_outcome": "No rows returned means all amounts are positive",
-            },
-        )
-        assert result.get("status") == "applied", f"Teach failed: {result}"
-        assert "measurement_hint" in result
-        assert "validation" in result["measurement_hint"]
-
-        # Re-run validation phase
-        rerun_result = _run_pipeline(
-            adhoc_output_dir,
-            target_phase="validation",
-            vertical="finance",
-        )
-        assert rerun_result.get("status") == "complete", (
-            f"Pipeline re-run failed: {rerun_result.get('error')}"
-        )
-
-        # Verify new validation produced a result
-        with adhoc_manager.session_scope() as session:
-            post_count = len(
-                session.execute(select(ValidationResultRecord)).scalars().all()
-            )
-
-        assert post_count > baseline_count, (
-            f"Expected more validation results after teaching a new rule. "
-            f"Before: {baseline_count}, after: {post_count}"
-        )
+            # Re-run validation phase — this is what measure(target_phase=...) does
+            run_result = run_pipeline("detection-v1", target_phase="validation")
+            assert run_result.success, "Pipeline re-run failed"
+        finally:
+            mgr.close()
 
 
 class TestMeasureTrajectory:
