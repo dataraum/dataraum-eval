@@ -52,7 +52,12 @@ def _run_format_pipeline(data_dir: Path, output_dir: Path) -> int:
         pytest.skip(f"No fixture data at {data_dir}")
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    config = RunConfig(source_path=data_dir, output_dir=output_dir, contract="aggregation_safe")
+    config = RunConfig(
+        source_path=data_dir,
+        output_dir=output_dir,
+        contract="aggregation_safe",
+        vertical="finance",
+    )
     result = pipeline_run(config)
     assert result.success, f"Pipeline failed: {result.error}"
 

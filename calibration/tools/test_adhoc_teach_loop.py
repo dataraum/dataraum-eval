@@ -99,6 +99,8 @@ def adhoc_output_dir(strategy_output_dir: Path) -> Path:
 
 @pytest.fixture(scope="module")
 def adhoc_manager(adhoc_output_dir: Path) -> Generator[ConnectionManager]:
+    from dataraum.core.config import reset_config_root
+
     config_root = adhoc_output_dir / "config"
     if config_root.exists():
         set_config_root(config_root)
@@ -106,6 +108,7 @@ def adhoc_manager(adhoc_output_dir: Path) -> Generator[ConnectionManager]:
     mgr.initialize()
     yield mgr
     mgr.close()
+    reset_config_root()
 
 
 @pytest.fixture(scope="module")

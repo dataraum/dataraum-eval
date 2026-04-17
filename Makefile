@@ -33,22 +33,8 @@ calibrate: run-clean run-$(STRATEGY)
 calibrate-typing: run-clean run-detection-typing-v1
 	uv run pytest calibration/ --strategy detection-typing-v1 -v
 
-# Apply fixes and re-run pipeline
-fix-%:
-	uv run python -m calibration.runner $* --apply-fixes
-
-# Run fix calibration tests
-test-fix:
-	uv run pytest calibration/test_fix_calibration.py --strategy $(STRATEGY) -v
-
-# Full loop: generate + pipeline + test + fix + test-fix
-calibrate-fix-%: run-clean run-%
-	uv run pytest calibration/ --strategy $* -v
-	uv run python -m calibration.runner $* --apply-fixes
-	uv run pytest calibration/test_fix_calibration.py --strategy $* -v
-
 # List available strategies
 list-strategies:
 	@ls strategies/*.yaml 2>/dev/null | xargs -I{} basename {} .yaml
 
-.PHONY: test test-fix list-strategies calibrate calibrate-typing
+.PHONY: test list-strategies calibrate calibrate-typing

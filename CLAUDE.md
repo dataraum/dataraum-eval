@@ -91,9 +91,9 @@ Tests: type_fidelity, temporal_entropy.
   curve to cross threshold
 - `formats` (corrupt_dates): must use injector's dispatch names, not strftime
 
-## Detection Calibration Results (2026-03-24, detection-v1)
+## Detection Calibration Results (2026-04-17, detection-v1)
 
-**Detection recall: 12/14 pass, 2 xfail**
+**Detection recall: 12/14 pass, 2 xfail, 2 non-deterministic (LLM)**
 
 ### Passing (score > 0.3)
 
@@ -103,14 +103,19 @@ Tests: type_fidelity, temporal_entropy.
 | outlier_rate | journal_lines.credit | 1.000 | 5% at 10x multiplier |
 | benford | bank_transactions.amount | ~0.80 | 60% round numbers |
 | temporal_drift | bank_transactions.amount | 1.000 | 1.35x shift after mid-year |
-| business_meaning | invoices.rrflp_11_zp00 | ~0.38 | LLM confidence on garbage name |
-| business_meaning | invoices.xq_v7kl | ~0.35 | LLM confidence on garbage name |
 | relationship_entropy | payments.invoice_id | ~0.45 | sqrt-boosted 20% orphan rate |
 | dimensional_entropy | journal_lines.debit/credit | ~0.70 | Natural debit/credit mutex |
 | derived_value | journal_lines.net_amount | ~0.71 | 10% formula drift, boost curve |
 | cross_table (gl_invoice) | invoices.amount | pass | 15% amount corruption, FK join |
 | cross_table (payment_bank) | payments.amount | pass | 15% amount corruption, FK join |
 | cross_table (trial_balance) | trial_balance.credit_balance | pass | 10% balance corruption |
+
+### Non-deterministic (xfail strict=False)
+
+| Detector | Target | Score | Notes |
+|---|---|---|---|
+| business_meaning | invoices.rrflp_11_zp00 | ~0.38 | LLM sometimes infers concept from data → ontology_bonus reduces score below threshold |
+| business_meaning | invoices.xq_v7kl | ~0.35 | Same — shows XPASS when detection works, XFAIL when LLM grounding hides it |
 
 ### Known misaligned (xfail)
 
@@ -126,63 +131,12 @@ Tests: type_fidelity, temporal_entropy.
 | type_fidelity | journal_lines.debit | 0.585 | Boost function on 8% quarantine rate |
 | temporal_entropy | payments.date | 0.800 | Corrupt dates → VARCHAR → type/role mismatch |
 
-## Fix Calibration Results (4b)
+## Teach Loop Calibration (4b)
 
-**Fix system: 8/10 pass, 2 xfail** (all expected)
-
-### Phase 1: accept_finding (config-only, contract overrule)
-
-Scores stay honest (no clamping). Contract passes via overrule:
-accepted targets are excluded from violation assessment.
-
-| Detector | Target | Pre | Post | Behavior |
-|---|---|---|---|---|
-| outlier_rate | journal_lines.credit | 1.000 | ~1.000 | score unchanged, ACCEPTED label |
-| benford | bank_transactions.amount | 0.803 | ~0.803 | score unchanged, ACCEPTED label |
-| null_ratio | journal_lines.cost_center | 0.711 | ~0.711 | score unchanged, ACCEPTED label |
-| relationship_entropy | payments.invoice_id | 0.447 | ~0.447 | score unchanged, ACCEPTED label |
-
-### Phase 2: metadata fixes (direct DB update, re-measure)
-
-| Detector | Target | Pre | Post | Expected |
-|---|---|---|---|---|
-| business_meaning | invoices.rrflp_11_zp00 | 0.375 | 0.000 | <= 0.1 |
-| business_meaning | invoices.xq_v7kl | 0.350 | 0.000 | <= 0.1 |
-
-### Phase 3: config fixes requiring phase re-run
-
-| Detector | Target | Action | Pre | Post | Expected |
-|---|---|---|---|---|---|
-| temporal_entropy | payments.date | add_type_pattern | 0.800 | ~0 | <= 0.2 |
-| type_fidelity | journal_lines.debit | set_column_type | 0.585 | 0.100 | <= 0.1 |
-
-### xfail (fix action doesn't address root cause)
-
-| Detector | Target | Action | Why |
-|---|---|---|---|
-| temporal_entropy | payments.date | set_timestamp_role | Column already marked as timestamp; the issue is type mismatch (VARCHAR from corrupt dates). add_type_pattern (Phase 3) is the real fix. |
-| relationship_entropy | payments.invoice_id | confirm_relationship | ri_entropy (0.447 from 20% orphans) dominates via max aggregation; confirm_relationship only reduces semantic component. accept_finding (Phase 1) is the working fix path. |
-
-### Fix system architecture
-
-The calibration runner supports three fix phases:
-
-**Phase 1+2 (measurement-only):** Config/metadata fixes that only need
-re-measurement. Applies fixes then calls `measure_entropy()` directly.
-
-**Phase 3 (phase re-run):** Config fixes to typing.yaml or relationships.yaml
-that require the pipeline to re-run from the affected phase. The runner:
-
-1. Copies output to `-fixed/` directory
-2. Cascade-cleans affected phase + all downstream phases
-3. Applies config fixes (typing.yaml, thresholds.yaml) before re-run
-4. Re-runs pipeline from the cleaned phase
-5. Applies metadata fixes on the rebuilt DB, then re-measures
-6. Scores read via `measure_entropy()` (no longer persisted to PhaseLog)
-
-Key constraint: config fixes must be applied BEFORE pipeline re-run (typing
-needs forced_types/patterns). Metadata fixes must be applied AFTER (cascade
-cleanup deletes the rows that metadata fixes target).
+The old fix system (ResolutionOptions, FixSchema, apply_fix) was retired in
+DAT-256. The teach system (DAT-251) replaced it. Teach loop tests live in
+`calibration/tools/test_adhoc_teach_loop.py` (7 tests: 5 pass, 2 xfail for
+config teach re-run bugs documented in handoff).
 
 ## Key Learnings
 

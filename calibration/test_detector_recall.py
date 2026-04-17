@@ -44,13 +44,19 @@ KNOWN_DETECTOR_GAPS: dict[tuple[str, str, str], str] = {
         "Cross-table aggregate formula (SUM(journal_lines.debit) GROUP BY account, period) — "
         "out of scope for within-table correlation detector"
     ),
+}
+
+# Detectors where LLM non-determinism makes the score vary across runs.
+# Use @pytest.mark.xfail(strict=False) — test shows XPASS when detection works,
+# XFAIL when LLM grounding reduces the score below threshold.
+LLM_NONDETERMINISTIC: dict[tuple[str, str, str], str] = {
     ("business_meaning", "invoices", "rrFlp_11_zp00"): (
-        "LLM correctly identifies business_concept=vendor_id from data values despite garbage name. "
-        "ontology_bonus reduces score below threshold — correct behavior (system understands the column)"
+        "LLM sometimes identifies business_concept from data values despite garbage name. "
+        "ontology_bonus then reduces score below threshold. Non-deterministic."
     ),
     ("business_meaning", "invoices", "xQ_v7kL"): (
-        "LLM correctly identifies business_concept=payment_terms from data values despite garbage name. "
-        "ontology_bonus reduces score below threshold — correct behavior (system understands the column)"
+        "LLM sometimes identifies business_concept from data values despite garbage name. "
+        "ontology_bonus then reduces score below threshold. Non-deterministic."
     ),
 }
 
@@ -122,6 +128,7 @@ def test_injection_detected(
     pipeline_table_scores: dict[tuple[str, str], float],
     pipeline_view_scores: dict[tuple[str, str], float],
     clean_pipeline_scores: dict[tuple[str, str, str], float],
+    request: pytest.FixtureRequest,
 ) -> None:
     """Each known injection must produce an elevated score for the affected column."""
     table = injection["target_file"].replace(".csv", "")
@@ -140,6 +147,13 @@ def test_injection_detected(
     gap_key = (detector, table, column)
     if gap_key in KNOWN_DETECTOR_GAPS:
         pytest.xfail(KNOWN_DETECTOR_GAPS[gap_key])
+
+    # LLM non-determinism: score varies between runs. strict=False lets us
+    # see XPASS when detection works and XFAIL when ontology_bonus hides it.
+    if gap_key in LLM_NONDETERMINISTIC:
+        request.node.add_marker(
+            pytest.mark.xfail(reason=LLM_NONDETERMINISTIC[gap_key], strict=False)
+        )
 
     # Pipeline lowercases column names during import
     column_lc = column.lower()

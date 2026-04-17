@@ -54,7 +54,7 @@ def _load_scores(output_dir: Path) -> DetectorScores:
     if not db_path.exists():
         pytest.skip(f"No pipeline output at {db_path} — run pipeline first")
 
-    from dataraum.core.config import set_config_root
+    from dataraum.core.config import reset_config_root, set_config_root
     from dataraum.core.connections import ConnectionConfig, ConnectionManager
     from dataraum.entropy.detectors.base import get_default_registry
     from dataraum.entropy.measurement import measure_entropy
@@ -80,6 +80,7 @@ def _load_scores(output_dir: Path) -> DetectorScores:
             measurement = measure_entropy(session, source.source_id, detector_ids)
     finally:
         manager.close()
+        reset_config_root()
 
     result = DetectorScores()
 
@@ -231,7 +232,7 @@ def pipeline_view_scores(detector_scores: DetectorScores) -> dict[tuple[str, str
 def tool_manager(strategy_output_dir: Path) -> Any:
     """Session-scoped ConnectionManager for MCP tool tests."""
 
-    from dataraum.core.config import set_config_root
+    from dataraum.core.config import reset_config_root, set_config_root
     from dataraum.core.connections import ConnectionConfig, ConnectionManager
 
     db_path = strategy_output_dir / "metadata.db"
@@ -247,6 +248,7 @@ def tool_manager(strategy_output_dir: Path) -> Any:
     manager.initialize()
     yield manager
     manager.close()
+    reset_config_root()
 
 
 @pytest.fixture
@@ -285,41 +287,6 @@ def typed_tables(tool_manager: Any) -> dict[str, str]:
         short = full_name.rsplit("__", 1)[-1] if "__" in full_name else full_name
         mapping[short] = f"typed_{full_name}"
     return mapping
-
-
-# ---------------------------------------------------------------------------
-# Fix calibration fixtures
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture(scope="session")
-def fixed_output_dir(strategy_name: str) -> Path:
-    """Path to fixed pipeline output."""
-    path = OUTPUT_DIR / f"{strategy_name}-fixed"
-    if not path.exists():
-        pytest.skip(
-            f"No fixed output at {path}. "
-            f"Run: make fix-{strategy_name}"
-        )
-    return path
-
-
-@pytest.fixture(scope="session")
-def post_fix_detector_scores(fixed_output_dir: Path) -> DetectorScores:
-    """All detector scores after fix application."""
-    return _load_scores(fixed_output_dir)
-
-
-@pytest.fixture(scope="session")
-def post_fix_scores(post_fix_detector_scores: DetectorScores) -> dict[tuple[str, str, str], float]:
-    """Detector scores after fix application (column-scoped)."""
-    return post_fix_detector_scores.column
-
-
-@pytest.fixture(scope="session")
-def post_fix_table_scores(post_fix_detector_scores: DetectorScores) -> dict[tuple[str, str], float]:
-    """Detector scores after fix application (table-scoped)."""
-    return post_fix_detector_scores.table
 
 
 # ---------------------------------------------------------------------------
