@@ -17,5 +17,6 @@ output/
 .DS_Store
 
 .env
+.docker.env
 
 *_testdata/

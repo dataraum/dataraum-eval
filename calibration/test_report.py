@@ -20,11 +20,11 @@ OUTPUT_DIR = EVAL_ROOT / "output"
 REPORTS_DIR = EVAL_ROOT / "calibration" / "reports"
 
 
-def _load_scores(output_dir: Path) -> dict[str, float]:
-    """Load detector scores via measure_entropy(), keyed as 'detector:table.column'."""
-    from calibration.conftest import _load_scores
+def _load_scores(strategy: str) -> dict[str, float]:
+    """Drive the control plane to score ``strategy``; flatten to keyed dict."""
+    from calibration.conftest import _load_scores_for_strategy
 
-    gate = _load_scores(output_dir)
+    gate = _load_scores_for_strategy(strategy)
     scores: dict[str, float] = {}
     for (table, column, detector), score in gate.column.items():
         scores[f"{detector}:{table}.{column}"] = round(score, 3)
@@ -43,9 +43,8 @@ def generate_report(strategy: str) -> Path:
         emap = yaml.safe_load(f)
 
     # Load injected and clean scores
-    injected_scores = _load_scores(OUTPUT_DIR / strategy)
-    clean_dir = OUTPUT_DIR / "clean"
-    clean_scores = _load_scores(clean_dir) if (clean_dir / "metadata.db").exists() else {}
+    injected_scores = _load_scores(strategy)
+    clean_scores = _load_scores("clean") if (DATA_DIR / "clean").exists() else {}
 
     # Compute recall per injection
     threshold = 0.3

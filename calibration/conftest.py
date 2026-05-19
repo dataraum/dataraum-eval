@@ -1,17 +1,25 @@
 """Calibration test fixtures.
 
-Loads entropy_map.yaml, ground_truth.yaml, and pipeline output for assertions.
-Strategy is configurable via --strategy flag (default: detection-v1).
+Loads entropy_map.yaml, ground_truth.yaml, and detector scores for assertions.
+Scores come from the dataraum control plane over HTTP MCP — the compose stack
+is auto-started by the ``mcp_stack`` fixture. Strategy is configurable via
+``--strategy`` (default: ``detection-v1``).
 """
 
 from __future__ import annotations
 
+import asyncio
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
+
+from calibration import runner as runner_mod
+from calibration.mcp_client import mcp_session
+from calibration.stack import StackHandle, up
 
 EVAL_ROOT = Path(__file__).parent.parent
 DATA_DIR = EVAL_ROOT / "data"
@@ -44,98 +52,69 @@ class DetectorScores:
     view: dict[tuple[str, str], float] = field(default_factory=dict)
 
 
-def _load_scores(output_dir: Path) -> DetectorScores:
-    """Load detector scores via measure_entropy().
+def _strip_source_prefix(name: str) -> str:
+    """Strip source_name__ prefix from table names (e.g. detection_v1__invoices → invoices)."""
+    if "__" in name:
+        return name.split("__", 1)[1]
+    return name
 
-    Opens the pipeline output database, resolves the source, and calls
-    measure_entropy() to aggregate EntropyObjectRecord rows into scores.
+
+def _points_to_scores(points: list[dict[str, Any]]) -> DetectorScores:
+    """Translate the ``points`` array from measure() into DetectorScores.
+
+    Each point: ``{"target": "column:tbl.col"|"table:tbl"|"view:vw",
+    "dimension": "layer.dim.sub_dim", "detector_id": str, "score": float}``.
     """
-    db_path = output_dir / "metadata.db"
-    if not db_path.exists():
-        pytest.skip(f"No pipeline output at {db_path} — run pipeline first")
-
-    from dataraum.core.config import reset_config_root, set_config_root
-    from dataraum.core.connections import ConnectionConfig, ConnectionManager
-    from dataraum.entropy.detectors.base import get_default_registry
-    from dataraum.entropy.measurement import measure_entropy
-    from dataraum.storage import Source
-    from sqlalchemy import select
-
-    config_root = output_dir / "config"
-    if config_root.exists():
-        set_config_root(config_root)
-
-    manager = ConnectionManager(ConnectionConfig.for_directory(output_dir))
-    manager.initialize()
-
-    try:
-        with manager.session_scope() as session:
-            source = session.execute(select(Source)).scalars().first()
-            if not source:
-                pytest.skip("No source found in output database")
-
-            registry = get_default_registry()
-            detector_ids = registry.get_detector_ids()
-
-            measurement = measure_entropy(session, source.source_id, detector_ids)
-    finally:
-        manager.close()
-        reset_config_root()
-
     result = DetectorScores()
+    for pt in points:
+        target = pt["target"]
+        score = float(pt["score"])
+        detector_id = str(pt.get("detector_id") or str(pt["dimension"]).rsplit(".", 1)[-1])
 
-    def _strip_source_prefix(name: str) -> str:
-        """Strip source_name__ prefix from table names (e.g. detection_v1__invoices → invoices)."""
-        if "__" in name:
-            return name.split("__", 1)[1]
-        return name
-
-    # Column-scoped scores
-    for dim_path, targets in measurement.column_details.items():
-        detector_id = dim_path.rsplit(".", 1)[-1]
-        # Look up detector_id from registry by dimension_path
-        for det in registry.get_all_detectors():
-            if det.dimension_path == dim_path:
-                detector_id = det.detector_id
-                break
-        for target, score in targets.items():
+        if target.startswith("column:"):
             ref = target.removeprefix("column:")
             parts = ref.split(".", 1)
-            if len(parts) == 2:
-                table, column = parts
-                table = _strip_source_prefix(table)
-                key = (table, column, detector_id)
-                if key not in result.column or score > result.column[key]:
-                    result.column[key] = score
-
-    # Table-scoped scores
-    for dim_path, targets in measurement.table_details.items():
-        detector_id = dim_path.rsplit(".", 1)[-1]
-        for det in registry.get_all_detectors():
-            if det.dimension_path == dim_path:
-                detector_id = det.detector_id
-                break
-        for target, score in targets.items():
-            tbl = target.removeprefix("table:")
-            tbl = _strip_source_prefix(tbl)
+            if len(parts) != 2:
+                continue
+            tbl, col = parts
+            key = (_strip_source_prefix(tbl), col, detector_id)
+            if key not in result.column or score > result.column[key]:
+                result.column[key] = score
+        elif target.startswith("table:"):
+            tbl = _strip_source_prefix(target.removeprefix("table:"))
             tbl_key = (tbl, detector_id)
             if tbl_key not in result.table or score > result.table[tbl_key]:
                 result.table[tbl_key] = score
-
-    # View-scoped scores
-    for dim_path, targets in measurement.view_details.items():
-        detector_id = dim_path.rsplit(".", 1)[-1]
-        for det in registry.get_all_detectors():
-            if det.dimension_path == dim_path:
-                detector_id = det.detector_id
-                break
-        for target, score in targets.items():
+        elif target.startswith("view:"):
             vw = target.removeprefix("view:")
             vw_key = (vw, detector_id)
             if vw_key not in result.view or score > result.view[vw_key]:
                 result.view[vw_key] = score
-
     return result
+
+
+async def _measure_for_strategy(handle: StackHandle, strategy: str) -> DetectorScores:
+    """Open an MCP session, ensure the strategy's pipeline has run, return scores."""
+    async with mcp_session(handle) as s:
+        await runner_mod.setup_strategy(s, strategy)
+        final = await runner_mod._wait_for_pipeline(s)
+        return _points_to_scores(final.get("points", []))
+
+
+def _load_scores_for_strategy(strategy: str) -> DetectorScores:
+    """Drive the control plane to produce scores for ``strategy``.
+
+    Generates data if missing, brings up the compose stack, runs the pipeline
+    via MCP, and aggregates the measure() ``points`` into DetectorScores.
+    """
+    data_dir = DATA_DIR / strategy
+    if not data_dir.exists():
+        pytest.skip(
+            f"No test data at {data_dir}. Run: "
+            f"uv run python -m calibration.runner {strategy} --generate-only"
+        )
+    handle = up()
+    return asyncio.run(_measure_for_strategy(handle, strategy))
 
 
 # ---------------------------------------------------------------------------
@@ -158,18 +137,6 @@ def strategy_data_dir(strategy_name: str) -> Path:
         pytest.skip(
             f"No test data at {path}. "
             f"Run: uv run python -m calibration.runner {strategy_name} --generate-only"
-        )
-    return path
-
-
-@pytest.fixture(scope="session")
-def strategy_output_dir(strategy_name: str) -> Path:
-    """Path to pipeline output for the current strategy."""
-    path = OUTPUT_DIR / strategy_name
-    if not path.exists():
-        pytest.skip(
-            f"No pipeline output at {path}. "
-            f"Run: uv run python -m calibration.runner {strategy_name}"
         )
     return path
 
@@ -200,9 +167,22 @@ def injections(entropy_map: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 @pytest.fixture(scope="session")
-def detector_scores(strategy_output_dir: Path) -> DetectorScores:
-    """All detector scores from measure_entropy() for the current strategy."""
-    return _load_scores(strategy_output_dir)
+def mcp_stack() -> StackHandle:
+    """Ensure the dataraum control-plane compose stack is up; return the MCP handle."""
+    return up()
+
+
+@pytest.fixture(scope="session")
+async def mcp_client(mcp_stack: StackHandle) -> AsyncIterator[Any]:
+    """Module-shared MCP ClientSession for tool tests."""
+    async with mcp_session(mcp_stack) as session:
+        yield session
+
+
+@pytest.fixture(scope="session")
+def detector_scores(strategy_name: str, mcp_stack: StackHandle) -> DetectorScores:
+    """Detector scores for the current strategy, sourced via HTTP MCP measure()."""
+    return _load_scores_for_strategy(strategy_name)
 
 
 @pytest.fixture(scope="session")
@@ -224,80 +204,14 @@ def pipeline_view_scores(detector_scores: DetectorScores) -> dict[tuple[str, str
 
 
 # ---------------------------------------------------------------------------
-# MCP tool fixtures (shared across calibration/ and calibration/tools/)
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture(scope="session")
-def tool_manager(strategy_output_dir: Path) -> Any:
-    """Session-scoped ConnectionManager for MCP tool tests."""
-
-    from dataraum.core.config import reset_config_root, set_config_root
-    from dataraum.core.connections import ConnectionConfig, ConnectionManager
-
-    db_path = strategy_output_dir / "metadata.db"
-    if not db_path.exists():
-        pytest.skip(f"No pipeline output at {db_path} -- run 'make calibrate' first")
-
-    config_root = strategy_output_dir / "config"
-    if config_root.exists():
-        set_config_root(config_root)
-
-    config = ConnectionConfig.for_directory(strategy_output_dir)
-    manager = ConnectionManager(config)
-    manager.initialize()
-    yield manager
-    manager.close()
-    reset_config_root()
-
-
-@pytest.fixture
-def db_session(tool_manager: Any) -> Any:
-    """Function-scoped SQLAlchemy session."""
-    with tool_manager.session_scope() as session:
-        yield session
-
-
-@pytest.fixture
-def duckdb_cursor(tool_manager: Any) -> Any:
-    """Function-scoped DuckDB cursor."""
-    with tool_manager.duckdb_cursor() as cursor:
-        yield cursor
-
-
-@pytest.fixture(scope="session")
-def typed_tables(tool_manager: Any) -> dict[str, str]:
-    """Map short table names to DuckDB typed view names.
-
-    Pipeline prefixes tables with source_name (e.g. ``detection_v1__invoices``).
-    This maps the short suffix (``invoices``) to the full DuckDB view name.
-    """
-    from dataraum.storage import Table
-    from sqlalchemy import select
-
-    with tool_manager.session_scope() as session:
-        table_names = list(
-            session.execute(
-                select(Table.table_name).where(Table.layer == "typed")
-            ).scalars().all()
-        )
-
-    mapping: dict[str, str] = {}
-    for full_name in table_names:
-        short = full_name.rsplit("__", 1)[-1] if "__" in full_name else full_name
-        mapping[short] = f"typed_{full_name}"
-    return mapping
-
-
-# ---------------------------------------------------------------------------
 # Clean baseline (always uses "clean" strategy data)
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture(scope="session")
-def clean_detector_scores() -> DetectorScores:
-    """All detector scores from clean pipeline output (no injections)."""
-    return _load_scores(OUTPUT_DIR / "clean")
+def clean_detector_scores(mcp_stack: StackHandle) -> DetectorScores:
+    """Detector scores for the clean baseline (no injections)."""
+    return _load_scores_for_strategy("clean")
 
 
 @pytest.fixture(scope="session")
