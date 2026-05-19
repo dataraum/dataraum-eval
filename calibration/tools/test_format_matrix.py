@@ -1,105 +1,115 @@
 """Format matrix — pipeline completion per source format (DAT-216).
 
-Tests that the pipeline handles various source formats correctly.
-Each format test generates clean data, runs the pipeline, and verifies
-typed tables exist in the output.
+Each non-CSV format runs a full pipeline against its fixture directory via
+HTTP MCP and verifies all typed tables come back from ``look()``. CSV is
+covered by the ambient ``detection_v1_session`` fixture (same code path).
 
-CSV is validated by the existing calibration output (fast).
-JSON, JSONL, Parquet run full pipelines (slow, marked @pytest.mark.slow).
+JSON / JSONL / Parquet / mixed-format tests are ``@pytest.mark.slow`` —
+each spins up a fresh pipeline (~6 min).
 """
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import Any
 
 import pytest
-from dataraum.core.connections import ConnectionManager
 
-EVAL_ROOT = Path(__file__).resolve().parent.parent.parent
-DATA_DIR = EVAL_ROOT / "data"
-OUTPUT_DIR = EVAL_ROOT / "output"
+from calibration import runner as runner_mod
+from calibration.mcp_client import call_tool, mcp_session
+from calibration.stack import StackHandle, container_path_for
 
 EXPECTED_TABLE_COUNT = 8
 
 
+async def _typed_table_names(session: Any) -> set[str]:
+    """Return the set of bare typed table names from look()."""
+    result = await call_tool(session, "look", {})
+    names = set()
+    for t in result.get("tables", []):
+        n = t.get("name", "")
+        names.add(n.split("__", 1)[1] if "__" in n else n)
+    return names
+
+
 class TestCsvFormat:
-    """CSV format — validated by existing pipeline output."""
+    """CSV format — validated via the ambient detection-v1 pipeline."""
 
-    def test_csv_pipeline_completed(self, tool_manager: ConnectionManager) -> None:
-        from dataraum.storage import Table
-        from sqlalchemy import select
-
-        with tool_manager.session_scope() as session:
-            tables = session.execute(
-                select(Table.table_name).where(Table.layer == "typed")
-            ).scalars().all()
-
-        assert len(tables) >= EXPECTED_TABLE_COUNT, (
-            f"Expected ≥{EXPECTED_TABLE_COUNT} typed tables from CSV, got {len(tables)}"
+    async def test_csv_pipeline_completed(self, detection_v1_session: Any) -> None:
+        names = await _typed_table_names(detection_v1_session)
+        assert len(names) >= EXPECTED_TABLE_COUNT, (
+            f"Expected ≥{EXPECTED_TABLE_COUNT} typed tables from CSV, got {len(names)}: {names}"
         )
 
 
-def _run_format_pipeline(data_dir: Path, output_dir: Path) -> int:
-    """Run pipeline on a data directory and return typed table count."""
-    from dataraum.core.connections import ConnectionConfig
-    from dataraum.core.connections import ConnectionManager as CM
-    from dataraum.pipeline.runner import RunConfig
-    from dataraum.pipeline.runner import run as pipeline_run
-    from dataraum.storage import Table
-    from sqlalchemy import select
+async def _run_format_pipeline(strategy: str) -> int:
+    """End-to-end MCP run for a non-default strategy; return typed table count.
 
-    if not data_dir.exists():
-        pytest.skip(f"No fixture data at {data_dir}")
+    Each test owns its own MCP session (a fresh client per pipeline run) so
+    state doesn't leak between formats.
+    """
+    handle: StackHandle = runner_mod.up()
+    # Ensure the strategy dir exists in our mounted sources tree
+    container_path = container_path_for(strategy)
+    async with mcp_session(handle) as s:
+        await runner_mod._end_active_session_if_any(s)
+        await runner_mod._ensure_source_registered(s, _safe_name(strategy), container_path)
+        begin = await call_tool(
+            s,
+            "begin_session",
+            {
+                "source": _safe_name(strategy),
+                "intent": f"format_matrix:{strategy}",
+                "contract": "aggregation_safe",
+                "vertical": "finance",
+            },
+        )
+        if "error" in begin:
+            pytest.fail(f"begin_session({strategy!r}) failed: {begin}")
+        final = await runner_mod._wait_for_pipeline(s)
+        if "error" in final:
+            pytest.fail(f"Pipeline for {strategy!r} failed: {final}")
+        names = await _typed_table_names(s)
+        return len(names)
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    config = RunConfig(
-        source_path=data_dir,
-        output_dir=output_dir,
-        contract="aggregation_safe",
-        vertical="finance",
-    )
-    result = pipeline_run(config)
-    assert result.success, f"Pipeline failed: {result.error}"
 
-    mgr = CM(ConnectionConfig.for_directory(output_dir))
-    mgr.initialize()
-    try:
-        with mgr.session_scope() as session:
-            count = len(
-                session.execute(
-                    select(Table.table_name).where(Table.layer == "typed")
-                ).scalars().all()
-            )
-    finally:
-        mgr.close()
-    return count
+def _safe_name(strategy: str) -> str:
+    """add_source accepts ^[a-z][a-z0-9_]{1,48}$ — normalize the strategy."""
+    return strategy.replace("-", "_")
 
 
 @pytest.mark.slow
 class TestJsonFormat:
-    def test_json_pipeline_completed(self, tmp_path: Path) -> None:
-        count = _run_format_pipeline(DATA_DIR / "clean-json", tmp_path / "output")
-        assert count >= EXPECTED_TABLE_COUNT, f"Expected ≥{EXPECTED_TABLE_COUNT} tables, got {count}"
+    async def test_json_pipeline_completed(self) -> None:
+        count = await _run_format_pipeline("clean-json")
+        assert count >= EXPECTED_TABLE_COUNT, (
+            f"Expected ≥{EXPECTED_TABLE_COUNT} tables, got {count}"
+        )
 
 
 @pytest.mark.slow
 class TestJsonlFormat:
-    def test_jsonl_pipeline_completed(self, tmp_path: Path) -> None:
-        count = _run_format_pipeline(DATA_DIR / "clean-jsonl", tmp_path / "output")
-        assert count >= EXPECTED_TABLE_COUNT, f"Expected ≥{EXPECTED_TABLE_COUNT} tables, got {count}"
+    async def test_jsonl_pipeline_completed(self) -> None:
+        count = await _run_format_pipeline("clean-jsonl")
+        assert count >= EXPECTED_TABLE_COUNT, (
+            f"Expected ≥{EXPECTED_TABLE_COUNT} tables, got {count}"
+        )
 
 
 @pytest.mark.slow
 class TestParquetFormat:
-    def test_parquet_pipeline_completed(self, tmp_path: Path) -> None:
-        count = _run_format_pipeline(DATA_DIR / "clean-parquet", tmp_path / "output")
-        assert count >= EXPECTED_TABLE_COUNT, f"Expected ≥{EXPECTED_TABLE_COUNT} tables, got {count}"
+    async def test_parquet_pipeline_completed(self) -> None:
+        count = await _run_format_pipeline("clean-parquet")
+        assert count >= EXPECTED_TABLE_COUNT, (
+            f"Expected ≥{EXPECTED_TABLE_COUNT} tables, got {count}"
+        )
 
 
 @pytest.mark.slow
 class TestMixedDirectoryFormat:
     """Mixed-format directory — CSV, JSON, and Parquet files in one folder."""
 
-    def test_mixed_directory_pipeline_completed(self, tmp_path: Path) -> None:
-        count = _run_format_pipeline(DATA_DIR / "clean_mixed", tmp_path / "output")
-        assert count >= EXPECTED_TABLE_COUNT, f"Expected ≥{EXPECTED_TABLE_COUNT} tables, got {count}"
+    async def test_mixed_directory_pipeline_completed(self) -> None:
+        count = await _run_format_pipeline("clean_mixed")
+        assert count >= EXPECTED_TABLE_COUNT, (
+            f"Expected ≥{EXPECTED_TABLE_COUNT} tables, got {count}"
+        )

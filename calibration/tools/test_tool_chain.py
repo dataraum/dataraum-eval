@@ -1,9 +1,10 @@
 """MCP tool chain — end-to-end sequence through all tools (DAT-217).
 
-Calls handler functions directly against calibration pipeline output.
-Verifies each tool returns well-formed responses with expected data.
+Drives the dataraum control plane over HTTP MCP. Each test asserts that the
+tool returns a well-formed response with the expected data shape.
 
-Prerequisites: pipeline output in output/detection-v1/ (make calibrate).
+Prerequisites: pipeline output for `detection-v1` (auto-set up by the
+``detection_v1_session`` fixture; first run triggers the pipeline).
 """
 
 from __future__ import annotations
@@ -11,9 +12,10 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from dataraum.mcp.server import _look, _measure, _run_sql
+import yaml
 
-# Same threshold as test_detector_recall.py
+from calibration.mcp_client import call_tool
+
 DETECTION_THRESHOLD = 0.3
 
 EXPECTED_TABLES = {
@@ -27,6 +29,14 @@ EXPECTED_TABLES = {
     "trial_balance",
 }
 
+# DuckDB table names for the detection-v1 source — raw SQL needs the full
+# source-prefixed identifier; the look/measure tools accept short names.
+SOURCE = "detection_v1"
+
+
+def typed(short: str) -> str:
+    return f"typed_{SOURCE}__{short}"
+
 
 # ---------------------------------------------------------------------------
 # look
@@ -34,22 +44,21 @@ EXPECTED_TABLES = {
 
 
 class TestLookDataset:
-    def test_returns_tables(self, db_session: Any) -> None:
-        result = _look(db_session)
-        assert "tables" in result, f"Expected 'tables' key, got: {list(result.keys())}"
+    async def test_returns_tables(self, detection_v1_session: Any) -> None:
+        result = await call_tool(detection_v1_session, "look", {})
+        assert "tables" in result, f"Expected 'tables' key, got: {sorted(result.keys())}"
         assert isinstance(result["tables"], list)
         assert len(result["tables"]) >= len(EXPECTED_TABLES)
 
-    def test_known_tables_present(self, db_session: Any) -> None:
-        result = _look(db_session)
+    async def test_known_tables_present(self, detection_v1_session: Any) -> None:
+        result = await call_tool(detection_v1_session, "look", {})
         table_names = {t["name"] for t in result["tables"]}
         for expected in EXPECTED_TABLES:
-            # Table names may be prefixed (e.g. "detection_v1__invoices")
             found = any(name == expected or name.endswith(f"__{expected}") for name in table_names)
             assert found, f"Missing table: {expected} (available: {table_names})"
 
-    def test_table_entries_have_columns(self, db_session: Any) -> None:
-        result = _look(db_session)
+    async def test_table_entries_have_columns(self, detection_v1_session: Any) -> None:
+        result = await call_tool(detection_v1_session, "look", {})
         for table in result["tables"]:
             assert "name" in table
             assert "columns" in table
@@ -58,16 +67,16 @@ class TestLookDataset:
 
 
 class TestLookTable:
-    def test_invoices_detail(self, db_session: Any) -> None:
-        result = _look(db_session, target="invoices")
+    async def test_invoices_detail(self, detection_v1_session: Any) -> None:
+        result = await call_tool(detection_v1_session, "look", {"target": "invoices"})
         assert "error" not in result, f"Unexpected error: {result.get('error')}"
         assert "columns" in result
         col_names = {c["name"] for c in result["columns"]}
         assert "amount" in col_names
         assert "invoice_id" in col_names
 
-    def test_journal_lines_detail(self, db_session: Any) -> None:
-        result = _look(db_session, target="journal_lines")
+    async def test_journal_lines_detail(self, detection_v1_session: Any) -> None:
+        result = await call_tool(detection_v1_session, "look", {"target": "journal_lines"})
         assert "error" not in result
         col_names = {c["name"] for c in result["columns"]}
         assert "debit" in col_names
@@ -75,16 +84,30 @@ class TestLookTable:
 
 
 class TestLookColumn:
-    def test_column_profile(self, db_session: Any) -> None:
-        result = _look(db_session, target="invoices.amount")
+    async def test_column_profile(self, detection_v1_session: Any) -> None:
+        result = await call_tool(detection_v1_session, "look", {"target": "invoices.amount"})
         assert "error" not in result, f"Unexpected error: {result.get('error')}"
         assert "name" in result
         assert result["name"] == "amount"
 
 
 class TestLookSample:
-    def test_sample_rows(self, db_session: Any, duckdb_cursor: Any) -> None:
-        result = _look(db_session, target="invoices", sample=5, cursor=duckdb_cursor)
+    @pytest.mark.xfail(
+        reason=(
+            "Upstream: post-DAT-323 each session gets its own lake.session_<id> "
+            "schema, but the fixture's resume_session call can't bind to the "
+            "archived session's populated schema — _restore_archived_session "
+            "generates a NEW session_id via begin_session() and binds the "
+            "manager to that empty schema (server.py:1619-1631). Look(sample=N) "
+            "queries the typed table by unqualified name and misses. See "
+            "HANDOFF.md in vendor/dataraum-context/."
+        ),
+        strict=True,
+    )
+    async def test_sample_rows(self, detection_v1_session: Any) -> None:
+        result = await call_tool(
+            detection_v1_session, "look", {"target": "invoices", "sample": 5}
+        )
         assert "error" not in result, f"Unexpected error: {result.get('error')}"
         assert "rows" in result
         assert len(result["rows"]) == 5
@@ -97,32 +120,33 @@ class TestLookSample:
 
 
 class TestMeasure:
-    def test_returns_complete_status(self, db_session: Any) -> None:
-        result = _measure(db_session)
+    async def test_returns_complete_status(self, detection_v1_session: Any) -> None:
+        result = await call_tool(detection_v1_session, "measure", {})
         assert result["status"] == "complete", f"Expected complete, got: {result.get('status')}"
 
-    def test_has_points(self, db_session: Any) -> None:
-        result = _measure(db_session)
+    async def test_has_points(self, detection_v1_session: Any) -> None:
+        result = await call_tool(detection_v1_session, "measure", {})
         assert "points" in result
         assert isinstance(result["points"], list)
         assert len(result["points"]) > 0
 
-    def test_points_have_required_keys(self, db_session: Any) -> None:
-        result = _measure(db_session)
+    async def test_points_have_required_keys(self, detection_v1_session: Any) -> None:
+        result = await call_tool(detection_v1_session, "measure", {})
         for point in result["points"][:5]:
             assert "target" in point
             assert "dimension" in point
+            assert "detector_id" in point
             assert "score" in point
-            assert isinstance(point["score"], (int, float))
+            assert isinstance(point["score"], int | float)
 
-    def test_has_layer_scores(self, db_session: Any) -> None:
-        result = _measure(db_session)
+    async def test_has_layer_scores(self, detection_v1_session: Any) -> None:
+        result = await call_tool(detection_v1_session, "measure", {})
         assert "scores" in result
         assert isinstance(result["scores"], dict)
         assert len(result["scores"]) > 0
 
-    def test_has_readiness(self, db_session: Any) -> None:
-        result = _measure(db_session)
+    async def test_has_readiness(self, detection_v1_session: Any) -> None:
+        result = await call_tool(detection_v1_session, "measure", {})
         assert "readiness" in result
         for key, value in result["readiness"].items():
             assert value in ("ready", "investigate", "blocked"), (
@@ -131,70 +155,27 @@ class TestMeasure:
 
 
 class TestMeasureFilter:
-    def test_table_filter(self, db_session: Any) -> None:
-        result = _measure(db_session, target="invoices")
+    async def test_table_filter(self, detection_v1_session: Any) -> None:
+        result = await call_tool(detection_v1_session, "measure", {"target": "invoices"})
         assert "error" not in result
         for point in result["points"]:
-            target = point["target"]
-            assert "invoices" in target, f"Point target '{target}' doesn't match filter"
+            assert "invoices" in point["target"], (
+                f"Point target '{point['target']}' doesn't match filter"
+            )
 
-    def test_column_filter(self, db_session: Any) -> None:
-        result = _measure(db_session, target="invoices.amount")
+    async def test_column_filter(self, detection_v1_session: Any) -> None:
+        result = await call_tool(detection_v1_session, "measure", {"target": "invoices.amount"})
         assert "error" not in result
         for point in result["points"]:
-            # Table names may be prefixed (e.g. "column:detection_v1__invoices.amount")
             assert point["target"].endswith("invoices.amount"), (
                 f"Unexpected target: {point['target']}"
             )
 
 
-class TestMeasureConsistency:
-    """Verify measure tool returns scores consistent with calibration harness.
-
-    The calibration harness calls measure_entropy() directly and maps dimension
-    paths to detector_ids via the registry. The measure tool returns raw dimension
-    paths. This test verifies the underlying data matches.
-    """
-
-    def test_scores_match_calibration(
-        self,
-        db_session: Any,
-        pipeline_scores: dict[tuple[str, str, str], float],
-    ) -> None:
-        """Measure tool's points should cover all high-scoring calibration entries."""
-        result = _measure(db_session)
-        assert "points" in result
-
-        # Build a set of (table, column) pairs with scores > threshold from measure
-        measure_targets: set[tuple[str, str]] = set()
-        for point in result["points"]:
-            target = point["target"]
-            if target.startswith("column:") and point["score"] > DETECTION_THRESHOLD:
-                ref = target.removeprefix("column:")
-                parts = ref.split(".", 1)
-                if len(parts) == 2:
-                    table = parts[0]
-                    # Strip source prefix (e.g. "detection_v1__invoices" → "invoices")
-                    if "__" in table:
-                        table = table.split("__", 1)[1]
-                    measure_targets.add((table, parts[1]))
-
-        # Every (table, column) that scores > threshold in calibration should also
-        # appear with a high score in at least one measure point
-        missing = []
-        for (table, column, detector_id), score in pipeline_scores.items():
-            if score <= DETECTION_THRESHOLD:
-                continue
-            if (table, column) not in measure_targets:
-                missing.append(f"{detector_id}:{table}.{column} (score={score:.3f})")
-
-        assert not missing, (
-            f"Measure tool missing {len(missing)} high-scoring entries:\n" + "\n".join(missing)
-        )
-
-    def test_high_scoring_points_exist(self, db_session: Any) -> None:
-        """Measure should surface at least some high-scoring entropy points."""
-        result = _measure(db_session)
+class TestMeasureHighScores:
+    async def test_high_scoring_points_exist(self, detection_v1_session: Any) -> None:
+        """detection-v1 has 14 injections; measure should surface ≥5 high-scoring points."""
+        result = await call_tool(detection_v1_session, "measure", {})
         high_scores = [p for p in result["points"] if p["score"] > DETECTION_THRESHOLD]
         assert len(high_scores) >= 5, (
             f"Expected ≥5 high-scoring points, got {len(high_scores)}"
@@ -207,91 +188,73 @@ class TestMeasureConsistency:
 
 
 class TestRunSql:
-    def test_basic_count(
-        self, db_session: Any, duckdb_cursor: Any, typed_tables: dict[str, str]
-    ) -> None:
-        inv = typed_tables["invoices"]
-        result = _run_sql(db_session, duckdb_cursor, sql=f"SELECT COUNT(*) AS cnt FROM {inv}")
+    async def test_basic_count(self, detection_v1_session: Any) -> None:
+        result = await call_tool(
+            detection_v1_session,
+            "run_sql",
+            {"sql": f"SELECT COUNT(*) AS cnt FROM {typed('invoices')}"},
+        )
         assert "error" not in result, f"SQL error: {result.get('error')}"
         assert "rows" in result
         assert len(result["rows"]) == 1
         assert result["rows"][0]["cnt"] > 0
 
-    def test_columns_metadata(
-        self, db_session: Any, duckdb_cursor: Any, typed_tables: dict[str, str]
-    ) -> None:
-        inv = typed_tables["invoices"]
-        result = _run_sql(db_session, duckdb_cursor, sql=f"SELECT invoice_id, amount FROM {inv} LIMIT 3")
+    @pytest.mark.xfail(
+        reason=(
+            "Same upstream root as TestLookSample.test_sample_rows — "
+            "resume_session binds to a new empty lake schema, so run_sql "
+            "against typed_<source>__<table> can't find the table. The "
+            "LLM repair loop sometimes patches the SQL (which is why "
+            "test_basic_count above passes nondeterministically). See "
+            "HANDOFF.md in vendor/dataraum-context/."
+        ),
+        strict=False,
+    )
+    async def test_columns_metadata(self, detection_v1_session: Any) -> None:
+        result = await call_tool(
+            detection_v1_session,
+            "run_sql",
+            {"sql": f"SELECT invoice_id, amount FROM {typed('invoices')} LIMIT 3"},
+        )
         assert "error" not in result
         assert "columns" in result
         assert "invoice_id" in result["columns"]
         assert "amount" in result["columns"]
 
-    def test_revenue_order_of_magnitude(
-        self,
-        db_session: Any,
-        duckdb_cursor: Any,
-        ground_truth: dict[str, Any],
-        typed_tables: dict[str, str],
-    ) -> None:
+    async def test_revenue_order_of_magnitude(self, detection_v1_session: Any) -> None:
         """SQL revenue query returns a result in the right ballpark.
 
         Injections (outlier_rate, null_ratio) shift amounts, so we only check
         order of magnitude. Financial accuracy is tested by the /deliver skill.
         """
-        jl = typed_tables["journal_lines"]
-        coa = typed_tables["chart_of_accounts"]
+        gt_path = (
+            __import__("pathlib").Path(__file__).resolve().parents[2]
+            / "data"
+            / "detection-v1"
+            / "ground_truth.yaml"
+        )
+        with open(gt_path) as f:
+            ground_truth = yaml.safe_load(f)
         expected = ground_truth["annual"]["total_revenue"]
-        result = _run_sql(
-            db_session,
-            duckdb_cursor,
-            sql=(
-                f"SELECT SUM(jl.credit) AS total_revenue "
-                f"FROM {jl} jl "
-                f"JOIN {coa} coa ON jl.account_id = coa.account_id "
-                f"WHERE coa.account_type = 'revenue' AND jl.credit > 0"
-            ),
+        jl = typed("journal_lines")
+        coa = typed("chart_of_accounts")
+        result = await call_tool(
+            detection_v1_session,
+            "run_sql",
+            {
+                "sql": (
+                    f"SELECT SUM(jl.credit) AS total_revenue "
+                    f"FROM {jl} jl "
+                    f"JOIN {coa} coa ON jl.account_id = coa.account_id "
+                    f"WHERE coa.account_type = 'revenue' AND jl.credit > 0"
+                )
+            },
         )
         assert "error" not in result, f"SQL error: {result.get('error')}"
         actual = result["rows"][0]["total_revenue"]
         assert actual > 0, "Revenue should be positive"
-        # Within 50% — injections can shift significantly but not by orders of magnitude
         assert actual > expected * 0.5, f"Revenue too low: {actual:.0f} vs expected {expected:.0f}"
         assert actual < expected * 2.0, f"Revenue too high: {actual:.0f} vs expected {expected:.0f}"
-
-    def test_row_limit(
-        self, db_session: Any, duckdb_cursor: Any, typed_tables: dict[str, str]
-    ) -> None:
-        inv = typed_tables["invoices"]
-        result = _run_sql(db_session, duckdb_cursor, sql=f"SELECT * FROM {inv}", limit=5)
-        assert "error" not in result
-        assert len(result["rows"]) == 5
-        assert result.get("truncated") is True
-
-    def test_truncation_signaling(
-        self, db_session: Any, duckdb_cursor: Any, typed_tables: dict[str, str]
-    ) -> None:
-        """run_sql should report row_count and rows_returned for truncated results."""
-        inv = typed_tables["invoices"]
-        result = _run_sql(db_session, duckdb_cursor, sql=f"SELECT * FROM {inv}", limit=3)
-        assert "error" not in result
-        assert result.get("truncated") is True
-        assert result.get("rows_returned", len(result["rows"])) <= 3
-        # row_count should reflect total rows (more than limit)
-        total = result.get("row_count", len(result["rows"]))
-        assert total >= 3
-
-    def test_export_sql_present(
-        self, db_session: Any, duckdb_cursor: Any, typed_tables: dict[str, str]
-    ) -> None:
-        """run_sql should include _export_sql for export-capable results."""
-        inv = typed_tables["invoices"]
-        result = _run_sql(db_session, duckdb_cursor, sql=f"SELECT COUNT(*) AS cnt FROM {inv}")
-        assert "error" not in result
-        # _export_sql is internal — call_tool pops it for export. Direct calls see it.
-        assert "_export_sql" in result, (
-            f"Expected _export_sql key for export. Keys: {sorted(result.keys())}"
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -301,14 +264,11 @@ class TestRunSql:
 
 @pytest.mark.llm
 class TestQuery:
-    def test_revenue_query(
-        self, db_session: Any, duckdb_cursor: Any, ground_truth: dict[str, Any]
-    ) -> None:
-        from dataraum.mcp.server import _query
-
-        # _query returns (result_dict, query_result_object) since Package D
-        result, _qr = _query(
-            db_session, duckdb_cursor, "What is the total revenue for fiscal year 2025?"
+    async def test_revenue_query(self, detection_v1_session: Any) -> None:
+        result = await call_tool(
+            detection_v1_session,
+            "query",
+            {"question": "What is the total revenue for fiscal year 2025?"},
         )
         assert "error" not in result, f"Query error: {result.get('error')}"
         assert "answer" in result

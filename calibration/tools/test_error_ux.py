@@ -1,70 +1,88 @@
-"""Error UX — tool error messages are clear and actionable (DAT-218).
+"""Error UX — tool error responses are clear and actionable (DAT-218).
 
 Each test verifies that invalid input produces a helpful error message,
-not a traceback or cryptic internal error.
+not a traceback or cryptic internal error. Runs against the live HTTP
+MCP control plane.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from dataraum.mcp.server import _begin_session, _look, _measure, _run_sql
+from calibration.mcp_client import call_tool
+
+from .conftest import end_active_session
 
 
 class TestLookErrors:
-    def test_nonexistent_table(self, db_session: Any) -> None:
-        result = _look(db_session, target="nonexistent_table_xyz")
+    async def test_nonexistent_table(self, detection_v1_session: Any) -> None:
+        result = await call_tool(detection_v1_session, "look", {"target": "nonexistent_table_xyz"})
         assert "error" in result
         assert "not found" in result["error"].lower()
         assert "Available" in result["error"]
 
-    def test_nonexistent_column(self, db_session: Any) -> None:
-        result = _look(db_session, target="invoices.nonexistent_column_xyz")
+    async def test_nonexistent_column(self, detection_v1_session: Any) -> None:
+        result = await call_tool(
+            detection_v1_session, "look", {"target": "invoices.nonexistent_column_xyz"}
+        )
         assert "error" in result
         assert "not found" in result["error"].lower()
 
-    def test_sample_without_table(self, db_session: Any, duckdb_cursor: Any) -> None:
-        result = _look(db_session, sample=5, cursor=duckdb_cursor)
+    async def test_sample_without_table(self, detection_v1_session: Any) -> None:
+        result = await call_tool(detection_v1_session, "look", {"sample": 5})
         assert "error" in result
         assert "target" in result["error"].lower() or "table" in result["error"].lower()
 
 
 class TestMeasureErrors:
-    def test_nonexistent_table(self, db_session: Any) -> None:
-        result = _measure(db_session, target="nonexistent_table_xyz")
+    async def test_nonexistent_table(self, detection_v1_session: Any) -> None:
+        result = await call_tool(
+            detection_v1_session, "measure", {"target": "nonexistent_table_xyz"}
+        )
         assert "error" in result
         assert "not found" in result["error"].lower()
         assert "Available" in result["error"]
 
 
 class TestRunSqlErrors:
-    def test_invalid_sql_repaired(self, db_session: Any, duckdb_cursor: Any) -> None:
+    async def test_invalid_sql_repaired_or_errored(self, detection_v1_session: Any) -> None:
         """Invalid SQL is either repaired by LLM or returns an error."""
-        result = _run_sql(db_session, duckdb_cursor, sql="SELECT FROM WHERE INVALID")
+        result = await call_tool(
+            detection_v1_session, "run_sql", {"sql": "SELECT FROM WHERE INVALID"}
+        )
         if "error" in result:
-            # No LLM available — original error returned
             assert isinstance(result["error"], str)
         else:
-            # LLM repair succeeded — verify we got rows back
             assert "rows" in result or "columns" in result
 
-    def test_no_input(self, db_session: Any, duckdb_cursor: Any) -> None:
-        result = _run_sql(db_session, duckdb_cursor)
+    async def test_no_input(self, detection_v1_session: Any) -> None:
+        result = await call_tool(detection_v1_session, "run_sql", {})
         assert "error" in result
         assert "steps" in result["error"].lower() or "sql" in result["error"].lower()
 
-    def test_both_inputs(self, db_session: Any, duckdb_cursor: Any) -> None:
-        result = _run_sql(
-            db_session,
-            duckdb_cursor,
-            steps=[{"step_id": "test", "sql": "SELECT 1"}],
-            sql="SELECT 1",
+    async def test_both_inputs(self, detection_v1_session: Any) -> None:
+        result = await call_tool(
+            detection_v1_session,
+            "run_sql",
+            {
+                "steps": [{"step_id": "test", "sql": "SELECT 1"}],
+                "sql": "SELECT 1",
+            },
         )
         assert "error" in result
         assert "not both" in result["error"].lower()
 
 
 class TestBeginSessionErrors:
-    def test_unknown_contract(self, db_session: Any) -> None:
-        result = _begin_session(db_session, intent="test", contract="nonexistent_contract_xyz")
+    async def test_unknown_contract(self, mcp_client: Any) -> None:
+        await end_active_session(mcp_client)
+        result = await call_tool(
+            mcp_client,
+            "begin_session",
+            {
+                "source": "detection_v1",
+                "intent": "test",
+                "contract": "nonexistent_contract_xyz",
+            },
+        )
         assert "error" in result

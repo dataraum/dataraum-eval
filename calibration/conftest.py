@@ -172,9 +172,16 @@ def mcp_stack() -> StackHandle:
     return up()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def mcp_client(mcp_stack: StackHandle) -> AsyncIterator[Any]:
-    """Module-shared MCP ClientSession for tool tests."""
+    """Function-scoped MCP ClientSession.
+
+    A session-scoped client triggers ``McpError: Session terminated`` after
+    the first test — the streamable-HTTP session is bound to its creating
+    event loop and pytest-asyncio's per-test loop closes between tests. A
+    fresh client per test is correct; the underlying pipeline state lives
+    server-side in Postgres and is reused across clients.
+    """
     async with mcp_session(mcp_stack) as session:
         yield session
 
