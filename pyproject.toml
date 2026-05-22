@@ -7,12 +7,11 @@ dependencies = ["dataraum-testdata", "dataraum"]
 
 [tool.uv.sources]
 dataraum-testdata = { path = "vendor/dataraum-testdata", editable = true }
-dataraum = { path = "vendor/dataraum-context", editable = true }
+dataraum = { path = "vendor/dataraum-context/packages/engine", editable = true }
 
 [dependency-groups]
 dev = [
     "pytest>=8.0",
-    "pytest-asyncio>=0.23",
     "pyyaml>=6.0",
     "ruff>=0.2.0",
     "mypy>=1.8.0",
@@ -22,7 +21,6 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["calibration"]
 addopts = "-v --tb=short"
-asyncio_mode = "auto"
 markers = [
     "llm: tests that call an LLM (deselect with -m 'not llm')",
     "slow: slow tests that run a full pipeline (deselect with -m 'not slow')",
@@ -52,9 +50,6 @@ strict = true
 warn_return_any = true
 warn_unused_ignores = false
 disallow_untyped_defs = true
-# Excluded until the tools tests are rewritten against the HTTP MCP client
-# (see calibration/tools/conftest.py).
-exclude = ["^calibration/tools/test_.*\\.py$"]
 
 [[tool.mypy.overrides]]
 module = [

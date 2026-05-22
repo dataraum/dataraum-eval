@@ -8,6 +8,8 @@ dist/
 # Pipeline output (regenerated, not committed)
 data/
 output/
+lake_data/
+workspace/
 
 # IDE
 .idea/

@@ -37,4 +37,15 @@ calibrate-typing: run-clean run-detection-typing-v1
 list-strategies:
 	@ls strategies/*.yaml 2>/dev/null | xargs -I{} basename {} .yaml
 
-.PHONY: test list-strategies calibrate calibrate-typing
+VENDOR_COMPOSE := vendor/dataraum-context/packages/infra/docker-compose.yml
+
+# Wipe generated data, pipeline output, the local DuckLake parquet store,
+# and the workspace overlay. Run `make clean-pg` separately for PG state.
+clean:
+	rm -rf data output lake_data workspace
+
+# Drop the Postgres container + volume (wipes all engine metadata).
+clean-pg:
+	docker compose -f $(VENDOR_COMPOSE) --env-file .docker.env down -v
+
+.PHONY: test list-strategies calibrate calibrate-typing clean clean-pg

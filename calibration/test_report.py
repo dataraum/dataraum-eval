@@ -59,26 +59,24 @@ def generate_report(strategy: str) -> Path:
         clean = clean_scores.get(key, 0.0)
         delta = (score - clean) if score is not None else None
 
-        recall_results.append({
-            "injection": inj["injection_type"],
-            "detector": detector,
-            "target": f"{table}.{column}",
-            "score": score,
-            "clean_score": clean,
-            "delta": round(delta, 3) if delta is not None else None,
-            "detected": score is not None and score > threshold,
-        })
+        recall_results.append(
+            {
+                "injection": inj["injection_type"],
+                "detector": detector,
+                "target": f"{table}.{column}",
+                "score": score,
+                "clean_score": clean,
+                "delta": round(delta, 3) if delta is not None else None,
+                "detected": score is not None and score > threshold,
+            }
+        )
 
     detected = sum(1 for r in recall_results if r["detected"])
-    testable = sum(
-        1 for r in recall_results if r["score"] is not None
-    )
+    testable = sum(1 for r in recall_results if r["score"] is not None)
 
     # Compute precision (false alarm rate on clean data)
     false_alarms = [
-        {"key": k, "score": v}
-        for k, v in sorted(clean_scores.items())
-        if v > threshold
+        {"key": k, "score": v} for k, v in sorted(clean_scores.items()) if v > threshold
     ]
 
     timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")

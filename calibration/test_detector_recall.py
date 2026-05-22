@@ -28,14 +28,18 @@ DETECTION_THRESHOLD = 0.3
 EVAL_ROOT = Path(__file__).parent.parent
 
 # Detectors that don't exist yet — always skip
-NOT_IMPLEMENTED = frozenset({
-    "derived_value_consistency",
-})
+NOT_IMPLEMENTED = frozenset(
+    {
+        "derived_value_consistency",
+    }
+)
 
 # Detectors where the injection is known-misaligned (documents the gap)
-KNOWN_MISALIGNED = frozenset({
-    "unit_entropy",  # Measures metadata, injection corrupts values
-})
+KNOWN_MISALIGNED = frozenset(
+    {
+        "unit_entropy",  # Measures metadata, injection corrupts values
+    }
+)
 
 # Injections where the detector can't see the specific target column.
 # Key: (detector_id, table, column). Reason documented inline.
@@ -162,7 +166,9 @@ def test_injection_detected(
     if "/" in column:
         cols = column_lc.split("/")
         scores = [
-            _find_score(table, c, detector, pipeline_scores, pipeline_table_scores, pipeline_view_scores)
+            _find_score(
+                table, c, detector, pipeline_scores, pipeline_table_scores, pipeline_view_scores
+            )
             for c in cols
         ]
         best = max((s for s in scores if s is not None), default=None)
@@ -176,7 +182,9 @@ def test_injection_detected(
         )
         return
 
-    score = _find_score(table, column_lc, detector, pipeline_scores, pipeline_table_scores, pipeline_view_scores)
+    score = _find_score(
+        table, column_lc, detector, pipeline_scores, pipeline_table_scores, pipeline_view_scores
+    )
     assert score is not None, (
         f"{detector} produced no score for {table}.{column} — "
         f"detector didn't run or doesn't cover this injection type"

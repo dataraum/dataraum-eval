@@ -1,9 +1,8 @@
-"""Drive testdata generation + the dataraum pipeline via HTTP MCP.
+"""Drive testdata generation + the dataraum pipeline in-process.
 
-Generation still runs in-process against ``dataraum-testdata`` (no remote
-surface there). The pipeline runs in the control-plane container; the runner
-talks to it through the MCP tool surface (add_source → begin_session →
-measure).
+Generation runs against ``dataraum-testdata`` directly. The pipeline runs
+in-process against the local Postgres + DuckLake substrate brought up by
+``calibration.stack``. No MCP server, no control-plane container.
 
 Usage::
 
@@ -19,33 +18,57 @@ Or from the CLI::
 
 from __future__ import annotations
 
-import asyncio
-import time
+import json
+import os
+import re
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from uuid import uuid4
 
 from dotenv import load_dotenv
 
-# Load .env before importing testdata (reads env vars at import time).
+# Load .env (ANTHROPIC_API_KEY etc.) before any module reads it.
 EVAL_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(EVAL_ROOT / ".env")
 
-from testdata.scenarios.runner import run_scenario  # noqa: E402
-
-from calibration.mcp_client import call_tool, mcp_session  # noqa: E402
-from calibration.stack import (  # noqa: E402
-    DATA_DIR,
-    StackHandle,
-    container_path_for,
-    up,
-)
+from calibration.stack import LAKE_DATA_DIR, up  # noqa: E402
 
 STRATEGIES_DIR = EVAL_ROOT / "strategies"
+DATA_DIR = EVAL_ROOT / "data"
 OUTPUT_DIR = EVAL_ROOT / "output"
 
-# Polling cadence while the pipeline is running.
-_PIPELINE_POLL_INTERVAL = 5.0
-_PIPELINE_POLL_TIMEOUT = 30 * 60  # 30 min hard cap
+_engine_bootstrapped = False
+
+
+@dataclass(frozen=True)
+class CalibrationRun:
+    """Identifiers for a completed pipeline run; persisted to the sidecar."""
+
+    strategy: str
+    source_id: str
+    source_name: str
+    session_id: str
+
+    def to_json(self) -> str:
+        return json.dumps(
+            {
+                "strategy": self.strategy,
+                "source_id": self.source_id,
+                "source_name": self.source_name,
+                "session_id": self.session_id,
+            },
+            indent=2,
+        )
+
+    @classmethod
+    def from_json(cls, payload: str) -> CalibrationRun:
+        data = json.loads(payload)
+        return cls(
+            strategy=data["strategy"],
+            source_id=data["source_id"],
+            source_name=data["source_name"],
+            session_id=data["session_id"],
+        )
 
 
 def strategy_path(strategy: str) -> Path:
@@ -58,6 +81,43 @@ def strategy_path(strategy: str) -> Path:
     return path
 
 
+def source_name_for(strategy: str) -> str:
+    """Stable source name for a strategy (must satisfy [a-z0-9_])."""
+    return re.sub(r"[^a-z0-9_]", "_", strategy.lower()).strip("_") or "source"
+
+
+def sidecar_path(strategy: str) -> Path:
+    return OUTPUT_DIR / strategy / "calibration_run.json"
+
+
+def bootstrap_engine() -> None:
+    """Bring up PG, open the DuckLake anchor, and bootstrap the workspace.
+
+    Idempotent within a process. Safe to call from pytest fixtures.
+    """
+    global _engine_bootstrapped
+    if _engine_bootstrapped:
+        return
+
+    up()  # docker compose + os.environ setup
+
+    from dataraum.core.connections import ConnectionConfig, ConnectionManager
+    from dataraum.server.storage import bootstrap_lake
+    from dataraum.server.workspace import bootstrap_workspace
+
+    bootstrap_lake(
+        catalog_url=os.environ["DUCKLAKE_CATALOG_URL"],
+        data_path=str(LAKE_DATA_DIR),
+    )
+
+    workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
+    workspace_mgr.initialize()
+    bootstrap_workspace(workspace_mgr.session_scope)
+    workspace_mgr.close()
+
+    _engine_bootstrapped = True
+
+
 def generate(
     strategy: str,
     *,
@@ -67,6 +127,8 @@ def generate(
     fmt: str = "csv",
 ) -> Path:
     """Generate test data using a strategy file from this repo."""
+    from testdata.scenarios.runner import run_scenario
+
     sf = strategy_path(strategy)
     data_dir = DATA_DIR / strategy
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -84,100 +146,54 @@ def generate(
     return data_dir
 
 
-def _source_name(strategy: str) -> str:
-    """Strategy name → MCP source name (lowercase, a-z/0-9/_)."""
-    return strategy.replace("-", "_")
-
-
-async def _ensure_source_registered(session: Any, name: str, path: str) -> None:
-    """Idempotent add_source — skip if already present, error on anything else.
-
-    Caller must ensure no session is active (add_source refuses with "Sources
-    are sealed" while a session holds the workspace).
-    """
-    listing = await call_tool(session, "list_sources", {})
-    if any(s.get("name") == name for s in listing.get("sources", [])):
-        return
-    result = await call_tool(session, "add_source", {"name": name, "path": path})
-    if "error" in result:
-        raise RuntimeError(f"add_source({name!r}, {path!r}) failed: {result}")
-
-
-async def _end_active_session_if_any(session: Any) -> None:
-    """Best-effort: end whatever session is active so add_source/begin_session can proceed.
-
-    Tolerates the "no active session" case — that's the desired state.
-    """
-    result = await call_tool(session, "end_session", {"outcome": "abandoned"})
-    err = str(result.get("error", "")).lower()
-    if "error" in result and "no active" not in err and "no session" not in err:
-        # Anything else (a real failure) — let the next call surface it; we
-        # don't want to mask a transport problem here.
-        pass
-
-
-async def setup_strategy(
-    session: Any,
-    strategy: str,
-    *,
-    contract: str | None = "aggregation_safe",
-    vertical: str | None = "finance",
-) -> dict[str, Any]:
-    """Idempotent: end → register → begin a session bound to ``strategy``'s source.
-
-    Returns the begin_session response. Safe to call repeatedly across
-    strategies in a single MCP session.
-    """
-    name = _source_name(strategy)
-    container_path = container_path_for(strategy)
-    await _end_active_session_if_any(session)
-    await _ensure_source_registered(session, name, container_path)
-    args: dict[str, Any] = {"source": name, "intent": f"calibration:{strategy}"}
-    if contract:
-        args["contract"] = contract
-    if vertical:
-        args["vertical"] = vertical
-    begin = await call_tool(session, "begin_session", args)
-    if "error" in begin:
-        raise RuntimeError(f"begin_session({name!r}) failed: {begin}")
-    return begin
-
-
-async def _wait_for_pipeline(session: Any) -> dict[str, Any]:
-    """Poll measure() until the pipeline finishes; return the final response."""
-    start = time.monotonic()
-    while True:
-        resp = await call_tool(session, "measure", {})
-        status = resp.get("status") or resp.get("pipeline_status")
-        if status in ("complete", "ready"):
-            return resp
-        if status == "failed":
-            raise RuntimeError(f"Pipeline failed: {resp}")
-        if time.monotonic() - start > _PIPELINE_POLL_TIMEOUT:
-            raise TimeoutError(
-                f"Pipeline did not complete within {_PIPELINE_POLL_TIMEOUT}s. Last: {resp}"
-            )
-        phases = resp.get("phases_completed", [])
-        print(f"[eval] pipeline status={status} phases_completed={len(phases)}")
-        await asyncio.sleep(_PIPELINE_POLL_INTERVAL)
-
-
-async def _run_pipeline_async(
-    handle: StackHandle,
-    strategy: str,
+def _create_session_for_source(
+    source_name: str,
+    source_path: Path,
     *,
     contract: str | None,
     vertical: str | None,
-) -> dict[str, Any]:
-    async with mcp_session(handle) as s:
-        begin = await setup_strategy(s, strategy, contract=contract, vertical=vertical)
-        print(f"[eval] begin_session ok: has_pipeline_data={begin.get('has_pipeline_data')}")
-        final = await _wait_for_pipeline(s)
-        print(
-            f"[eval] pipeline complete: points={len(final.get('points', []))} "
-            f"phases={len(final.get('phases_completed', []))}"
-        )
-        return final
+    intent: str,
+) -> tuple[str, str]:
+    """Find/create the Source + open an InvestigationSession bound to it.
+
+    Returns ``(session_id, source_id)``.
+    """
+    from dataraum.core.connections import ConnectionConfig, ConnectionManager
+    from dataraum.investigation.db_models import InvestigationSession
+    from dataraum.storage import Source
+    from sqlalchemy import select
+
+    workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
+    workspace_mgr.initialize()
+    try:
+        with workspace_mgr.session_scope() as s:
+            src = s.execute(select(Source).where(Source.name == source_name)).scalar_one_or_none()
+            if src is None:
+                src = Source(
+                    source_id=str(uuid4()),
+                    name=source_name,
+                    source_type="csv",
+                    connection_config={"path": str(source_path.resolve())},
+                    status="configured",
+                )
+                s.add(src)
+                s.flush()
+            source_id = src.source_id
+
+            inv = InvestigationSession(
+                session_id=str(uuid4()),
+                source_id=source_id,
+                intent=intent,
+                contract=contract,
+                vertical=vertical,
+                status="active",
+            )
+            s.add(inv)
+            s.flush()
+            session_id = inv.session_id
+        return session_id, source_id
+    finally:
+        workspace_mgr.close()
 
 
 def run_pipeline(
@@ -185,17 +201,60 @@ def run_pipeline(
     *,
     contract: str | None = "aggregation_safe",
     vertical: str | None = "finance",
-) -> dict[str, Any]:
-    """Run the pipeline against test data via MCP. Returns the final measure() response."""
+) -> CalibrationRun:
+    """Run the pipeline against generated data in-process. Persists sidecar.
+
+    Returns the identifiers needed to read scores back from Postgres.
+    """
     data_dir = DATA_DIR / strategy
     if not data_dir.exists():
-        raise FileNotFoundError(
-            f"No test data at {data_dir}. Run generate({strategy!r}) first."
-        )
+        raise FileNotFoundError(f"No test data at {data_dir}. Run generate({strategy!r}) first.")
 
-    handle = up()
-    print(f"[eval] Running pipeline via MCP: strategy={strategy}")
-    return asyncio.run(_run_pipeline_async(handle, strategy, contract=contract, vertical=vertical))
+    bootstrap_engine()
+
+    source_name = source_name_for(strategy)
+    session_id, source_id = _create_session_for_source(
+        source_name,
+        data_dir,
+        contract=contract,
+        vertical=vertical,
+        intent=f"calibration:{strategy}",
+    )
+
+    from dataraum.pipeline.runner import RunConfig
+    from dataraum.pipeline.runner import run as pipeline_run
+
+    output_dir = OUTPUT_DIR / strategy
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"[eval] Running pipeline in-process: strategy={strategy} session={session_id}")
+    config = RunConfig(
+        source_path=data_dir,
+        output_dir=output_dir,
+        source_name=source_name,
+        contract=contract,
+        vertical=vertical,
+        session_id=session_id,
+    )
+    result = pipeline_run(config).unwrap()
+    if not result.success:
+        raise RuntimeError(
+            f"Pipeline failed for strategy {strategy!r}: "
+            f"error={result.error} failed_phases={[p.phase_name for p in result.get_failed_phases()]}"
+        )
+    print(
+        f"[eval] Pipeline complete: phases_completed={result.phases_completed} "
+        f"duration={result.duration_seconds:.1f}s"
+    )
+
+    run = CalibrationRun(
+        strategy=strategy,
+        source_id=source_id,
+        source_name=source_name,
+        session_id=session_id,
+    )
+    sidecar_path(strategy).write_text(run.to_json())
+    return run
 
 
 def calibration_run(
@@ -206,8 +265,8 @@ def calibration_run(
     scenario: str = "month-end-close",
     contract: str | None = "aggregation_safe",
     vertical: str | None = "finance",
-) -> dict[str, Any]:
-    """Full calibration run: generate test data + drive the pipeline via MCP."""
+) -> CalibrationRun:
+    """Full calibration run: generate test data + run the pipeline in-process."""
     generate(strategy, seed=seed, months=months, scenario=scenario)
     return run_pipeline(strategy, contract=contract, vertical=vertical)
 

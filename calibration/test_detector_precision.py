@@ -53,10 +53,7 @@ def test_clean_scores_match_baseline(
     if not baseline:
         # First run — generate baseline
         _write_baseline(clean_pipeline_scores)
-        pytest.skip(
-            f"No baseline existed. Generated {BASELINE_PATH}. "
-            "Review and re-run."
-        )
+        pytest.skip(f"No baseline existed. Generated {BASELINE_PATH}. Review and re-run.")
 
     tolerance = 0.05
     regressions = []
@@ -71,8 +68,7 @@ def test_clean_scores_match_baseline(
             expected = baseline[key]
             if score > expected + tolerance:
                 regressions.append(
-                    f"  {key}: {score:.3f} (was {expected:.3f}, "
-                    f"delta +{score - expected:.3f})"
+                    f"  {key}: {score:.3f} (was {expected:.3f}, delta +{score - expected:.3f})"
                 )
         else:
             new_high_scores.append(f"  {key}: {score:.3f} (NEW)")
@@ -106,9 +102,7 @@ def test_clean_average_below_threshold(
         return
 
     avg = sum(clean_pipeline_scores.values()) / len(clean_pipeline_scores)
-    assert avg < 0.15, (
-        f"Average clean score {avg:.3f} too high — detectors are noisy"
-    )
+    assert avg < 0.15, f"Average clean score {avg:.3f} too high — detectors are noisy"
 
 
 def _write_baseline(
