@@ -15,8 +15,10 @@ Three repos, vendored as git submodules under `vendor/`:
 | `dataraum-context` | Pipeline: phases, detectors, fix system | Yes — `vendor/dataraum-context` |
 | `dataraum-eval` (this) | Strategies, calibration tests, runner | Yes |
 
-Everything runs from this repo via direct Python API calls — no subprocess
-shelling out to sibling repos.
+Testdata generation runs via a direct Python API call. The **pipeline now runs
+as a Temporal workflow** (DAT-344/DAT-370): the engine is a Temporal activity
+worker, so calibration brings up Postgres + Temporal in docker, runs the engine
+worker on the host, and triggers `addSourceWorkflow` as a client (see below).
 
 ## Running Calibration
 
@@ -27,16 +29,21 @@ make calibrate-typing                  # detection-typing-v1 (type-breaking only
 
 # Or step by step:
 make generate-detection-v1             # testdata → data/detection-v1/
-make pipeline-detection-v1             # pipeline → output/detection-v1/
+make pipeline-detection-v1             # addSourceWorkflow → scores in PG
 uv run pytest calibration/ --strategy detection-v1 -v
 
 # Clean everything
-make clean
+make clean       # local dirs    ·    make clean-pg  # drop PG + Temporal volume
 ```
 
-The runner (`calibration/runner.py`) calls `testdata.scenarios.runner.run_scenario`
-and `dataraum.pipeline.runner.run` directly. Strategy YAML files in `strategies/`
-control injection parameters and detector_id overrides.
+`calibration.stack` brings up `postgres` + the `temporal` server from the vendor
+compose (same Postgres backs Temporal). `calibration.worker` starts the engine
+worker as a **host subprocess** (`python -m dataraum.worker.main` on the eval
+interpreter — live working-tree code, reads host `data/`, writes host
+`lake_data/`). `calibration.runner.run_pipeline` is then a Temporal **client**:
+it writes the `Source` row, triggers `addSourceWorkflow`, awaits `AddSourceResult`,
+and tears the worker down. Strategy YAML in `strategies/` controls injection
+parameters and `detector_id` overrides.
 
 ## How Calibration Works
 
@@ -44,11 +51,16 @@ control injection parameters and detector_id overrides.
    detector_id override)
 2. **testdata** generates clean financial data, applies injections, writes
    `entropy_map.yaml` listing exactly what was injected
-3. **Pipeline** runs all phases, post-step detectors write `EntropyObjectRecord` rows
+3. **`addSourceWorkflow`** imports the source, **fans out one `processTableWorkflow`
+   per raw table** (`typing → statistics → column_eligibility → statistical_quality
+   → temporal → detect_table`), then runs `semantic_per_column` as the source-level
+   reduce. The one `detect_table` step per table runs the **table-local** detectors
+   (`type_fidelity`, `null_ratio`) and writes `EntropyObjectRecord` rows.
 4. **conftest.py** calls `measure_entropy()` to aggregate detector records into
    `(table, column, detector_id) → score`
 5. **test_detector_recall.py** asserts each injection's detector scores above
-   `DETECTION_THRESHOLD` (0.3) for the affected column
+   `DETECTION_THRESHOLD` (0.3); detectors whose phase/detect-step the current
+   slice doesn't run yet are **skipped** (see "Current slice" below), not failed.
 
 ## What We Test
 
@@ -91,7 +103,45 @@ Tests: type_fidelity, temporal_entropy.
   curve to cross threshold
 - `formats` (corrupt_dates): must use injector's dispatch names, not strftime
 
-## Detection Calibration Results (2026-04-17, detection-v1)
+## Current slice (DAT-370, 2026-05-27) — what actually runs
+
+The `addSourceWorkflow` slice runs phases **up to `semantic_per_column`** plus two
+stage-level detect steps that run the detectors their phases declare in
+`pipeline.yaml`:
+
+- **`detect_table`** (per child workflow) — table-local detectors scoped to each
+  child's typed table: `typing→type_fidelity`, `statistics→null_ratio`.
+- **`detect_source`** (after the reduce; `fix/dat-370-source-level-detectors`) —
+  `semantic_per_column`'s detectors, source-wide: `business_meaning`,
+  `unit_entropy`, `temporal_entropy`, `outlier_rate`, `benford`.
+
+Verified end-to-end through Temporal on the fix branch:
+
+| Strategy | Detector | Result |
+|---|---|---|
+| detection-v1 | `null_ratio` (journal_lines.cost_center) | ✅ pass |
+| detection-v1 | `outlier_rate` (journal_lines.credit) | ✅ pass |
+| detection-v1 | `benford` (bank_transactions.amount) | ✅ pass |
+| detection-v1 | `unit_entropy` (invoices.amount) | xfail (known-misaligned) |
+| detection-v1 | `business_meaning` (invoices.*) ×2 | xfail/xpass (LLM-nondeterministic) |
+| detection-typing-v1 | `type_fidelity` (journal_lines.debit) | ✅ pass |
+| detection-typing-v1 | `temporal_entropy` (payments.date) | ✅ pass |
+
+**History:** DAT-370 originally orphaned `semantic_per_column`'s five detectors —
+it ran the phase but wired no detect step for them (only `detect_table` for
+table-local phases). Eval caught this; the fix added `detect_source`. The
+detectors were never broken, only unwired.
+
+Still **skipped** by `test_detector_recall.py` (slice-2 phases not in the chain):
+`relationship_entropy`, `dimensional_entropy`, `derived_value`, `temporal_drift`,
+`cross_table_consistency` (in `semantic_per_table` / `enriched_views` /
+`validation` / …). As those phases get wired, move detector ids out of
+`OUT_OF_SLICE_REASON` / into `CURRENT_SLICE_DETECTORS` in
+`test_detector_recall.py` and the assertions re-apply. The results table below is
+the **pre-Temporal baseline** (all phases ran in-process) — the target once the
+full workflow chain lands.
+
+## Detection Calibration Results (2026-04-17, detection-v1) — pre-Temporal baseline
 
 **Detection recall: 12/14 pass, 2 xfail, 2 non-deterministic (LLM)**
 

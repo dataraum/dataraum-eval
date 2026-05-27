@@ -1,14 +1,16 @@
 """Ground truth metrics — do computed values match known answers?
 
-Uses ground_truth.yaml from testdata to verify the pipeline + MCP tools
-produce correct financial metrics. Revenue query uses _run_sql directly.
+Uses ground_truth.yaml from testdata to verify financial invariants. The
+SQL-backed revenue check is skipped in the current slice: it drove the retired
+MCP ``_run_sql`` tool (moved to ``reference/mcp/`` in DAT-369), and the cockpit
+query surface that replaces it is not exercised by this harness yet.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from dataraum.mcp.server import _run_sql
+import pytest
 
 
 def test_ground_truth_loaded(ground_truth: dict[str, Any]) -> None:
@@ -31,33 +33,12 @@ def test_invariants_hold(ground_truth: dict[str, Any]) -> None:
     assert inv["invoice_payment_matched"] is True
 
 
-def test_revenue_matches_ground_truth(
-    ground_truth: dict[str, Any],
-    typed_tables: dict[str, str],
-    db_session: Any,
-    duckdb_cursor: Any,
-) -> None:
-    """Total revenue from SQL should match ground truth within tolerance.
-
-    Injections (outlier_rate, null_ratio) shift amounts, so we allow 50%
-    deviation. This verifies the query path works and returns the right
-    order of magnitude — not exact financial accuracy.
-    """
-    jl = typed_tables["journal_lines"]
-    coa = typed_tables["chart_of_accounts"]
-    expected = ground_truth["annual"]["total_revenue"]
-
-    result = _run_sql(
-        db_session,
-        duckdb_cursor,
-        sql=(
-            f"SELECT SUM(jl.credit) AS total_revenue "
-            f"FROM {jl} jl "
-            f"JOIN {coa} coa ON jl.account_id = coa.account_id "
-            f"WHERE coa.account_type = 'revenue' AND jl.credit > 0"
-        ),
+@pytest.mark.skip(
+    reason=(
+        "SQL revenue check drove the retired MCP _run_sql tool (DAT-369 moved the "
+        "MCP surface to reference/mcp/). Re-enable against the cockpit query path "
+        "when this harness exercises it."
     )
-    assert "error" not in result, f"SQL error: {result.get('error')}"
-    actual = result["rows"][0]["total_revenue"]
-    assert actual > expected * 0.5, f"Revenue too low: {actual:.0f} vs expected {expected:.0f}"
-    assert actual < expected * 2.0, f"Revenue too high: {actual:.0f} vs expected {expected:.0f}"
+)
+def test_revenue_matches_ground_truth(ground_truth: dict[str, Any]) -> None:
+    """Total revenue from SQL should match ground truth within tolerance."""

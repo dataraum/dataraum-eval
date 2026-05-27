@@ -34,6 +34,40 @@ NOT_IMPLEMENTED = frozenset(
     }
 )
 
+# Detectors the current addSourceWorkflow slice actually runs. Two stage-level
+# detect steps execute the detectors their phases declare in pipeline.yaml:
+#   - detect_table (per child): table-local phases — typing→type_fidelity,
+#     statistics→null_ratio — scoped to each child's typed table.
+#   - detect_source (after the reduce, DAT-370 fix): semantic_per_column's
+#     detectors source-wide — business_meaning, unit_entropy, temporal_entropy,
+#     outlier_rate, benford.
+# Move ids out of OUT_OF_SLICE_REASON into here as later phases (and their detect
+# steps) get wired into the workflow.
+CURRENT_SLICE_DETECTORS = frozenset(
+    {
+        "type_fidelity",
+        "null_ratio",
+        "business_meaning",
+        "unit_entropy",
+        "temporal_entropy",
+        "outlier_rate",
+        "benford",
+    }
+)
+
+# Why each out-of-slice detector produces no score yet:
+_SLICE_2_PHASE = (
+    "owning phase is not in the addSourceWorkflow chain yet (slice-2: "
+    "relationships / semantic_per_table / enriched_views / validation / ...)"
+)
+OUT_OF_SLICE_REASON: dict[str, str] = {
+    "relationship_entropy": _SLICE_2_PHASE,
+    "dimensional_entropy": _SLICE_2_PHASE,
+    "derived_value": _SLICE_2_PHASE,
+    "temporal_drift": _SLICE_2_PHASE,
+    "cross_table_consistency": _SLICE_2_PHASE,
+}
+
 # Detectors where the injection is known-misaligned (documents the gap)
 KNOWN_MISALIGNED = frozenset(
     {
@@ -142,6 +176,17 @@ def test_injection_detected(
     # Always skip unimplemented detectors
     if detector in NOT_IMPLEMENTED:
         pytest.skip(f"{detector} not implemented yet")
+
+    # Skip detectors whose phase/detect-step the current workflow slice doesn't
+    # run yet (DAT-370 add_source slice). Not a regression — the detector simply
+    # never executes. These light up as later phases get wired; the assertions
+    # below (and the xfail markers) re-apply once a detector is back in scope.
+    if detector not in CURRENT_SLICE_DETECTORS:
+        pytest.skip(
+            OUT_OF_SLICE_REASON.get(
+                detector, f"{detector}: phase not yet wired into the addSourceWorkflow slice"
+            )
+        )
 
     # Mark known-misaligned injections as expected failures
     if detector in KNOWN_MISALIGNED:

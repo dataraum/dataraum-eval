@@ -1,8 +1,12 @@
-"""Drive testdata generation + the dataraum pipeline in-process.
+"""Drive testdata generation + the dataraum pipeline via Temporal.
 
-Generation runs against ``dataraum-testdata`` directly. The pipeline runs
-in-process against the local Postgres + DuckLake substrate brought up by
-``calibration.stack``. No MCP server, no control-plane container.
+Generation runs against ``dataraum-testdata`` directly. The pipeline is a
+Temporal workflow now (DAT-344/DAT-370): we bring up Postgres + the Temporal
+server (``calibration.stack``), start the engine worker on the host
+(``calibration.worker``), and trigger ``addSourceWorkflow`` as a client. The
+workflow imports the source, fans out a child workflow per raw table (typing →
+analytics → ``detect_table``), then runs ``semantic_per_column`` as the
+source-level reduce. Scores are read back from Postgres by ``conftest.py``.
 
 Usage::
 
@@ -18,11 +22,13 @@ Or from the CLI::
 
 from __future__ import annotations
 
+import asyncio
 import json
-import os
 import re
 from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 from dotenv import load_dotenv
@@ -31,7 +37,8 @@ from dotenv import load_dotenv
 EVAL_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(EVAL_ROOT / ".env")
 
-from calibration.stack import LAKE_DATA_DIR, up  # noqa: E402
+from calibration import stack, worker  # noqa: E402
+from calibration.stack import up  # noqa: E402
 
 STRATEGIES_DIR = EVAL_ROOT / "strategies"
 DATA_DIR = EVAL_ROOT / "data"
@@ -91,28 +98,28 @@ def sidecar_path(strategy: str) -> Path:
 
 
 def bootstrap_engine() -> None:
-    """Bring up PG, open the DuckLake anchor, and bootstrap the workspace.
+    """Bring up PG + Temporal and materialize the workspace schema.
 
-    Idempotent within a process. Safe to call from pytest fixtures.
+    The eval process is a Temporal client + Postgres reader: it writes the
+    ``Source`` row and reads scores back, so it needs the ``ws_<id>`` schema to
+    exist but never opens the DuckLake anchor (that is the host worker's job, in
+    its own process). Idempotent within a process; safe from pytest fixtures.
     """
     global _engine_bootstrapped
     if _engine_bootstrapped:
         return
 
-    up()  # docker compose + os.environ setup
+    up()  # docker compose (PG + Temporal) + os.environ setup
 
     from dataraum.core.connections import ConnectionConfig, ConnectionManager
-    from dataraum.server.storage import bootstrap_lake
     from dataraum.server.workspace import bootstrap_workspace
 
-    bootstrap_lake(
-        catalog_url=os.environ["DUCKLAKE_CATALOG_URL"],
-        data_path=str(LAKE_DATA_DIR),
-    )
+    # Activate the workspace (config overlay + active-id pointer) and create the
+    # ws_<id> Postgres schema + tables. The worker re-runs this idempotently.
+    bootstrap_workspace()
 
     workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
     workspace_mgr.initialize()
-    bootstrap_workspace(workspace_mgr.session_scope)
     workspace_mgr.close()
 
     _engine_bootstrapped = True
@@ -196,6 +203,40 @@ def _create_session_for_source(
         workspace_mgr.close()
 
 
+async def _drive_add_source(
+    *,
+    strategy: str,
+    workspace_id: str,
+    source_id: str,
+    session_id: str,
+    vertical: str | None,
+    log_path: Path,
+) -> Any:
+    """Trigger ``addSourceWorkflow`` under a freshly-started host worker.
+
+    Returns the workflow's :class:`AddSourceResult` (raw table ids + per-table
+    raw→typed outcomes). The worker is torn down when the workflow completes.
+    """
+    from dataraum.worker.contracts import AddSourceInput, AddSourceResult, SourceIdentity
+
+    client = await worker.connect_client()
+    identity = SourceIdentity(
+        workspace_id=workspace_id,
+        source_id=source_id,
+        session_id=session_id,
+        vertical=vertical,
+    )
+    async with worker.worker_running(client, log_path):
+        return await client.execute_workflow(
+            "addSourceWorkflow",
+            AddSourceInput(identity=identity),
+            id=f"calibration-{strategy}-{session_id}",
+            task_queue=stack.TEMPORAL_TASK_QUEUE,
+            result_type=AddSourceResult,
+            execution_timeout=timedelta(minutes=30),
+        )
+
+
 def run_pipeline(
     strategy: str,
     *,
@@ -221,30 +262,27 @@ def run_pipeline(
         intent=f"calibration:{strategy}",
     )
 
-    from dataraum.pipeline.runner import RunConfig
-    from dataraum.pipeline.runner import run as pipeline_run
-
     output_dir = OUTPUT_DIR / strategy
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"[eval] Running pipeline in-process: strategy={strategy} session={session_id}")
-    config = RunConfig(
-        source_path=data_dir,
-        output_dir=output_dir,
-        source_name=source_name,
-        contract=contract,
-        vertical=vertical,
-        session_id=session_id,
-    )
-    result = pipeline_run(config).unwrap()
-    if not result.success:
-        raise RuntimeError(
-            f"Pipeline failed for strategy {strategy!r}: "
-            f"error={result.error} failed_phases={[p.phase_name for p in result.get_failed_phases()]}"
+    from dataraum.server.workspace import get_active_workspace_id
+
+    workspace_id = get_active_workspace_id()
+
+    print(f"[eval] Driving addSourceWorkflow: strategy={strategy} session={session_id}")
+    result = asyncio.run(
+        _drive_add_source(
+            strategy=strategy,
+            workspace_id=workspace_id,
+            source_id=source_id,
+            session_id=session_id,
+            vertical=vertical,
+            log_path=output_dir / "worker.log",
         )
+    )
     print(
-        f"[eval] Pipeline complete: phases_completed={result.phases_completed} "
-        f"duration={result.duration_seconds:.1f}s"
+        f"[eval] addSourceWorkflow complete: {len(result.tables)} table(s) processed "
+        f"(raw_table_ids={result.raw_table_ids})"
     )
 
     run = CalibrationRun(

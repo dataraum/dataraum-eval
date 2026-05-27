@@ -1,10 +1,12 @@
-"""Bring up Postgres + DuckLake catalog for in-process calibration.
+"""Bring up Postgres + DuckLake catalog + Temporal for calibration.
 
-The pipeline runs in-process here (no MCP server, no control-plane
-container). Postgres is the only piece we need from the vendor's compose
-stack — we ``docker compose up postgres`` against
-``vendor/dataraum-context/packages/infra/docker-compose.yml`` and set the
-env vars the engine reads at runtime.
+The engine is a Temporal activity worker now (DAT-344/DAT-370), so a run is
+driven by triggering ``addSourceWorkflow`` against a worker that polls the
+``dataraum-pipeline`` task queue. We bring up two pieces from the vendor's
+compose stack — ``postgres`` (engine metadata + DuckLake catalog + Temporal's
+own persistence) and the ``temporal`` server — and run the **engine worker on
+the host** (see :mod:`calibration.worker`) so it executes the live working-tree
+code and reads/writes the host ``data/`` + ``lake_data/`` dirs directly.
 
 The compose stack persists across test runs. ``make clean`` wipes the
 local lake/workspace directories; ``docker compose ... down -v`` wipes
@@ -14,6 +16,7 @@ the Postgres volume.
 from __future__ import annotations
 
 import os
+import socket
 import subprocess
 from pathlib import Path
 
@@ -32,8 +35,40 @@ POSTGRES_USER = "dataraum"
 POSTGRES_PASSWORD = "dataraum"  # noqa: S105 — local dev default, matches vendor .env.example
 POSTGRES_DB = "dataraum"
 POSTGRES_LAKE_CATALOG_DB = "dataraum_lake_catalog"
+POSTGRES_COCKPIT_DB = "cockpit_db"  # unused here, but postgres-init requires it set
 POSTGRES_HOST = "127.0.0.1"
 POSTGRES_PORT = 5432
+
+# Active workspace_id (DAT-339 schema-per-workspace). The engine resolves the
+# Postgres schema name as ws_<id-with-dashes-as-underscores>; the worker and the
+# eval client must agree on it (the worker refuses cross-workspace payloads).
+DATARAUM_WORKSPACE_ID = "00000000-0000-0000-0000-000000000001"
+
+# Temporal (DAT-344). The vendor compose runs the server against the same
+# Postgres instance; the worker + eval client reach it at the published port.
+TEMPORAL_HOST = f"{POSTGRES_HOST}:7233"
+TEMPORAL_NAMESPACE = "default"
+TEMPORAL_TASK_QUEUE = "dataraum-pipeline"
+TEMPORAL_PORT = 7233
+
+# Pinned image versions, mirrored from vendor packages/infra/.env.example.
+TEMPORAL_VERSION = "1.31.0"
+TEMPORAL_ADMINTOOLS_VERSION = "1.31.0"
+TEMPORAL_UI_VERSION = "2.49.1"
+
+# Long-running, healthchecked services calibration needs: Postgres + the
+# Temporal server. `up --wait` on these returns 0 once both are healthy. The
+# cockpit + engine-worker containers are deliberately NOT started — the worker
+# runs on the host.
+_HEALTHCHECK_SERVICES = ["postgres", "temporal"]
+
+# One-shot that registers the `default` namespace (pulls in the admin-tools
+# schema setup via depends_on). It EXITS after running, so it can't be part of
+# the `--wait` set — `up --wait` reports a non-zero rc when a tracked service
+# exits (the compose file expects the long-running temporal-ui to anchor the
+# wait, and we don't start it). Started separately, then blocked on via
+# `docker compose wait` for its exit code.
+_NAMESPACE_SERVICE = "temporal-create-namespace"
 
 DATABASE_URL = (
     f"postgresql+psycopg://{POSTGRES_USER}:{POSTGRES_PASSWORD}"
@@ -53,6 +88,14 @@ def _ensure_env_file() -> None:
         f"POSTGRES_PASSWORD={POSTGRES_PASSWORD}",
         f"POSTGRES_DB={POSTGRES_DB}",
         f"DUCKLAKE_CATALOG_DB={POSTGRES_LAKE_CATALOG_DB}",
+        # postgres-init creates COCKPIT_DB at first boot and fails loud if unset,
+        # even though calibration never starts the cockpit.
+        f"COCKPIT_DB={POSTGRES_COCKPIT_DB}",
+        # Temporal server image pins consumed by the `temporal` +
+        # `temporal-admin-tools` services.
+        f"TEMPORAL_VERSION={TEMPORAL_VERSION}",
+        f"TEMPORAL_ADMINTOOLS_VERSION={TEMPORAL_ADMINTOOLS_VERSION}",
+        f"TEMPORAL_UI_VERSION={TEMPORAL_UI_VERSION}",
         # HOST_SOURCES_DIR is referenced by the (unused) control-plane
         # service; setting it avoids a compose-file warning.
         f"HOST_SOURCES_DIR={EVAL_ROOT / 'data'}",
@@ -88,47 +131,69 @@ def _pg_ready() -> bool:
 
 
 def _export_env() -> None:
-    """Set the env vars the in-process engine reads at runtime."""
+    """Set the env vars the engine reads at runtime (eval client + host worker).
+
+    Both the eval process (Temporal client + PG reader) and the engine worker
+    subprocess inherit these. ``get_settings()`` validates the full set at
+    boot, so every required field (substrate + Temporal + workspace) is set
+    here even when the eval client itself doesn't read it.
+    """
     LAKE_DATA_DIR.mkdir(parents=True, exist_ok=True)
     WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
     os.environ["DATABASE_URL"] = DATABASE_URL
     os.environ["DUCKLAKE_CATALOG_URL"] = DUCKLAKE_CATALOG_URL
     os.environ["DUCKLAKE_DATA_PATH"] = str(LAKE_DATA_DIR)
     os.environ["DATARAUM_HOME"] = str(WORKSPACE_DIR)
+    os.environ["DATARAUM_WORKSPACE_ID"] = DATARAUM_WORKSPACE_ID
+    os.environ["TEMPORAL_HOST"] = TEMPORAL_HOST
+    os.environ["TEMPORAL_NAMESPACE"] = TEMPORAL_NAMESPACE
+    os.environ["TEMPORAL_TASK_QUEUE"] = TEMPORAL_TASK_QUEUE
 
 
-def up() -> None:
-    """Ensure Postgres (with the DuckLake catalog DB) is running."""
-    _ensure_env_file()
-    _export_env()
+def _temporal_ready() -> bool:
+    """Probe the Temporal frontend by TCP-connecting to its published port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(1.0)
+        return sock.connect_ex((POSTGRES_HOST, TEMPORAL_PORT)) == 0
 
-    if _pg_ready():
-        return
 
-    print("[stack] Starting Postgres (docker compose up postgres -d --wait)...")
-    result = subprocess.run(
-        [
-            "docker",
-            "compose",
-            "-f",
-            str(COMPOSE_FILE),
-            "--env-file",
-            str(ENV_FILE),
-            "up",
-            "postgres",
-            "-d",
-            "--wait",
-        ],
+def _compose(*args: str) -> subprocess.CompletedProcess[str]:
+    """Run a docker compose subcommand against the vendor file + generated env."""
+    return subprocess.run(
+        ["docker", "compose", "-f", str(COMPOSE_FILE), "--env-file", str(ENV_FILE), *args],
         capture_output=True,
         text=True,
         check=False,
     )
+
+
+def _check(result: subprocess.CompletedProcess[str], what: str) -> None:
     if result.returncode != 0:
         raise RuntimeError(
-            f"docker compose up postgres failed (rc={result.returncode}):\n"
-            f"stdout:\n{result.stdout}\n"
-            f"stderr:\n{result.stderr}"
+            f"{what} failed (rc={result.returncode}):\n"
+            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
         )
+
+
+def up() -> None:
+    """Ensure Postgres + the Temporal server are running, with the namespace registered."""
+    _ensure_env_file()
+    _export_env()
+
+    if _pg_ready() and _temporal_ready():
+        return
+
+    print(f"[stack] Starting {', '.join(_HEALTHCHECK_SERVICES)} (docker compose up -d --wait)...")
+    _check(_compose("up", *_HEALTHCHECK_SERVICES, "-d", "--wait"), "docker compose up postgres+temporal")
+
+    # Register the `default` namespace (idempotent) and block on its exit code.
+    # It's a one-shot, so it can't ride the `--wait` above (see _NAMESPACE_SERVICE).
+    print(f"[stack] Registering Temporal namespace ({_NAMESPACE_SERVICE})...")
+    _check(_compose("up", _NAMESPACE_SERVICE, "-d"), f"docker compose up {_NAMESPACE_SERVICE}")
+    wait = _compose("wait", _NAMESPACE_SERVICE)
+    _check(wait, f"docker compose wait {_NAMESPACE_SERVICE}")
+    if wait.stdout.strip() not in ("", "0"):
+        raise RuntimeError(f"{_NAMESPACE_SERVICE} exited non-zero: {wait.stdout.strip()!r}")
 
 
 def down(volumes: bool = False) -> None:
