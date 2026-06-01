@@ -1,21 +1,25 @@
-"""Bring up Postgres + DuckLake catalog + Temporal for calibration.
+"""Bring up Postgres + DuckLake catalog + SeaweedFS + Temporal for calibration.
 
 The engine is a Temporal activity worker now (DAT-344/DAT-370), so a run is
 driven by triggering ``addSourceWorkflow`` against a worker that polls the
-``dataraum-pipeline`` task queue. We bring up two pieces from the vendor's
-compose stack — ``postgres`` (engine metadata + DuckLake catalog + Temporal's
-own persistence) and the ``temporal`` server — and run the **engine worker on
-the host** (see :mod:`calibration.worker`) so it executes the live working-tree
-code and reads/writes the host ``data/`` + ``lake_data/`` dirs directly.
+``dataraum-pipeline`` task queue. We bring up three long-running pieces from the
+vendor's compose stack — ``postgres`` (engine metadata + DuckLake catalog +
+Temporal's own persistence), ``seaweedfs`` (S3-backed DuckLake data store,
+DAT-389), and the ``temporal`` server — plus two one-shots (Temporal namespace +
+S3 bucket creation), and run the **engine worker on the host**
+(see :mod:`calibration.worker`) so it executes the live working-tree code. The
+worker reads the host ``data/`` dir and writes DuckLake data to S3
+(``s3://dataraum-lake/lake`` on the host-published SeaweedFS gateway).
 
 The compose stack persists across test runs. ``make clean`` wipes the
-local lake/workspace directories; ``docker compose ... down -v`` wipes
-the Postgres volume.
+local workspace directory; ``docker compose ... down -v`` wipes the Postgres +
+SeaweedFS volumes.
 """
 
 from __future__ import annotations
 
 import os
+import re
 import socket
 import subprocess
 from pathlib import Path
@@ -25,10 +29,8 @@ VENDOR_DIR = EVAL_ROOT / "vendor" / "dataraum-context"
 COMPOSE_FILE = VENDOR_DIR / "packages" / "infra" / "docker-compose.yml"
 ENV_FILE = EVAL_ROOT / ".docker.env"
 
-# Local host directories the in-process engine writes to. Both are
-# gitignored. The container's compose mounts named volumes at the same
-# logical paths — we use host paths because the engine runs locally.
-LAKE_DATA_DIR = EVAL_ROOT / "lake_data"
+# Local host workspace dir (DATARAUM_HOME). Gitignored. DuckLake *data* no
+# longer lives on the host — it's S3-backed via SeaweedFS (see below).
 WORKSPACE_DIR = EVAL_ROOT / "workspace"
 
 POSTGRES_USER = "dataraum"
@@ -56,19 +58,33 @@ TEMPORAL_VERSION = "1.31.0"
 TEMPORAL_ADMINTOOLS_VERSION = "1.31.0"
 TEMPORAL_UI_VERSION = "2.49.1"
 
-# Long-running, healthchecked services calibration needs: Postgres + the
-# Temporal server. `up --wait` on these returns 0 once both are healthy. The
-# cockpit + engine-worker containers are deliberately NOT started — the worker
-# runs on the host.
-_HEALTHCHECK_SERVICES = ["postgres", "temporal"]
+# SeaweedFS S3-backed DuckLake store (DAT-389). The compose `seaweedfs` service
+# advertises `seaweedfs:8333` *inside* the compose network; the host worker
+# reaches the same gateway at the published port. Values mirror vendor
+# packages/infra/.env.example. Creds are nominal — this dev SeaweedFS runs
+# without an S3 auth config — but DuckDB still wants them non-empty.
+S3_PORT = 8333
+S3_ENDPOINT = f"{POSTGRES_HOST}:{S3_PORT}"  # host:port, no scheme (DuckDB ENDPOINT form)
+S3_BUCKET = "dataraum-lake"
+S3_REGION = "us-east-1"
+S3_ACCESS_KEY_ID = "dataraum"
+S3_SECRET_ACCESS_KEY = "dataraum-s3-secret"  # noqa: S105 — local dev default
+# DuckLake data path: a bucket-relative S3 URI, NOT a host path (DAT-389).
+DUCKLAKE_DATA_PATH = f"s3://{S3_BUCKET}/lake"
 
-# One-shot that registers the `default` namespace (pulls in the admin-tools
-# schema setup via depends_on). It EXITS after running, so it can't be part of
-# the `--wait` set — `up --wait` reports a non-zero rc when a tracked service
-# exits (the compose file expects the long-running temporal-ui to anchor the
-# wait, and we don't start it). Started separately, then blocked on via
-# `docker compose wait` for its exit code.
+# Long-running, healthchecked services calibration needs: Postgres, SeaweedFS
+# (S3 store), and the Temporal server. `up --wait` on these returns 0 once all
+# are healthy. The cockpit + engine-worker containers are deliberately NOT
+# started — the worker runs on the host.
+_HEALTHCHECK_SERVICES = ["postgres", "seaweedfs", "temporal"]
+
+# One-shots that set up state then EXIT: register the Temporal `default`
+# namespace, and create the SeaweedFS lake bucket (SeaweedFS doesn't reliably
+# auto-create buckets). They can't ride the `--wait` set — `up --wait` reports a
+# non-zero rc when a tracked service exits — so each is started separately and
+# blocked on via `docker compose wait` for its exit code.
 _NAMESPACE_SERVICE = "temporal-create-namespace"
+_BUCKET_SERVICE = "seaweedfs-init"
 
 DATABASE_URL = (
     f"postgresql+psycopg://{POSTGRES_USER}:{POSTGRES_PASSWORD}"
@@ -99,6 +115,9 @@ def _ensure_env_file() -> None:
         # HOST_SOURCES_DIR is referenced by the (unused) control-plane
         # service; setting it avoids a compose-file warning.
         f"HOST_SOURCES_DIR={EVAL_ROOT / 'data'}",
+        # seaweedfs-init reads S3_BUCKET to create the lake bucket; must match
+        # the bucket the engine writes to (DUCKLAKE_DATA_PATH=s3://<bucket>/lake).
+        f"S3_BUCKET={S3_BUCKET}",
         "",
     ]
     ENV_FILE.write_text("\n".join(lines))
@@ -138,16 +157,23 @@ def _export_env() -> None:
     boot, so every required field (substrate + Temporal + workspace) is set
     here even when the eval client itself doesn't read it.
     """
-    LAKE_DATA_DIR.mkdir(parents=True, exist_ok=True)
     WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
     os.environ["DATABASE_URL"] = DATABASE_URL
     os.environ["DUCKLAKE_CATALOG_URL"] = DUCKLAKE_CATALOG_URL
-    os.environ["DUCKLAKE_DATA_PATH"] = str(LAKE_DATA_DIR)
+    os.environ["DUCKLAKE_DATA_PATH"] = DUCKLAKE_DATA_PATH
     os.environ["DATARAUM_HOME"] = str(WORKSPACE_DIR)
     os.environ["DATARAUM_WORKSPACE_ID"] = DATARAUM_WORKSPACE_ID
     os.environ["TEMPORAL_HOST"] = TEMPORAL_HOST
     os.environ["TEMPORAL_NAMESPACE"] = TEMPORAL_NAMESPACE
     os.environ["TEMPORAL_TASK_QUEUE"] = TEMPORAL_TASK_QUEUE
+    # S3-backed DuckLake (DAT-389). The host worker reaches SeaweedFS at the
+    # published gateway port; SSL off for local dev.
+    os.environ["S3_ENDPOINT"] = S3_ENDPOINT
+    os.environ["S3_BUCKET"] = S3_BUCKET
+    os.environ["S3_REGION"] = S3_REGION
+    os.environ["S3_USE_SSL"] = "false"
+    os.environ["S3_ACCESS_KEY_ID"] = S3_ACCESS_KEY_ID
+    os.environ["S3_SECRET_ACCESS_KEY"] = S3_SECRET_ACCESS_KEY
 
 
 def _temporal_ready() -> bool:
@@ -155,6 +181,13 @@ def _temporal_ready() -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.settimeout(1.0)
         return sock.connect_ex((POSTGRES_HOST, TEMPORAL_PORT)) == 0
+
+
+def _seaweedfs_ready() -> bool:
+    """Probe the SeaweedFS S3 gateway by TCP-connecting to its published port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(1.0)
+        return sock.connect_ex((POSTGRES_HOST, S3_PORT)) == 0
 
 
 def _compose(*args: str) -> subprocess.CompletedProcess[str]:
@@ -175,25 +208,49 @@ def _check(result: subprocess.CompletedProcess[str], what: str) -> None:
         )
 
 
+def _oneshot_exit_code(wait: subprocess.CompletedProcess[str]) -> str:
+    """Extract a one-shot's exit code from ``docker compose wait`` output.
+
+    The output format varies by compose version: newer prints
+    ``container "<id>" exited with status code N`` (the id contains digits, so a
+    naive last-integer parse is unsafe); older prints a bare ``N``. Match the
+    explicit ``status code N`` first, then fall back to a bare integer.
+    """
+    match = re.search(r"status code (\d+)", wait.stdout)
+    if match:
+        return match.group(1)
+    return wait.stdout.strip()
+
+
+def _run_oneshot(service: str, what: str) -> None:
+    """Start a one-shot service, block on it, and assert it exited 0."""
+    print(f"[stack] {what} ({service})...")
+    _check(_compose("up", service, "-d"), f"docker compose up {service}")
+    wait = _compose("wait", service)
+    _check(wait, f"docker compose wait {service}")
+    code = _oneshot_exit_code(wait)
+    if code not in ("", "0"):
+        raise RuntimeError(f"{service} exited non-zero: {code!r}\nstdout:\n{wait.stdout}")
+
+
 def up() -> None:
-    """Ensure Postgres + the Temporal server are running, with the namespace registered."""
+    """Ensure Postgres + SeaweedFS + Temporal are up, with namespace + bucket created."""
     _ensure_env_file()
     _export_env()
 
-    if _pg_ready() and _temporal_ready():
+    if _pg_ready() and _temporal_ready() and _seaweedfs_ready():
         return
 
     print(f"[stack] Starting {', '.join(_HEALTHCHECK_SERVICES)} (docker compose up -d --wait)...")
-    _check(_compose("up", *_HEALTHCHECK_SERVICES, "-d", "--wait"), "docker compose up postgres+temporal")
+    _check(
+        _compose("up", *_HEALTHCHECK_SERVICES, "-d", "--wait"),
+        "docker compose up postgres+seaweedfs+temporal",
+    )
 
-    # Register the `default` namespace (idempotent) and block on its exit code.
-    # It's a one-shot, so it can't ride the `--wait` above (see _NAMESPACE_SERVICE).
-    print(f"[stack] Registering Temporal namespace ({_NAMESPACE_SERVICE})...")
-    _check(_compose("up", _NAMESPACE_SERVICE, "-d"), f"docker compose up {_NAMESPACE_SERVICE}")
-    wait = _compose("wait", _NAMESPACE_SERVICE)
-    _check(wait, f"docker compose wait {_NAMESPACE_SERVICE}")
-    if wait.stdout.strip() not in ("", "0"):
-        raise RuntimeError(f"{_NAMESPACE_SERVICE} exited non-zero: {wait.stdout.strip()!r}")
+    # One-shots (idempotent): register the Temporal namespace and create the S3
+    # lake bucket. Each exits after running, so neither can ride the `--wait`.
+    _run_oneshot(_NAMESPACE_SERVICE, "Registering Temporal namespace")
+    _run_oneshot(_BUCKET_SERVICE, "Creating SeaweedFS lake bucket")
 
 
 def down(volumes: bool = False) -> None:

@@ -1,0 +1,125 @@
+# Intent-readiness ground truth — eval-owned, hand-authored from the injections.
+#
+# The entropy network rolls detector scores up to three intent readiness signals
+# (query / aggregation / reporting), banded ready < investigate < blocked. This
+# file is the oracle the BBN never had: for each known injection, which intents
+# must it knock off "ready" for the affected column.
+#
+# Claim style (non-circular): we assert a FLOOR — "this injection must move this
+# intent to at least <min_readiness>" — derived from domain reasoning about what
+# the injection breaks, NOT from running the rollup. A 40% null rate in a column
+# means that column is not safe to aggregate; the network must say so.
+#
+# Schema (per strategy):
+#   expectations:
+#     - target: "<table>.<column>"   # matches entropy_map target_file/target_column
+#       driver: "<detector_id>"      # injected detector; used for slice gating
+#       min_readiness:               # floor per intent (omit intents not affected)
+#         <intent>: investigate|blocked
+#       note: "<why>"
+#
+# Gating mirrors test_detector_recall.py: an expectation is skipped when its
+# driver detector is out of the current addSourceWorkflow slice, known-misaligned,
+# or LLM-nondeterministic. As phases get wired, the skips lift automatically.
+#
+# Precision counterpart: `clean_readiness` (top-level, shared — the clean dataset
+# is the same regardless of --strategy) is a captured baseline of clean-data
+# readiness, mirroring calibration/clean_baseline.yaml for detector scores. Clean
+# financial data is NOT all-ready: it has legitimate metadata/distribution gaps
+# (52% nulls in cost_center, non-Benford trial_balance, undeclared units) that the
+# network correctly surfaces. The precision check fails only on a REGRESSION — a
+# clean column reading worse than its recorded baseline (a new false alarm) — not
+# on these documented, accurate signals. Regenerate after detector/network changes.
+
+clean_readiness:
+  # null_ratio ~0.52 on a nullable dimension → not aggregation-ready (accurate).
+  bank_transactions.payment_id:
+    aggregation_intent: investigate
+  journal_lines.cost_center:
+    aggregation_intent: investigate
+  # unit_entropy 0.8 (undeclared units) + non-Benford ~0.8 → not safe to
+  # aggregate/report without declaring units (accurate; unit_entropy is the
+  # documented metadata-completeness detector).
+  trial_balance.debit_balance:
+    aggregation_intent: blocked
+    reporting_intent: blocked
+  trial_balance.credit_balance:
+    aggregation_intent: blocked
+    reporting_intent: blocked
+
+detection-v1:
+  expectations:
+    - target: "journal_lines.cost_center"
+      driver: "null_ratio"
+      min_readiness:
+        aggregation_intent: investigate
+      note: "40% nulls — null_ratio strongly drives aggregation_safety (0.7)"
+
+    - target: "journal_lines.credit"
+      driver: "outlier_rate"
+      min_readiness:
+        aggregation_intent: investigate
+      note: "5% @ 10x — outlier_rate feeds aggregation_safety (0.6)"
+
+    - target: "bank_transactions.amount"
+      driver: "benford"
+      min_readiness:
+        aggregation_intent: investigate
+      note: "60% round numbers — benford_compliance feeds aggregation_intent (0.4); borderline by design"
+
+    # business_meaning is LLM-nondeterministic (xfail strict=False, like recall):
+    # naming_clarity feeds reporting_intent (0.7), so when detection fires the
+    # column should read >= investigate for reporting.
+    - target: "invoices.rrFlp_11_zp00"
+      driver: "business_meaning"
+      min_readiness:
+        reporting_intent: investigate
+      note: "garbage name — naming_clarity -> reporting_intent; LLM-nondeterministic"
+    - target: "invoices.xQ_v7kL"
+      driver: "business_meaning"
+      min_readiness:
+        reporting_intent: investigate
+      note: "garbage name — naming_clarity -> reporting_intent; LLM-nondeterministic"
+
+    # --- Below: drivers whose owning phase is not yet in the workflow slice.
+    # Documented now so the oracle is complete; skipped until the phase is wired.
+    - target: "payments.invoice_id"
+      driver: "relationship_entropy"
+      min_readiness:
+        reporting_intent: investigate
+      note: "20% orphan FKs — relationship_quality -> reporting_intent (slice-2)"
+    - target: "journal_lines.net_amount"
+      driver: "derived_value"
+      min_readiness:
+        aggregation_intent: investigate
+      note: "10% formula drift -> formula_match -> aggregation_intent (slice-2)"
+    - target: "bank_transactions.amount"
+      driver: "temporal_drift"
+      min_readiness:
+        aggregation_intent: investigate
+        query_intent: investigate
+      note: "mid-year shift -> temporal_drift feeds query+aggregation (slice-2)"
+    - target: "invoices.amount"
+      driver: "cross_table_consistency"
+      min_readiness:
+        reporting_intent: investigate
+        aggregation_intent: investigate
+      note: "GL/invoice mismatch -> cross_table_consistency (slice-2)"
+
+detection-typing-v1:
+  expectations:
+    - target: "journal_lines.debit"
+      driver: "type_fidelity"
+      min_readiness:
+        query_intent: investigate
+      note: "8% type quarantine — type_fidelity strongly feeds query_intent (0.7)"
+    - target: "payments.date"
+      driver: "temporal_entropy"
+      min_readiness:
+        query_intent: investigate
+        reporting_intent: investigate
+      note: >
+        corrupt dates -> temporal_entropy maps to the time_role node, which feeds
+        query_intent (0.5), aggregation_intent (0.4), and reporting_intent (0.4).
+        Unparseable dates break time-filtering, time-bucketed aggregation, and
+        time-stamped reporting alike.

@@ -212,6 +212,69 @@ def pipeline_view_scores(detector_scores: DetectorScores) -> dict[tuple[str, str
 # ---------------------------------------------------------------------------
 
 
+def _load_network_readiness(strategy: str) -> dict[tuple[str, str], dict[str, str]]:
+    """Per-column intent readiness from the entropy network rollup.
+
+    Loads persisted ``EntropyObjectRecord`` rows for the source, assembles the
+    network context (noisy-OR rollup over ``network.yaml``), and maps each column
+    target to ``{intent_name: readiness}``. Implementation-agnostic: validates the
+    readiness *output*, so it guards both the pgmpy BBN and the rollup that
+    replaces it.
+    """
+    run = _ensure_pipeline_run(strategy)
+    runner_mod.bootstrap_engine()
+
+    from dataraum.core.connections import ConnectionConfig, ConnectionManager
+    from dataraum.entropy.core.storage import EntropyRepository
+    from dataraum.entropy.db_models import EntropyObjectRecord
+    from dataraum.entropy.network.model import EntropyNetwork
+    from dataraum.entropy.views.network_context import assemble_network_context
+    from sqlalchemy import select
+
+    workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
+    workspace_mgr.initialize()
+    try:
+        with workspace_mgr.session_scope() as session:
+            repo = EntropyRepository(session)
+            records = list(
+                session.execute(
+                    select(EntropyObjectRecord).where(
+                        EntropyObjectRecord.source_id == run.source_id
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            objects = [repo._record_to_object(r) for r in records]
+            ctx = assemble_network_context(objects, EntropyNetwork())
+    finally:
+        workspace_mgr.close()
+
+    result: dict[tuple[str, str], dict[str, str]] = {}
+    for target, col in ctx.columns.items():
+        ref = target.removeprefix("column:")
+        parts = ref.split(".", 1)
+        if len(parts) != 2:
+            continue
+        tbl, column = parts
+        result[(_strip_source_prefix(tbl), column)] = {
+            intent.intent_name: intent.readiness for intent in col.intents
+        }
+    return result
+
+
+@pytest.fixture(scope="session")
+def network_readiness(strategy_name: str) -> dict[tuple[str, str], dict[str, str]]:
+    """(table, column) → {intent_name: readiness} for the current strategy."""
+    return _load_network_readiness(strategy_name)
+
+
+@pytest.fixture(scope="session")
+def clean_network_readiness() -> dict[tuple[str, str], dict[str, str]]:
+    """(table, column) → {intent_name: readiness} for the clean baseline."""
+    return _load_network_readiness("clean")
+
+
 @pytest.fixture(scope="session")
 def clean_detector_scores() -> DetectorScores:
     """Detector scores for the clean baseline (no injections)."""

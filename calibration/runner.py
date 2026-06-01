@@ -25,6 +25,8 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -93,6 +95,49 @@ def source_name_for(strategy: str) -> str:
     return re.sub(r"[^a-z0-9_]", "_", strategy.lower()).strip("_") or "source"
 
 
+# Data-file suffixes a source loads. entropy_map.yaml / ground_truth.yaml are
+# eval metadata (not source objects), so .yaml is excluded.
+_DATA_SUFFIXES = frozenset({".csv", ".tsv", ".parquet", ".json", ".jsonl", ".xlsx", ".db", ".sqlite"})
+
+
+def _upload_sources_to_lake(source_name: str, data_dir: Path) -> list[str]:
+    """Upload a strategy's data files to the lake bucket; return their s3:// URIs.
+
+    DuckLake is S3-backed (DAT-389): a file source carries ``file_uris`` of
+    ``s3://<lake-bucket>/<key>`` objects, not a host path. The dev SeaweedFS S3
+    gateway accepts anonymous PUT, so a plain HTTP upload (no boto3, no request
+    signing) suffices — and it preserves the bytes exactly, which matters for the
+    injected values. Objects land under ``<source_name>/<filename>`` so each
+    loads into the ``<source_name>__<file_stem>`` raw table the tests expect.
+    """
+    files = sorted(p for p in data_dir.iterdir() if p.suffix.lower() in _DATA_SUFFIXES)
+    if not files:
+        raise FileNotFoundError(
+            f"No source data files ({', '.join(sorted(_DATA_SUFFIXES))}) in {data_dir}"
+        )
+
+    uris: list[str] = []
+    for path in files:
+        key = f"{source_name}/{path.name}"
+        url = f"http://{stack.S3_ENDPOINT}/{stack.S3_BUCKET}/{key}"
+        req = urllib.request.Request(
+            url,
+            data=path.read_bytes(),
+            method="PUT",
+            headers={"Content-Type": "application/octet-stream"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                if resp.status not in (200, 201, 204):
+                    raise RuntimeError(f"PUT {url} → HTTP {resp.status}")
+        except urllib.error.HTTPError as e:
+            raise RuntimeError(f"Upload failed for {key}: HTTP {e.code} {e.reason}") from e
+        uris.append(f"s3://{stack.S3_BUCKET}/{key}")
+
+    print(f"[eval] Uploaded {len(uris)} file(s) to s3://{stack.S3_BUCKET}/{source_name}/")
+    return uris
+
+
 def sidecar_path(strategy: str) -> Path:
     return OUTPUT_DIR / strategy / "calibration_run.json"
 
@@ -155,13 +200,17 @@ def generate(
 
 def _create_session_for_source(
     source_name: str,
-    source_path: Path,
+    file_uris: list[str],
     *,
     contract: str | None,
     vertical: str | None,
     intent: str,
 ) -> tuple[str, str]:
     """Find/create the Source + open an InvestigationSession bound to it.
+
+    ``file_uris`` are ``s3://<lake-bucket>/<key>`` source objects (DAT-378/389).
+    On reuse the connection_config is refreshed — the dev SeaweedFS volume is
+    ephemeral, so the bucket is recreated and re-uploaded on every run.
 
     Returns ``(session_id, source_id)``.
     """
@@ -180,10 +229,13 @@ def _create_session_for_source(
                     source_id=str(uuid4()),
                     name=source_name,
                     source_type="csv",
-                    connection_config={"path": str(source_path.resolve())},
+                    connection_config={"file_uris": file_uris},
                     status="configured",
                 )
                 s.add(src)
+                s.flush()
+            else:
+                src.connection_config = {"file_uris": file_uris}
                 s.flush()
             source_id = src.source_id
 
@@ -254,9 +306,10 @@ def run_pipeline(
     bootstrap_engine()
 
     source_name = source_name_for(strategy)
+    file_uris = _upload_sources_to_lake(source_name, data_dir)
     session_id, source_id = _create_session_for_source(
         source_name,
-        data_dir,
+        file_uris,
         contract=contract,
         vertical=vertical,
         intent=f"calibration:{strategy}",
