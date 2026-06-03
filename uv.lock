@@ -240,6 +240,7 @@ dev = [
     { name = "pytest-asyncio", specifier = ">=0.23.0" },
     { name = "pytest-cov", specifier = ">=4.1.0" },
     { name = "pytest-testmon", specifier = ">=2.2.0" },
+    { name = "pytest-xdist", specifier = ">=3.6" },
     { name = "ruff", specifier = ">=0.2.0" },
     { name = "scipy-stubs", specifier = ">=1.16.3.2" },
     { name = "testcontainers", extras = ["postgres"], specifier = ">=4.14" },

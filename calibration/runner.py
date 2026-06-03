@@ -35,9 +35,12 @@ from uuid import uuid4
 
 from dotenv import load_dotenv
 
-# Load .env (ANTHROPIC_API_KEY etc.) before any module reads it.
+# Load .env (ANTHROPIC_API_KEY etc.) before any module reads it. ``override=True``
+# makes this file authoritative over the inherited shell environment — a stale
+# exported ANTHROPIC_API_KEY would otherwise shadow the working .env key (load_dotenv
+# defaults to override=False) and fail every LLM phase with a 401.
 EVAL_ROOT = Path(__file__).resolve().parent.parent
-load_dotenv(EVAL_ROOT / ".env")
+load_dotenv(EVAL_ROOT / ".env", override=True)
 
 from calibration import stack, worker  # noqa: E402
 from calibration.stack import up  # noqa: E402
@@ -239,9 +242,12 @@ def _create_session_for_source(
                 s.flush()
             source_id = src.source_id
 
+            # Source-free since DAT-401: a session composes typed tables (possibly
+            # spanning sources), so InvestigationSession carries no source_id. The
+            # source binding rides on SourceIdentity in addSourceWorkflow; we still
+            # return source_id for the Source row + the workflow identity.
             inv = InvestigationSession(
                 session_id=str(uuid4()),
-                source_id=source_id,
                 intent=intent,
                 contract=contract,
                 vertical=vertical,
@@ -255,7 +261,7 @@ def _create_session_for_source(
         workspace_mgr.close()
 
 
-async def _drive_add_source(
+async def _drive_pipeline(
     *,
     strategy: str,
     workspace_id: str,
@@ -263,30 +269,64 @@ async def _drive_add_source(
     session_id: str,
     vertical: str | None,
     log_path: Path,
-) -> Any:
-    """Trigger ``addSourceWorkflow`` under a freshly-started host worker.
+) -> tuple[Any, Any]:
+    """Trigger ``addSourceWorkflow`` then ``beginSessionWorkflow`` under one worker.
 
-    Returns the workflow's :class:`AddSourceResult` (raw table ids + per-table
-    raw→typed outcomes). The worker is torn down when the workflow completes.
+    ``add_source`` imports + types the source and runs the table-local + source-level
+    detectors. ``begin_session`` then composes the freshly-typed tables into the
+    **same** investigation session and runs the cross-table phases
+    (``relationships`` → ``semantic_per_table``) plus the terminal relationship
+    ``session_detect`` — the only path that scores ``relationship_entropy`` /
+    ``join_path_determinism`` (DAT-408). Both run under the same ``session_id`` so
+    every ``EntropyObjectRecord`` reads back together. The worker is torn down when
+    both workflows complete.
+
+    Returns ``(AddSourceResult, BeginSessionResult)``.
     """
-    from dataraum.worker.contracts import AddSourceInput, AddSourceResult, SourceIdentity
+    from dataraum.worker.contracts import (
+        AddSourceInput,
+        AddSourceResult,
+        BeginSessionInput,
+        BeginSessionResult,
+        SessionIdentity,
+        SourceIdentity,
+        begin_session_workflow_id,
+    )
 
     client = await worker.connect_client()
-    identity = SourceIdentity(
+    source_identity = SourceIdentity(
         workspace_id=workspace_id,
         source_id=source_id,
         session_id=session_id,
         vertical=vertical,
     )
     async with worker.worker_running(client, log_path):
-        return await client.execute_workflow(
+        add_result = await client.execute_workflow(
             "addSourceWorkflow",
-            AddSourceInput(identity=identity),
+            AddSourceInput(identity=source_identity),
             id=f"calibration-{strategy}-{session_id}",
             task_queue=stack.TEMPORAL_TASK_QUEUE,
             result_type=AddSourceResult,
             execution_timeout=timedelta(minutes=30),
         )
+
+        typed_table_ids = [t.typed_table_id for t in add_result.tables]
+        print(
+            f"[eval] beginSessionWorkflow: composing {len(typed_table_ids)} typed "
+            f"table(s) into session {session_id}"
+        )
+        begin_result = await client.execute_workflow(
+            "beginSessionWorkflow",
+            BeginSessionInput(
+                identity=SessionIdentity(workspace_id=workspace_id, session_id=session_id),
+                tables=typed_table_ids,
+            ),
+            id=begin_session_workflow_id(workspace_id, session_id),
+            task_queue=stack.TEMPORAL_TASK_QUEUE,
+            result_type=BeginSessionResult,
+            execution_timeout=timedelta(minutes=30),
+        )
+    return add_result, begin_result
 
 
 def run_pipeline(
@@ -322,9 +362,12 @@ def run_pipeline(
 
     workspace_id = get_active_workspace_id()
 
-    print(f"[eval] Driving addSourceWorkflow: strategy={strategy} session={session_id}")
-    result = asyncio.run(
-        _drive_add_source(
+    print(
+        f"[eval] Driving addSourceWorkflow + beginSessionWorkflow: "
+        f"strategy={strategy} session={session_id}"
+    )
+    add_result, begin_result = asyncio.run(
+        _drive_pipeline(
             strategy=strategy,
             workspace_id=workspace_id,
             source_id=source_id,
@@ -334,8 +377,11 @@ def run_pipeline(
         )
     )
     print(
-        f"[eval] addSourceWorkflow complete: {len(result.tables)} table(s) processed "
-        f"(raw_table_ids={result.raw_table_ids})"
+        f"[eval] addSourceWorkflow complete: {len(add_result.tables)} table(s) processed "
+        f"(raw_table_ids={add_result.raw_table_ids})"
+    )
+    print(
+        f"[eval] beginSessionWorkflow complete: {len(begin_result.table_ids)} table(s) in session"
     )
 
     run = CalibrationRun(

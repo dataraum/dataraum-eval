@@ -39,7 +39,7 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 @dataclass
 class DetectorScores:
-    """Detector scores from measure_entropy(), split by scope."""
+    """Detector scores from persisted EntropyObjectRecord rows, split by scope."""
 
     # Column-scoped: (table, column, detector_id) → score
     column: dict[tuple[str, str, str], float] = field(default_factory=dict)
@@ -47,6 +47,11 @@ class DetectorScores:
     table: dict[tuple[str, str], float] = field(default_factory=dict)
     # View-scoped: (view_name, detector_id) → score
     view: dict[tuple[str, str], float] = field(default_factory=dict)
+    # Relationship-scoped (DAT-408): a relationship object is keyed
+    # ``relationship:{from_col_id}::{to_col_id}``. We index its score under BOTH
+    # endpoint columns as (table, column, detector_id), so an injection that names
+    # one FK column (e.g. payments.invoice_id) finds the relationship's score.
+    relationship: dict[tuple[str, str, str], float] = field(default_factory=dict)
 
 
 def _strip_source_prefix(name: str) -> str:
@@ -78,58 +83,73 @@ def _ensure_pipeline_run(strategy: str) -> runner_mod.CalibrationRun:
 
 
 def _load_scores_for_strategy(strategy: str) -> DetectorScores:
-    """Read EntropyObjectRecord rows via measure_entropy() and adapt to DetectorScores."""
+    """Read persisted EntropyObjectRecord rows and aggregate into DetectorScores.
+
+    Post-DAT-399/408: ``entropy/measurement.py`` (``measure_entropy``) is gone and
+    ``entropy_objects`` no longer carries ``source_id``. Scores are read straight
+    off the persisted rows, scoped by ``session_id``, and bucketed by ``target``
+    prefix (``column:`` / ``table:`` / ``view:`` / ``relationship:``). For each
+    (target, detector) the max score is kept.
+    """
     run = _ensure_pipeline_run(strategy)
 
     runner_mod.bootstrap_engine()
 
     from dataraum.core.connections import ConnectionConfig, ConnectionManager
-    from dataraum.entropy.detectors.base import get_default_registry
-    from dataraum.entropy.measurement import measure_entropy
+    from dataraum.entropy.db_models import EntropyObjectRecord
+    from dataraum.entropy.models import parse_relationship_target
+    from dataraum.storage import Column, Table
+    from sqlalchemy import select
 
     workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
     workspace_mgr.initialize()
     try:
-        registry = get_default_registry()
-        detector_ids = registry.get_detector_ids()
-        # detector_id → dimension_path (and scope) directly from the registry
-        path_by_detector = {d.detector_id: d.dimension_path for d in registry.get_all_detectors()}
-        detector_by_path = {path: det_id for det_id, path in path_by_detector.items()}
-
         with workspace_mgr.session_scope() as session:
-            measurement = measure_entropy(session, run.source_id, detector_ids)
+            records = list(
+                session.execute(
+                    select(EntropyObjectRecord).where(
+                        EntropyObjectRecord.session_id == run.session_id
+                    )
+                ).scalars()
+            )
+            # column_id → (table_name, column_name): relationship rows carry no
+            # table_id/column_id — identity is the two column ids inside ``target``.
+            table_names = {t.table_id: t.table_name for t in session.execute(select(Table)).scalars()}
+            col_names = {
+                c.column_id: (table_names.get(c.table_id, ""), c.column_name)
+                for c in session.execute(select(Column)).scalars()
+            }
     finally:
         workspace_mgr.close()
 
     result = DetectorScores()
 
-    for dim_path, targets in measurement.column_details.items():
-        detector_id = detector_by_path.get(dim_path, dim_path.rsplit(".", 1)[-1])
-        for target, score in targets.items():
-            ref = target.removeprefix("column:")
-            parts = ref.split(".", 1)
+    def _keep_max(d: dict[Any, float], key: Any, score: float) -> None:
+        if key not in d or score > d[key]:
+            d[key] = score
+
+    for rec in records:
+        det, target, score = rec.detector_id, rec.target, rec.score
+        if target.startswith("column:"):
+            parts = target.removeprefix("column:").split(".", 1)
             if len(parts) != 2:
                 continue
             tbl, col = parts
-            key = (_strip_source_prefix(tbl), col, detector_id)
-            if key not in result.column or score > result.column[key]:
-                result.column[key] = score
-
-    for dim_path, targets in measurement.table_details.items():
-        detector_id = detector_by_path.get(dim_path, dim_path.rsplit(".", 1)[-1])
-        for target, score in targets.items():
-            tbl = _strip_source_prefix(target.removeprefix("table:"))
-            tbl_key = (tbl, detector_id)
-            if tbl_key not in result.table or score > result.table[tbl_key]:
-                result.table[tbl_key] = score
-
-    for dim_path, targets in measurement.view_details.items():
-        detector_id = detector_by_path.get(dim_path, dim_path.rsplit(".", 1)[-1])
-        for target, score in targets.items():
-            vw = target.removeprefix("view:")
-            vw_key = (vw, detector_id)
-            if vw_key not in result.view or score > result.view[vw_key]:
-                result.view[vw_key] = score
+            _keep_max(result.column, (_strip_source_prefix(tbl), col, det), score)
+        elif target.startswith("table:"):
+            _keep_max(result.table, (_strip_source_prefix(target.removeprefix("table:")), det), score)
+        elif target.startswith("view:"):
+            _keep_max(result.view, (target.removeprefix("view:"), det), score)
+        else:
+            pair = parse_relationship_target(target)
+            if pair is None:
+                continue
+            # Index the relationship's score under BOTH endpoint columns, so an
+            # injection naming either FK side (table, col, detector) resolves it.
+            for col_id in pair:
+                tbl, col = col_names.get(col_id, ("", ""))
+                if tbl and col:
+                    _keep_max(result.relationship, (_strip_source_prefix(tbl), col, det), score)
 
     return result
 
@@ -207,6 +227,14 @@ def pipeline_view_scores(detector_scores: DetectorScores) -> dict[tuple[str, str
     return detector_scores.view
 
 
+@pytest.fixture(scope="session")
+def pipeline_relationship_scores(
+    detector_scores: DetectorScores,
+) -> dict[tuple[str, str, str], float]:
+    """Relationship-scoped scores, indexed per endpoint: (table, column, detector_id) → score."""
+    return detector_scores.relationship
+
+
 # ---------------------------------------------------------------------------
 # Clean baseline (always uses "clean" strategy data)
 # ---------------------------------------------------------------------------
@@ -225,28 +253,41 @@ def _load_network_readiness(strategy: str) -> dict[tuple[str, str], dict[str, st
     runner_mod.bootstrap_engine()
 
     from dataraum.core.connections import ConnectionConfig, ConnectionManager
-    from dataraum.entropy.core.storage import EntropyRepository
     from dataraum.entropy.db_models import EntropyObjectRecord
+    from dataraum.entropy.models import EntropyObject
     from dataraum.entropy.network.model import EntropyNetwork
-    from dataraum.entropy.views.network_context import assemble_network_context
+    from dataraum.entropy.views.readiness_context import assemble_readiness_context
     from sqlalchemy import select
 
     workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
     workspace_mgr.initialize()
     try:
         with workspace_mgr.session_scope() as session:
-            repo = EntropyRepository(session)
             records = list(
                 session.execute(
                     select(EntropyObjectRecord).where(
-                        EntropyObjectRecord.source_id == run.source_id
+                        EntropyObjectRecord.session_id == run.session_id
                     )
                 )
                 .scalars()
                 .all()
             )
-            objects = [repo._record_to_object(r) for r in records]
-            ctx = assemble_network_context(objects, EntropyNetwork())
+            # Reconstruct domain objects for the rollup (DAT-399: read-path swap from
+            # the retired measurement module to the readiness-context assembler).
+            objects = [
+                EntropyObject(
+                    object_id=r.object_id,
+                    layer=r.layer,
+                    dimension=r.dimension,
+                    sub_dimension=r.sub_dimension,
+                    target=r.target,
+                    score=r.score,
+                    evidence=r.evidence if isinstance(r.evidence, list) else [],
+                    detector_id=r.detector_id,
+                )
+                for r in records
+            ]
+            ctx = assemble_readiness_context(objects, EntropyNetwork())
     finally:
         workspace_mgr.close()
 

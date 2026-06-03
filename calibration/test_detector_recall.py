@@ -34,15 +34,19 @@ NOT_IMPLEMENTED = frozenset(
     }
 )
 
-# Detectors the current addSourceWorkflow slice actually runs. Two stage-level
-# detect steps execute the detectors their phases declare in pipeline.yaml:
-#   - detect_table (per child): table-local phases — typing→type_fidelity,
-#     statistics→null_ratio — scoped to each child's typed table.
-#   - detect_source (after the reduce, DAT-370 fix): semantic_per_column's
-#     detectors source-wide — business_meaning, unit_entropy, temporal_entropy,
-#     outlier_rate, benford.
+# Detectors the current slice actually runs. Two workflows drive them:
+#   - addSourceWorkflow → terminal `detect` (DAT-394): the table-local +
+#     source-level detectors source-wide — type_fidelity, null_ratio,
+#     business_meaning, unit_entropy, temporal_entropy, outlier_rate, benford.
+#   - beginSessionWorkflow → terminal `session_detect` (DAT-408): the cross-table
+#     relationship detectors over the session's tables — relationship_entropy
+#     (break_referential_integrity). join_path_determinism ALSO runs here and its
+#     precision fix is verified (PR #207), but it has no recall fixture yet:
+#     add_duplicate_fk_paths tests redundancy the LLM dedupes, not genuine
+#     ambiguity — that needs two DISTINCT FKs to the same table (testdata gap), so
+#     join_path stays out of the asserted slice until such a fixture exists.
 # Move ids out of OUT_OF_SLICE_REASON into here as later phases (and their detect
-# steps) get wired into the workflow.
+# steps) get wired into the workflows.
 CURRENT_SLICE_DETECTORS = frozenset(
     {
         "type_fidelity",
@@ -52,16 +56,16 @@ CURRENT_SLICE_DETECTORS = frozenset(
         "temporal_entropy",
         "outlier_rate",
         "benford",
+        "relationship_entropy",
     }
 )
 
 # Why each out-of-slice detector produces no score yet:
 _SLICE_2_PHASE = (
-    "owning phase is not in the addSourceWorkflow chain yet (slice-2: "
-    "relationships / semantic_per_table / enriched_views / validation / ...)"
+    "owning phase is not in a driven workflow chain yet (slice-2+: "
+    "enriched_views / validation / cycles / ...)"
 )
 OUT_OF_SLICE_REASON: dict[str, str] = {
-    "relationship_entropy": _SLICE_2_PHASE,
     "dimensional_entropy": _SLICE_2_PHASE,
     "derived_value": _SLICE_2_PHASE,
     "temporal_drift": _SLICE_2_PHASE,
@@ -132,12 +136,26 @@ def _find_score(
     pipeline_scores: dict[tuple[str, str, str], float],
     pipeline_table_scores: dict[tuple[str, str], float],
     pipeline_view_scores: dict[tuple[str, str], float],
+    pipeline_relationship_scores: dict[tuple[str, str, str], float],
 ) -> float | None:
-    """Find a detector score across column, table, and view scopes."""
+    """Find a detector score across column, relationship, table, and view scopes."""
     # Column-scoped: exact (table, column, detector) match
     score = pipeline_scores.get((table, column, detector))
     if score is not None:
         return score
+
+    # Relationship-scoped (DAT-408): the score is indexed under BOTH endpoint
+    # columns, so the injected FK column (e.g. payments.invoice_id) matches exactly;
+    # the (table, detector) fallback covers a typed-name mismatch on this endpoint.
+    score = pipeline_relationship_scores.get((table, column, detector))
+    if score is not None:
+        return score
+    rel_best = None
+    for (t, _, d), s in pipeline_relationship_scores.items():
+        if t == table and d == detector and (rel_best is None or s > rel_best):
+            rel_best = s
+    if rel_best is not None:
+        return rel_best
 
     # Table-scoped: (table, detector) match
     score = pipeline_table_scores.get((table, detector))
@@ -165,6 +183,7 @@ def test_injection_detected(
     pipeline_scores: dict[tuple[str, str, str], float],
     pipeline_table_scores: dict[tuple[str, str], float],
     pipeline_view_scores: dict[tuple[str, str], float],
+    pipeline_relationship_scores: dict[tuple[str, str, str], float],
     clean_pipeline_scores: dict[tuple[str, str, str], float],
     request: pytest.FixtureRequest,
 ) -> None:
@@ -212,7 +231,13 @@ def test_injection_detected(
         cols = column_lc.split("/")
         scores = [
             _find_score(
-                table, c, detector, pipeline_scores, pipeline_table_scores, pipeline_view_scores
+                table,
+                c,
+                detector,
+                pipeline_scores,
+                pipeline_table_scores,
+                pipeline_view_scores,
+                pipeline_relationship_scores,
             )
             for c in cols
         ]
@@ -228,7 +253,13 @@ def test_injection_detected(
         return
 
     score = _find_score(
-        table, column_lc, detector, pipeline_scores, pipeline_table_scores, pipeline_view_scores
+        table,
+        column_lc,
+        detector,
+        pipeline_scores,
+        pipeline_table_scores,
+        pipeline_view_scores,
+        pipeline_relationship_scores,
     )
     assert score is not None, (
         f"{detector} produced no score for {table}.{column} — "

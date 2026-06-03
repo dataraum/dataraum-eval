@@ -74,6 +74,12 @@ injections:
 
   # --- Structural layer ---
 
+  # NOTE (DAT-405 Stage B): a join_path_determinism recall fixture does NOT belong
+  # here. add_duplicate_fk_paths creates a REDUNDANT duplicate FK that the LLM
+  # dedupes — and a clean duplicate of invoice_id makes the LLM confirm IT instead
+  # of the 20%-orphan invoice_id, silently stealing relationship_entropy's recall
+  # target. Genuine join-path ambiguity needs two semantically-DISTINCT FKs to the
+  # same table (testdata gap) and its own strategy, isolated from this one.
   - injector: break_referential_integrity
     table: payments
     detector_id: relationship_entropy
