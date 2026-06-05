@@ -9,5 +9,9 @@ scores:
   benford:trial_balance.debit_balance: 0.815
   null_ratio:bank_transactions.payment_id: 0.53
   null_ratio:journal_lines.cost_center: 0.519
-  unit_entropy:trial_balance.credit_balance: 0.8
-  unit_entropy:trial_balance.debit_balance: 0.8
+  slice_variance:invoices.payment_terms: 0.375
+  slice_variance:invoices.status: 0.5
+  slice_variance:journal_lines.cost_center: 1.0
+  slice_variance:payments.method: 0.375
+  temporal_drift:trial_balance.credit_balance: 0.447
+  temporal_drift:trial_balance.debit_balance: 0.535

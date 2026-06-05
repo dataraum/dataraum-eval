@@ -84,9 +84,10 @@ def test_clean_scores_match_baseline(
     if lines:
         lines.append("")
         lines.append(
-            "If these are expected, regenerate baseline: "
-            "pytest calibration/test_detector_precision.py "
-            "--regen-baseline"
+            "If these are expected, regenerate the baseline: delete "
+            "calibration/clean_baseline.yaml and re-run this test (it "
+            "rewrites the file from the current clean scores), then review "
+            "the diff."
         )
         raise AssertionError("\n".join(lines))
 

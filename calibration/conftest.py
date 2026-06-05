@@ -240,14 +240,15 @@ def pipeline_relationship_scores(
 # ---------------------------------------------------------------------------
 
 
-def _load_network_readiness(strategy: str) -> dict[tuple[str, str], dict[str, str]]:
-    """Per-column intent readiness from the entropy network rollup.
+def _assemble_readiness(
+    strategy: str,
+) -> tuple[Any, dict[str, tuple[str, str]]]:
+    """Assemble the readiness context for a strategy's persisted records.
 
-    Loads persisted ``EntropyObjectRecord`` rows for the source, assembles the
-    network context (noisy-OR rollup over ``network.yaml``), and maps each column
-    target to ``{intent_name: readiness}``. Implementation-agnostic: validates the
-    readiness *output*, so it guards both the pgmpy BBN and the rollup that
-    replaces it.
+    Returns ``(ctx, col_names)`` where ``ctx.columns`` is keyed by target string
+    (``column:`` AND ``relationship:`` targets, DAT-408) and ``col_names`` maps
+    ``column_id → (table_name, column_name)`` for resolving relationship
+    endpoints.
     """
     run = _ensure_pipeline_run(strategy)
     runner_mod.bootstrap_engine()
@@ -257,6 +258,7 @@ def _load_network_readiness(strategy: str) -> dict[tuple[str, str], dict[str, st
     from dataraum.entropy.models import EntropyObject
     from dataraum.entropy.network.model import EntropyNetwork
     from dataraum.entropy.views.readiness_context import assemble_readiness_context
+    from dataraum.storage import Column, Table
     from sqlalchemy import select
 
     workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
@@ -288,8 +290,26 @@ def _load_network_readiness(strategy: str) -> dict[tuple[str, str], dict[str, st
                 for r in records
             ]
             ctx = assemble_readiness_context(objects, EntropyNetwork())
+            table_names = {t.table_id: t.table_name for t in session.execute(select(Table)).scalars()}
+            col_names = {
+                c.column_id: (table_names.get(c.table_id, ""), c.column_name)
+                for c in session.execute(select(Column)).scalars()
+            }
     finally:
         workspace_mgr.close()
+    return ctx, col_names
+
+
+def _load_network_readiness(strategy: str) -> dict[tuple[str, str], dict[str, str]]:
+    """Per-column intent readiness from the entropy network rollup.
+
+    Loads persisted ``EntropyObjectRecord`` rows for the source, assembles the
+    network context (noisy-OR rollup over ``network.yaml``), and maps each column
+    target to ``{intent_name: readiness}``. Implementation-agnostic: validates the
+    readiness *output*, so it guards both the pgmpy BBN and the rollup that
+    replaces it.
+    """
+    ctx, _ = _assemble_readiness(strategy)
 
     result: dict[tuple[str, str], dict[str, str]] = {}
     for target, col in ctx.columns.items():
@@ -304,10 +324,56 @@ def _load_network_readiness(strategy: str) -> dict[tuple[str, str], dict[str, st
     return result
 
 
+_READINESS_RANK = {"ready": 0, "investigate": 1, "blocked": 2}
+
+
+def _load_relationship_readiness(strategy: str) -> dict[tuple[str, str], dict[str, str]]:
+    """Relationship-grain intent readiness, indexed per endpoint column.
+
+    Relationship problems live at relationship grain (DAT-408/DAT-405 decision):
+    the assembler rolls ``relationship:{from_col_id}::{to_col_id}`` targets
+    through the same network, and this maps each one onto BOTH endpoint
+    ``(table, column)`` keys so an expectation naming the FK column resolves it.
+    An endpoint in several relationships keeps the WORST readiness per intent —
+    the band a practitioner should see for that join.
+    """
+    from dataraum.entropy.models import parse_relationship_target
+
+    ctx, col_names = _assemble_readiness(strategy)
+
+    result: dict[tuple[str, str], dict[str, str]] = {}
+    for target, col in ctx.columns.items():
+        if not target.startswith("relationship:"):
+            continue
+        pair = parse_relationship_target(target)
+        if pair is None:
+            continue
+        intents = {intent.intent_name: intent.readiness for intent in col.intents}
+        for col_id in pair:
+            tbl, column = col_names.get(col_id, ("", ""))
+            if not (tbl and column):
+                continue
+            key = (_strip_source_prefix(tbl), column)
+            existing = result.setdefault(key, {})
+            for intent_name, readiness in intents.items():
+                prev = existing.get(intent_name)
+                if prev is None or _READINESS_RANK[readiness] > _READINESS_RANK[prev]:
+                    existing[intent_name] = readiness
+    return result
+
+
 @pytest.fixture(scope="session")
 def network_readiness(strategy_name: str) -> dict[tuple[str, str], dict[str, str]]:
     """(table, column) → {intent_name: readiness} for the current strategy."""
     return _load_network_readiness(strategy_name)
+
+
+@pytest.fixture(scope="session")
+def relationship_network_readiness(
+    strategy_name: str,
+) -> dict[tuple[str, str], dict[str, str]]:
+    """Relationship-grain readiness indexed per endpoint (table, column)."""
+    return _load_relationship_readiness(strategy_name)
 
 
 @pytest.fixture(scope="session")

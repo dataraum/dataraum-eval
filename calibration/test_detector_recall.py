@@ -38,13 +38,16 @@ NOT_IMPLEMENTED = frozenset(
 #   - addSourceWorkflow → terminal `detect` (DAT-394): the table-local +
 #     source-level detectors source-wide — type_fidelity, null_ratio,
 #     business_meaning, unit_entropy, temporal_entropy, outlier_rate, benford.
-#   - beginSessionWorkflow → terminal `session_detect` (DAT-408): the cross-table
-#     relationship detectors over the session's tables — relationship_entropy
-#     (break_referential_integrity). join_path_determinism ALSO runs here and its
-#     precision fix is verified (PR #207), but it has no recall fixture yet:
-#     add_duplicate_fk_paths tests redundancy the LLM dedupes, not genuine
-#     ambiguity — that needs two DISTINCT FKs to the same table (testdata gap), so
-#     join_path stays out of the asserted slice until such a fixture exists.
+#   - beginSessionWorkflow → terminal `session_detect` (DAT-408/DAT-403): the
+#     cross-table relationship detectors (relationship_entropy) plus the revived
+#     value layer — slice_variance, temporal_drift, dimensional_entropy,
+#     derived_value (slicing → … → correlations, wired 2026-06-05; scoring
+#     verified after the DAT-405 loader head-fallback fix).
+#     join_path_determinism ALSO runs here and its precision fix is verified
+#     (PR #207), but it has no recall fixture yet: add_duplicate_fk_paths tests
+#     redundancy the LLM dedupes, not genuine ambiguity — that needs two
+#     DISTINCT FKs to the same table (DAT-419 testdata gap), so join_path stays
+#     out of the asserted slice until such a fixture exists.
 # Move ids out of OUT_OF_SLICE_REASON into here as later phases (and their detect
 # steps) get wired into the workflows.
 CURRENT_SLICE_DETECTORS = frozenset(
@@ -57,18 +60,18 @@ CURRENT_SLICE_DETECTORS = frozenset(
         "outlier_rate",
         "benford",
         "relationship_entropy",
+        "temporal_drift",
+        "dimensional_entropy",
+        "derived_value",
+        "slice_variance",
     }
 )
 
 # Why each out-of-slice detector produces no score yet:
 _SLICE_2_PHASE = (
-    "owning phase is not in a driven workflow chain yet (slice-2+: "
-    "enriched_views / validation / cycles / ...)"
+    "owning phase is not in a driven workflow chain yet (slice-2+: validation / cycles / ...)"
 )
 OUT_OF_SLICE_REASON: dict[str, str] = {
-    "dimensional_entropy": _SLICE_2_PHASE,
-    "derived_value": _SLICE_2_PHASE,
-    "temporal_drift": _SLICE_2_PHASE,
     "cross_table_consistency": _SLICE_2_PHASE,
 }
 

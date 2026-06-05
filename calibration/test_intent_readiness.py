@@ -64,11 +64,19 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
 def test_intent_readiness_floor(
     expectation: dict[str, Any],
     network_readiness: dict[tuple[str, str], dict[str, str]],
+    relationship_network_readiness: dict[tuple[str, str], dict[str, str]],
     request: pytest.FixtureRequest,
 ) -> None:
-    """Each injection must push the affected column to at least its floor readiness."""
+    """Each injection must push the affected target to at least its floor readiness.
+
+    Expectations assert COLUMN-grain readiness by default. ``grain: relationship``
+    asserts the relationship-grain band instead (indexed per endpoint column):
+    relationship problems live at relationship grain — the column's own band is
+    blind to them by design (DAT-408 model, DAT-405 decision 2026-06-05).
+    """
     table, column = expectation["target"].split(".", 1)
     driver = expectation["driver"]
+    grain = expectation.get("grain", "column")
 
     # Same gating as detector recall — skip / xfail before asserting.
     if driver in NOT_IMPLEMENTED:
@@ -86,10 +94,13 @@ def test_intent_readiness_floor(
             pytest.mark.xfail(reason=LLM_NONDETERMINISTIC[(driver, table, column)], strict=False)
         )
 
+    readiness_map = (
+        relationship_network_readiness if grain == "relationship" else network_readiness
+    )
     # Pipeline lowercases column names on import.
-    readiness = network_readiness.get((table, column.lower()))
+    readiness = readiness_map.get((table, column.lower()))
     assert readiness is not None, (
-        f"no network readiness for {table}.{column} — column produced no node "
+        f"no {grain}-grain readiness for {table}.{column} — target produced no node "
         f"evidence (driver={driver} may map to a direct signal, not a network node)"
     )
 

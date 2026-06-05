@@ -35,8 +35,16 @@ clean_readiness:
   # null_ratio ~0.52 on a nullable dimension → not aggregation-ready (accurate).
   bank_transactions.payment_id:
     aggregation_intent: investigate
+  # cost_center: 52% null AND the null rate varies sharply per slice — the
+  # revived slice_variance (DAT-403/405) scores 1.0 on top of null_ratio 0.52,
+  # noisy-OR → blocked for aggregation, investigate for query. Accepted as
+  # accurate (hybrid decision 2026-06-05): the column genuinely is heterogeneous;
+  # the long-term classifier for expected-vs-problem patterns is the
+  # business-pattern filter — DAT-184 (backlog; DAT-186's "suppress
+  # slice_variance on structural dimensions" was deduped into it).
   journal_lines.cost_center:
-    aggregation_intent: investigate
+    aggregation_intent: blocked
+    query_intent: investigate
   # unit_entropy 0.8 (undeclared units) + non-Benford ~0.8 → not safe to
   # aggregate/report without declaring units (accurate; unit_entropy is the
   # documented metadata-completeness detector).
@@ -85,14 +93,24 @@ detection-v1:
     # Documented now so the oracle is complete; skipped until the phase is wired.
     - target: "payments.invoice_id"
       driver: "relationship_entropy"
+      grain: relationship
       min_readiness:
         reporting_intent: investigate
-      note: "20% orphan FKs — relationship_quality -> reporting_intent (slice-2)"
-    - target: "journal_lines.net_amount"
+      note: >-
+        20% orphan FKs — relationship_quality -> reporting_intent, asserted at
+        RELATIONSHIP grain (the relationship:{from}::{to} target's band, indexed
+        per endpoint). The column's own band is blind to relationship problems
+        by design (DAT-408 model, DAT-405 decision 2026-06-05).
+    - target: "journal_lines.debit"
       driver: "derived_value"
       min_readiness:
         aggregation_intent: investigate
-      note: "10% formula drift -> formula_match -> aggregation_intent (slice-2)"
+      note: >-
+        10% formula drift injected on net_amount -> formula_match ->
+        aggregation_intent. The correlations dedup prefers the sum form
+        (debit = net_amount + credit), so the broken-formula score is
+        ATTRIBUTED to debit, not the injected column — same attribution the
+        recall test's _find_score handles (see CLAUDE.md derived_value note).
     - target: "bank_transactions.amount"
       driver: "temporal_drift"
       min_readiness:
