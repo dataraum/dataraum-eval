@@ -3,10 +3,12 @@
 Generation runs against ``dataraum-testdata`` directly. The pipeline is a
 Temporal workflow now (DAT-344/DAT-370): we bring up Postgres + the Temporal
 server (``calibration.stack``), start the engine worker on the host
-(``calibration.worker``), and trigger ``addSourceWorkflow`` as a client. The
-workflow imports the source, fans out a child workflow per raw table (typing →
-analytics → ``detect_table``), then runs ``semantic_per_column`` as the
-source-level reduce. Scores are read back from Postgres by ``conftest.py``.
+(``calibration.worker``), and trigger ``addSourceWorkflow`` as a client. A run
+ingests a SET of per-file content-keyed sources (DAT-422/DAT-425): each data
+file is its own ``src_<digest>`` source, the workflow imports each, fans out a
+child workflow per raw table (typing → analytics → ``detect_table``), then runs
+``semantic_per_column`` as the session-level reduce. Scores are read back from
+Postgres by ``conftest.py``.
 
 Usage::
 
@@ -23,8 +25,8 @@ Or from the CLI::
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
-import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -54,19 +56,21 @@ _engine_bootstrapped = False
 
 @dataclass(frozen=True)
 class CalibrationRun:
-    """Identifiers for a completed pipeline run; persisted to the sidecar."""
+    """Identifiers for a completed pipeline run; persisted to the sidecar.
+
+    ``source_ids`` is the run's per-file content-source set (DAT-422): one
+    ``src_<digest>`` source per data file, in upload order.
+    """
 
     strategy: str
-    source_id: str
-    source_name: str
+    source_ids: tuple[str, ...]
     session_id: str
 
     def to_json(self) -> str:
         return json.dumps(
             {
                 "strategy": self.strategy,
-                "source_id": self.source_id,
-                "source_name": self.source_name,
+                "source_ids": list(self.source_ids),
                 "session_id": self.session_id,
             },
             indent=2,
@@ -77,8 +81,7 @@ class CalibrationRun:
         data = json.loads(payload)
         return cls(
             strategy=data["strategy"],
-            source_id=data["source_id"],
-            source_name=data["source_name"],
+            source_ids=tuple(data["source_ids"]),
             session_id=data["session_id"],
         )
 
@@ -93,25 +96,56 @@ def strategy_path(strategy: str) -> Path:
     return path
 
 
-def source_name_for(strategy: str) -> str:
-    """Stable source name for a strategy (must satisfy [a-z0-9_])."""
-    return re.sub(r"[^a-z0-9_]", "_", strategy.lower()).strip("_") or "source"
-
-
 # Data-file suffixes a source loads. entropy_map.yaml / ground_truth.yaml are
 # eval metadata (not source objects), so .yaml is excluded.
 _DATA_SUFFIXES = frozenset({".csv", ".tsv", ".parquet", ".json", ".jsonl", ".xlsx", ".db", ".sqlite"})
 
+# Declared Source.source_type per suffix. Import dispatches file loads per-URI
+# by suffix anyway (only db_recipe consults source_type), so this is metadata,
+# mirroring the cockpit's sourceTypeForUri map; unmapped suffixes fall back to
+# the generic "file".
+_SOURCE_TYPE_BY_SUFFIX = {
+    ".csv": "csv",
+    ".tsv": "csv",
+    ".parquet": "parquet",
+    ".json": "json",
+    ".jsonl": "json",
+}
 
-def _upload_sources_to_lake(source_name: str, data_dir: Path) -> list[str]:
-    """Upload a strategy's data files to the lake bucket; return their s3:// URIs.
+
+@dataclass(frozen=True)
+class SourceObject:
+    """One uploaded data file = one content-keyed source (DAT-422)."""
+
+    uri: str
+    source_name: str  # src_<digest>
+    source_type: str
+
+
+def _content_digest(data: bytes, workspace_id: str) -> str:
+    """Workspace-salted SHA-1 content digest of one file's bytes.
+
+    Mirrors the cockpit's ``digestBytes`` small-file path (``upload/digest.ts``):
+    SHA-1 over ``bytes + (workspace_id + byte_length)``. Calibration data files
+    are far below the cockpit's 8 MB Merkle-roll-up threshold, so the whole-file
+    path is the only one needed — identical bytes in the same workspace yield the
+    same ``src_<digest>`` source either way (re-upload dedup).
+    """
+    salted = (workspace_id + str(len(data))).encode()
+    return hashlib.sha1(data + salted).hexdigest()
+
+
+def _upload_sources_to_lake(data_dir: Path, workspace_id: str) -> list[SourceObject]:
+    """Upload a strategy's data files to the lake bucket as staged uploads.
 
     DuckLake is S3-backed (DAT-389): a file source carries ``file_uris`` of
     ``s3://<lake-bucket>/<key>`` objects, not a host path. The dev SeaweedFS S3
     gateway accepts anonymous PUT, so a plain HTTP upload (no boto3, no request
     signing) suffices — and it preserves the bytes exactly, which matters for the
-    injected values. Objects land under ``<source_name>/<filename>`` so each
-    loads into the ``<source_name>__<file_stem>`` raw table the tests expect.
+    injected values. Objects land at the locked ``uploads/<digest>/<filename>``
+    key (DAT-422, ``upload/policy.ts``): the digest segment is the file's content
+    key, so its source is ``src_<digest>`` and its raw table loads as
+    ``src_<digest>__<file_stem>``.
     """
     files = sorted(p for p in data_dir.iterdir() if p.suffix.lower() in _DATA_SUFFIXES)
     if not files:
@@ -119,13 +153,15 @@ def _upload_sources_to_lake(source_name: str, data_dir: Path) -> list[str]:
             f"No source data files ({', '.join(sorted(_DATA_SUFFIXES))}) in {data_dir}"
         )
 
-    uris: list[str] = []
+    objects: list[SourceObject] = []
     for path in files:
-        key = f"{source_name}/{path.name}"
+        data = path.read_bytes()
+        digest = _content_digest(data, workspace_id)
+        key = f"uploads/{digest}/{path.name}"
         url = f"http://{stack.S3_ENDPOINT}/{stack.S3_BUCKET}/{key}"
         req = urllib.request.Request(
             url,
-            data=path.read_bytes(),
+            data=data,
             method="PUT",
             headers={"Content-Type": "application/octet-stream"},
         )
@@ -135,10 +171,16 @@ def _upload_sources_to_lake(source_name: str, data_dir: Path) -> list[str]:
                     raise RuntimeError(f"PUT {url} → HTTP {resp.status}")
         except urllib.error.HTTPError as e:
             raise RuntimeError(f"Upload failed for {key}: HTTP {e.code} {e.reason}") from e
-        uris.append(f"s3://{stack.S3_BUCKET}/{key}")
+        objects.append(
+            SourceObject(
+                uri=f"s3://{stack.S3_BUCKET}/{key}",
+                source_name=f"src_{digest}",
+                source_type=_SOURCE_TYPE_BY_SUFFIX.get(path.suffix.lower(), "file"),
+            )
+        )
 
-    print(f"[eval] Uploaded {len(uris)} file(s) to s3://{stack.S3_BUCKET}/{source_name}/")
-    return uris
+    print(f"[eval] Uploaded {len(objects)} file(s) to s3://{stack.S3_BUCKET}/uploads/")
+    return objects
 
 
 def sidecar_path(strategy: str) -> Path:
@@ -201,21 +243,25 @@ def generate(
     return data_dir
 
 
-def _create_session_for_source(
-    source_name: str,
-    file_uris: list[str],
+def _seed_run_sources(
+    objects: list[SourceObject],
     *,
     contract: str | None,
     vertical: str | None,
     intent: str,
-) -> tuple[str, str]:
-    """Find/create the Source + open an InvestigationSession bound to it.
+) -> tuple[str, list[str]]:
+    """Upsert one content-keyed Source per object + open an InvestigationSession.
 
-    ``file_uris`` are ``s3://<lake-bucket>/<key>`` source objects (DAT-378/389).
-    On reuse the connection_config is refreshed — the dev SeaweedFS volume is
-    ephemeral, so the bucket is recreated and re-uploaded on every run.
+    The run's source set (DAT-422): each uploaded file is its own
+    ``src_<digest>`` source carrying exactly one ``file_uris`` entry. Identical
+    bytes re-upsert the same row (the name is the content key); the URI is
+    refreshed on reuse — the dev SeaweedFS volume is ephemeral, so the bucket is
+    recreated and re-uploaded on every run.
 
-    Returns ``(session_id, source_id)``.
+    The InvestigationSession row MUST exist before ``addSourceWorkflow`` starts:
+    ``typing`` writes ``session_tables`` rows with a NOT-NULL FK to it.
+
+    Returns ``(session_id, source_ids)`` with source_ids in upload order.
     """
     from dataraum.core.connections import ConnectionConfig, ConnectionManager
     from dataraum.investigation.db_models import InvestigationSession
@@ -226,26 +272,29 @@ def _create_session_for_source(
     workspace_mgr.initialize()
     try:
         with workspace_mgr.session_scope() as s:
-            src = s.execute(select(Source).where(Source.name == source_name)).scalar_one_or_none()
-            if src is None:
-                src = Source(
-                    source_id=str(uuid4()),
-                    name=source_name,
-                    source_type="csv",
-                    connection_config={"file_uris": file_uris},
-                    status="configured",
-                )
-                s.add(src)
-                s.flush()
-            else:
-                src.connection_config = {"file_uris": file_uris}
-                s.flush()
-            source_id = src.source_id
+            source_ids: list[str] = []
+            for obj in objects:
+                src = s.execute(
+                    select(Source).where(Source.name == obj.source_name)
+                ).scalar_one_or_none()
+                if src is None:
+                    src = Source(
+                        source_id=str(uuid4()),
+                        name=obj.source_name,
+                        source_type=obj.source_type,
+                        connection_config={"file_uris": [obj.uri]},
+                        status="configured",
+                    )
+                    s.add(src)
+                    s.flush()
+                else:
+                    src.connection_config = {"file_uris": [obj.uri]}
+                    s.flush()
+                source_ids.append(src.source_id)
 
             # Source-free since DAT-401: a session composes typed tables (possibly
-            # spanning sources), so InvestigationSession carries no source_id. The
-            # source binding rides on SourceIdentity in addSourceWorkflow; we still
-            # return source_id for the Source row + the workflow identity.
+            # spanning sources), so InvestigationSession carries no source binding.
+            # The run's sources ride in AddSourceInput.source_ids instead.
             inv = InvestigationSession(
                 session_id=str(uuid4()),
                 intent=intent,
@@ -256,30 +305,32 @@ def _create_session_for_source(
             s.add(inv)
             s.flush()
             session_id = inv.session_id
-        return session_id, source_id
+        return session_id, source_ids
     finally:
         workspace_mgr.close()
 
 
 async def _drive_pipeline(
     *,
-    strategy: str,
     workspace_id: str,
-    source_id: str,
+    source_ids: list[str],
     session_id: str,
     vertical: str | None,
     log_path: Path,
 ) -> tuple[Any, Any]:
     """Trigger ``addSourceWorkflow`` then ``beginSessionWorkflow`` under one worker.
 
-    ``add_source`` imports + types the source and runs the table-local + source-level
-    detectors. ``begin_session`` then composes the freshly-typed tables into the
-    **same** investigation session and runs the cross-table phases
-    (``relationships`` → ``semantic_per_table``) plus the terminal relationship
-    ``session_detect`` — the only path that scores ``relationship_entropy`` /
-    ``join_path_determinism`` (DAT-408). Both run under the same ``session_id`` so
-    every ``EntropyObjectRecord`` reads back together. The worker is torn down when
-    both workflows complete.
+    ``add_source`` ingests the run's source SET (DAT-422): one ``import`` per id
+    in ``source_ids``, then types the union and runs the table-local +
+    session-level detectors. The identity is source-free — the workflow scopes
+    each per-source import itself, so ``source_id`` stays unset here.
+    ``begin_session`` then composes the freshly-typed tables into the **same**
+    investigation session and runs the cross-table phases (``relationships`` →
+    ``semantic_per_table``) plus the terminal relationship ``session_detect`` —
+    the only path that scores ``relationship_entropy`` /
+    ``join_path_determinism`` (DAT-408). Both run under the same ``session_id``
+    so every ``EntropyObjectRecord`` reads back together. The worker is torn
+    down when both workflows complete.
 
     Returns ``(AddSourceResult, BeginSessionResult)``.
     """
@@ -290,21 +341,21 @@ async def _drive_pipeline(
         BeginSessionResult,
         SessionIdentity,
         SourceIdentity,
+        add_source_workflow_id,
         begin_session_workflow_id,
     )
 
     client = await worker.connect_client()
     source_identity = SourceIdentity(
         workspace_id=workspace_id,
-        source_id=source_id,
         session_id=session_id,
         vertical=vertical,
     )
     async with worker.worker_running(client, log_path):
         add_result = await client.execute_workflow(
             "addSourceWorkflow",
-            AddSourceInput(identity=source_identity),
-            id=f"calibration-{strategy}-{session_id}",
+            AddSourceInput(identity=source_identity, source_ids=source_ids),
+            id=add_source_workflow_id(workspace_id, session_id),
             task_queue=stack.TEMPORAL_TASK_QUEUE,
             result_type=AddSourceResult,
             execution_timeout=timedelta(minutes=30),
@@ -345,11 +396,13 @@ def run_pipeline(
 
     bootstrap_engine()
 
-    source_name = source_name_for(strategy)
-    file_uris = _upload_sources_to_lake(source_name, data_dir)
-    session_id, source_id = _create_session_for_source(
-        source_name,
-        file_uris,
+    from dataraum.server.workspace import get_active_workspace_id
+
+    workspace_id = get_active_workspace_id()
+
+    objects = _upload_sources_to_lake(data_dir, workspace_id)
+    session_id, source_ids = _seed_run_sources(
+        objects,
         contract=contract,
         vertical=vertical,
         intent=f"calibration:{strategy}",
@@ -358,19 +411,14 @@ def run_pipeline(
     output_dir = OUTPUT_DIR / strategy
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    from dataraum.server.workspace import get_active_workspace_id
-
-    workspace_id = get_active_workspace_id()
-
     print(
         f"[eval] Driving addSourceWorkflow + beginSessionWorkflow: "
-        f"strategy={strategy} session={session_id}"
+        f"strategy={strategy} session={session_id} sources={len(source_ids)}"
     )
     add_result, begin_result = asyncio.run(
         _drive_pipeline(
-            strategy=strategy,
             workspace_id=workspace_id,
-            source_id=source_id,
+            source_ids=source_ids,
             session_id=session_id,
             vertical=vertical,
             log_path=output_dir / "worker.log",
@@ -386,8 +434,7 @@ def run_pipeline(
 
     run = CalibrationRun(
         strategy=strategy,
-        source_id=source_id,
-        source_name=source_name,
+        source_ids=tuple(source_ids),
         session_id=session_id,
     )
     sidecar_path(strategy).write_text(run.to_json())

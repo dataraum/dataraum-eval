@@ -55,7 +55,7 @@ class DetectorScores:
 
 
 def _strip_source_prefix(name: str) -> str:
-    """Strip source_name__ prefix (e.g. detection_v1__invoices → invoices)."""
+    """Strip source_name__ prefix (e.g. src_<digest>__invoices → invoices)."""
     if "__" in name:
         return name.split("__", 1)[1]
     return name
