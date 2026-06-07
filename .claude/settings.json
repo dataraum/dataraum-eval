@@ -1,4 +1,9 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/philipp/Code/dataraum/dataraum-eval push origin main)"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {
