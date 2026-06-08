@@ -110,13 +110,19 @@ detection-v1:
     - target: "journal_lines.debit"
       driver: "derived_value"
       min_readiness:
-        aggregation_intent: investigate
+        aggregation_intent: ready
       note: >-
         10% formula drift injected on net_amount -> formula_match ->
         aggregation_intent. The correlations dedup prefers the sum form
         (debit = net_amount + credit), so the broken-formula score is
         ATTRIBUTED to debit, not the injected column — same attribution the
         recall test's _find_score handles (see CLAUDE.md derived_value note).
+        DAT-442: boost removed -> honest mismatch rate ~0.10 (was 0.71 boosted).
+        Like benford above, no linear loss weight lifts a 0.10 mismatch to
+        investigate without Goodhart, so the band honestly stays ready (severity
+        in the loss table, not a boost). Recall still proven by the ordering
+        grammar in test_detector_recall; strengthen the injection (DAT-450) to
+        exercise the investigate path — do NOT crank the weight.
     # temporal_drift CUT (DAT-442 reset): distribution drift can't separate a shift
     # from natural volatility on flow columns (clean KS ≈ injected ≈ 0.53). Proven
     # in calibration/unit/test_drift_recorded.py; real drift → DAT-445.
