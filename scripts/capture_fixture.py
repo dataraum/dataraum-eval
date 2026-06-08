@@ -54,7 +54,9 @@ PG_TABLES = [
 ]
 
 # Strategies whose generated source CSVs carry the raw per-period values.
-STRATEGIES = ["clean", "detection-v1"]
+# detection-null-v1 carries the inject_null_tokens columns (journal_lines.debit,
+# bank_transactions.amount) — the raw sentinel values behind the pooled witnesses.
+STRATEGIES = ["clean", "detection-v1", "detection-null-v1"]
 
 
 def _pg_password() -> str:

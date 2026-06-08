@@ -87,6 +87,29 @@ def column_values(
     return out
 
 
+def column_cells(
+    conn: sqlite3.Connection,
+    strategy: str,
+    source: str,
+    value_col: str,
+) -> list[object]:
+    """Every raw cell of one column INCLUDING blanks, row order preserved.
+
+    Unlike ``column_values`` (which skips empties), this keeps one entry per row so
+    completeness / null measures can count missing cells. ``""`` or a missing key
+    become ``None``. This is what ``null_ratio`` consumes.
+    """
+    rows = conn.execute(
+        "SELECT row_json FROM raw_values WHERE strategy=? AND source=?",
+        (strategy, source),
+    ).fetchall()
+    out: list[object] = []
+    for (row_json,) in rows:
+        raw = json.loads(row_json).get(value_col)
+        out.append(None if raw in (None, "") else raw)
+    return out
+
+
 def row_records(
     conn: sqlite3.Connection,
     strategy: str,
