@@ -1,0 +1,36 @@
+name: detection-null-v1
+level: high
+description: >
+  Null-semantics adjudication calibration (ADR-0009 / DAT-457). Injects
+  null-marker sentinel TOKENS into numeric columns: the tokens fail the numeric
+  cast, quarantine, and the null_semantics detector adjudicates each rejected
+  token (is-null vs is-value) by pooling quarantine / type / vocabulary
+  witnesses. The token pools are NOVEL (not in the base null vocabulary), so the
+  vocabulary witness dissents and conflict fires — the case a null_value teach
+  then closes.
+
+  Graded by ORDERING (injected conflict > clean baseline by a margin), never a
+  point threshold (ADR-0009 eval grammar). The token pool is parameterized, so
+  the assertion holds for a family of variations rather than a memorized fixture.
+
+# Detector tested: null_semantics (adjudication; ordering/delta grammar, NOT a
+# point threshold — see calibration/test_adjudication_recall.py)
+
+injections:
+  - injector: inject_null_tokens
+    table: journal_lines
+    detector_id: null_semantics
+    params:
+      col: debit
+      ratio: 0.10
+      tokens: ["#ERR", "TBD", "PENDING", "see note", "??"]
+      severity: high
+
+  - injector: inject_null_tokens
+    table: bank_transactions
+    detector_id: null_semantics
+    params:
+      col: amount
+      ratio: 0.08
+      tokens: ["WITHHELD", "DISPUTED", "ON HOLD"]
+      severity: high
