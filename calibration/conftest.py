@@ -256,7 +256,6 @@ def _assemble_readiness(
     from dataraum.core.connections import ConnectionConfig, ConnectionManager
     from dataraum.entropy.db_models import EntropyObjectRecord
     from dataraum.entropy.models import EntropyObject
-    from dataraum.entropy.network.model import EntropyNetwork
     from dataraum.entropy.views.readiness_context import assemble_readiness_context
     from dataraum.storage import Column, Table
     from sqlalchemy import select
@@ -289,7 +288,7 @@ def _assemble_readiness(
                 )
                 for r in records
             ]
-            ctx = assemble_readiness_context(objects, EntropyNetwork())
+            ctx = assemble_readiness_context(objects)
             table_names = {t.table_id: t.table_name for t in session.execute(select(Table)).scalars()}
             col_names = {
                 c.column_id: (table_names.get(c.table_id, ""), c.column_name)
@@ -300,14 +299,13 @@ def _assemble_readiness(
     return ctx, col_names
 
 
-def _load_network_readiness(strategy: str) -> dict[tuple[str, str], dict[str, str]]:
-    """Per-column intent readiness from the entropy network rollup.
+def _load_intent_readiness(strategy: str) -> dict[tuple[str, str], dict[str, str]]:
+    """Per-column intent readiness from the loss rollup.
 
     Loads persisted ``EntropyObjectRecord`` rows for the source, assembles the
-    network context (noisy-OR rollup over ``network.yaml``), and maps each column
-    target to ``{intent_name: readiness}``. Implementation-agnostic: validates the
-    readiness *output*, so it guards both the pgmpy BBN and the rollup that
-    replaces it.
+    readiness context (loss table: risk = clamp01(Σ weight·value), banded), and maps
+    each column target to ``{intent_name: readiness}``. Implementation-agnostic:
+    validates the readiness *output*, not the rollup engine (DAT-442).
     """
     ctx, _ = _assemble_readiness(strategy)
 
@@ -332,7 +330,7 @@ def _load_relationship_readiness(strategy: str) -> dict[tuple[str, str], dict[st
 
     Relationship problems live at relationship grain (DAT-408/DAT-405 decision):
     the assembler rolls ``relationship:{from_col_id}::{to_col_id}`` targets
-    through the same network, and this maps each one onto BOTH endpoint
+    through the same loss rollup, and this maps each one onto BOTH endpoint
     ``(table, column)`` keys so an expectation naming the FK column resolves it.
     An endpoint in several relationships keeps the WORST readiness per intent —
     the band a practitioner should see for that join.
@@ -363,13 +361,13 @@ def _load_relationship_readiness(strategy: str) -> dict[tuple[str, str], dict[st
 
 
 @pytest.fixture(scope="session")
-def network_readiness(strategy_name: str) -> dict[tuple[str, str], dict[str, str]]:
+def intent_readiness(strategy_name: str) -> dict[tuple[str, str], dict[str, str]]:
     """(table, column) → {intent_name: readiness} for the current strategy."""
-    return _load_network_readiness(strategy_name)
+    return _load_intent_readiness(strategy_name)
 
 
 @pytest.fixture(scope="session")
-def relationship_network_readiness(
+def relationship_intent_readiness(
     strategy_name: str,
 ) -> dict[tuple[str, str], dict[str, str]]:
     """Relationship-grain readiness indexed per endpoint (table, column)."""
@@ -377,9 +375,9 @@ def relationship_network_readiness(
 
 
 @pytest.fixture(scope="session")
-def clean_network_readiness() -> dict[tuple[str, str], dict[str, str]]:
+def clean_intent_readiness() -> dict[tuple[str, str], dict[str, str]]:
     """(table, column) → {intent_name: readiness} for the clean baseline."""
-    return _load_network_readiness("clean")
+    return _load_intent_readiness("clean")
 
 
 @pytest.fixture(scope="session")

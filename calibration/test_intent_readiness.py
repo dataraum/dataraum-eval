@@ -1,15 +1,15 @@
-"""Intent-readiness calibration — does the network roll detector scores up to
+"""Intent-readiness calibration — does the loss table roll detector scores up to
 the right query / aggregation / reporting readiness?
 
-The entropy network (``network.yaml``) combines detector scores into three
-intent readiness signals, banded ready < investigate < blocked. This test is the
-oracle the network never had: for each known injection, ``intent_readiness.yaml``
+The loss table (``loss.yaml``) combines detector scores into three intent
+readiness signals — risk = clamp01(Σ weight·value), banded ready < investigate <
+blocked. This test is the oracle: for each known injection, ``intent_readiness.yaml``
 states the FLOOR readiness the affected column must reach for each compromised
-intent. We assert the network reports at least that — a recall check on the
-rollup. Precision: on the clean baseline every column must read "ready".
+intent. We assert the rollup reports at least that — a recall check. Precision: on
+the clean baseline every column must read "ready".
 
-This is implementation-agnostic. It validated the pgmpy BBN and continues to
-guard the deterministic noisy-OR rollup that replaces it — the contract is the
+This is implementation-agnostic. It validated the pgmpy BBN, then the noisy-OR
+rollup, and now the loss rollup that replaces both (DAT-442) — the contract is the
 readiness output, not the inference engine.
 
 Slice / known-issue gating reuses test_detector_recall.py so there is one source
@@ -63,8 +63,8 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
 
 def test_intent_readiness_floor(
     expectation: dict[str, Any],
-    network_readiness: dict[tuple[str, str], dict[str, str]],
-    relationship_network_readiness: dict[tuple[str, str], dict[str, str]],
+    intent_readiness: dict[tuple[str, str], dict[str, str]],
+    relationship_intent_readiness: dict[tuple[str, str], dict[str, str]],
     request: pytest.FixtureRequest,
 ) -> None:
     """Each injection must push the affected target to at least its floor readiness.
@@ -95,13 +95,13 @@ def test_intent_readiness_floor(
         )
 
     readiness_map = (
-        relationship_network_readiness if grain == "relationship" else network_readiness
+        relationship_intent_readiness if grain == "relationship" else intent_readiness
     )
     # Pipeline lowercases column names on import.
     readiness = readiness_map.get((table, column.lower()))
     assert readiness is not None, (
         f"no {grain}-grain readiness for {table}.{column} — target produced no node "
-        f"evidence (driver={driver} may map to a direct signal, not a network node)"
+        f"evidence (driver={driver} may be an informative signal, not a loss measurement)"
     )
 
     for intent, floor in expectation["min_readiness"].items():
@@ -127,20 +127,20 @@ def _clean_baseline() -> dict[str, dict[str, str]]:
 
 
 def test_clean_readiness_no_regression(
-    clean_network_readiness: dict[tuple[str, str], dict[str, str]],
+    clean_intent_readiness: dict[tuple[str, str], dict[str, str]],
 ) -> None:
     """Precision: no clean column reads WORSE than its captured baseline.
 
     Clean financial data legitimately produces non-ready signals (nullable
-    columns, non-Benford distributions, undeclared units) that the network
-    correctly surfaces — see ``clean_readiness`` in intent_readiness.yaml. This
-    catches a *regression*: a clean column whose readiness exceeds baseline (a
-    new false alarm), mirroring test_detector_precision.py's baseline model.
+    columns, undeclared units) that the loss rollup correctly surfaces — see
+    ``clean_readiness`` in intent_readiness.yaml. This catches a *regression*: a
+    clean column whose readiness exceeds baseline (a new false alarm), mirroring
+    test_detector_precision.py's baseline model.
     """
     baseline = _clean_baseline()
 
     regressions: list[str] = []
-    for (tbl, col), intents in sorted(clean_network_readiness.items()):
+    for (tbl, col), intents in sorted(clean_intent_readiness.items()):
         expected = baseline.get(f"{tbl}.{col}", {})
         for intent, actual in sorted(intents.items()):
             floor = expected.get(intent, "ready")
