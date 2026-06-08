@@ -72,8 +72,14 @@ detection-v1:
     - target: "bank_transactions.amount"
       driver: "benford"
       min_readiness:
-        aggregation_intent: investigate
-      note: "60% round numbers — benford_compliance feeds aggregation_intent (0.4); borderline by design"
+        aggregation_intent: ready
+      note: >-
+        60% round numbers barely perturbs leading digits → KL surprise ~0.13
+        (clean ~0.00); recall is proven by the ordering grammar in
+        test_detector_recall. No linear loss weight lifts a 0.13 surprise to
+        investigate, so the band honestly stays ready (severity in the loss table,
+        not a boost). Strengthen the injection (DAT-450) to exercise the investigate
+        path; do NOT crank the weight (Goodhart).
 
     # business_meaning is LLM-nondeterministic (xfail strict=False, like recall):
     # naming_clarity feeds reporting_intent (0.7), so when detection fires the
@@ -111,12 +117,9 @@ detection-v1:
         (debit = net_amount + credit), so the broken-formula score is
         ATTRIBUTED to debit, not the injected column — same attribution the
         recall test's _find_score handles (see CLAUDE.md derived_value note).
-    - target: "bank_transactions.amount"
-      driver: "temporal_drift"
-      min_readiness:
-        aggregation_intent: investigate
-        query_intent: investigate
-      note: "mid-year shift -> temporal_drift feeds query+aggregation (slice-2)"
+    # temporal_drift CUT (DAT-442 reset): distribution drift can't separate a shift
+    # from natural volatility on flow columns (clean KS ≈ injected ≈ 0.53). Proven
+    # in calibration/unit/test_drift_recorded.py; real drift → DAT-445.
     - target: "invoices.amount"
       driver: "cross_table_consistency"
       min_readiness:

@@ -25,6 +25,15 @@ import yaml
 # Minimum score for a detector to be considered "detected the injection"
 DETECTION_THRESHOLD = 0.3
 
+# Surprise / disagreement detectors (DAT-442) emit honest, often-small scores — a
+# KL surprise (benford). For these, recall is the ORDERING "injected > clean + margin"
+# (the column is measurably more entropic than clean), NOT a point threshold: >0.3 is
+# the Goodhart trap when the real signal is a clean separation from near-zero clean
+# (see test_adjudication_recall). Rates (null_ratio, outlier_rate) keep the point
+# threshold — a 40% null rate is honestly 0.40, no tuning involved.
+ORDERING_DETECTORS = frozenset({"benford"})
+ORDERING_MARGIN = 0.05
+
 EVAL_ROOT = Path(__file__).parent.parent
 
 # Detectors that don't exist yet — always skip
@@ -40,7 +49,7 @@ NOT_IMPLEMENTED = frozenset(
 #     business_meaning, unit_entropy, temporal_entropy, outlier_rate, benford.
 #   - beginSessionWorkflow → terminal `session_detect` (DAT-408/DAT-403): the
 #     cross-table relationship detectors (relationship_entropy) plus the revived
-#     value layer — slice_variance, temporal_drift, dimensional_entropy,
+#     value layer — slice_variance, dimensional_entropy,
 #     derived_value (slicing → … → correlations, wired 2026-06-05; scoring
 #     verified after the DAT-405 loader head-fallback fix).
 #     join_path_determinism ALSO runs here and its precision fix is verified
@@ -60,7 +69,6 @@ CURRENT_SLICE_DETECTORS = frozenset(
         "outlier_rate",
         "benford",
         "relationship_entropy",
-        "temporal_drift",
         "dimensional_entropy",
         "derived_value",
         "slice_variance",
@@ -271,6 +279,17 @@ def test_injection_detected(
 
     clean = clean_pipeline_scores.get((table, column_lc, detector), 0.0)
     delta = score - clean
+
+    if detector in ORDERING_DETECTORS:
+        # Ordering grammar: injected must sit a clear margin above clean. The
+        # absolute score is honestly modest (a divergence), so a point threshold
+        # would wrongly read "missed" while the detector cleanly separates.
+        assert delta > ORDERING_MARGIN, (
+            f"{detector} scored {score:.3f} for {table}.{column} "
+            f"(clean={clean:.3f}, delta={delta:+.3f}) — not measurably above clean "
+            f"(margin={ORDERING_MARGIN})"
+        )
+        return
 
     assert score > DETECTION_THRESHOLD, (
         f"{detector} scored {score:.3f} for {table}.{column} "
