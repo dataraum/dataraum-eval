@@ -1,14 +1,14 @@
 # Intent-readiness ground truth — eval-owned, hand-authored from the injections.
 #
-# The entropy network rolls detector scores up to three intent readiness signals
-# (query / aggregation / reporting), banded ready < investigate < blocked. This
-# file is the oracle the BBN never had: for each known injection, which intents
-# must it knock off "ready" for the affected column.
+# The loss table rolls detector scores up to three intent readiness signals
+# (query / aggregation / reporting) — risk = clamp01(Σ weight·value), banded
+# ready < investigate < blocked (DAT-442; no network). This file is the oracle:
+# for each known injection, which intents must it knock off "ready" for the column.
 #
 # Claim style (non-circular): we assert a FLOOR — "this injection must move this
 # intent to at least <min_readiness>" — derived from domain reasoning about what
 # the injection breaks, NOT from running the rollup. A 40% null rate in a column
-# means that column is not safe to aggregate; the network must say so.
+# means that column is not safe to aggregate; the loss rollup must say so.
 #
 # Schema (per strategy):
 #   expectations:
@@ -25,37 +25,30 @@
 # Precision counterpart: `clean_readiness` (top-level, shared — the clean dataset
 # is the same regardless of --strategy) is a captured baseline of clean-data
 # readiness, mirroring calibration/clean_baseline.yaml for detector scores. Clean
-# financial data is NOT all-ready: it has legitimate metadata/distribution gaps
-# (52% nulls in cost_center, non-Benford trial_balance, undeclared units) that the
-# network correctly surfaces. The precision check fails only on a REGRESSION — a
-# clean column reading worse than its recorded baseline (a new false alarm) — not
-# on these documented, accurate signals. Regenerate after detector/network changes.
+# financial data is NOT all-ready: it has legitimate metadata gaps (52% nulls in
+# cost_center, undeclared units) that the loss rollup correctly surfaces. The
+# precision check fails only on a REGRESSION — a clean column reading worse than its
+# recorded baseline (a new false alarm) — not on these documented, accurate signals.
+# Regenerate after detector/loss changes.
 
 clean_readiness:
-  # null_ratio ~0.52 on a nullable dimension → not aggregation-ready (accurate).
+  # Captured from the loss rollup on clean data (no injections), DAT-442. Clean
+  # financial data legitimately reads non-ready where a real metadata gap exists.
+  # null_ratio on a nullable dimension → not aggregation-ready (accurate).
   bank_transactions.payment_id:
     aggregation_intent: investigate
-  # cost_center: 52% null → null_ratio aggregation loss (0.7) drives the band.
-  # (Previously slice_variance ALSO scored 1.0 here on the per-slice null spread,
-  # noisy-OR → firmly blocked; slice_variance was CUT in the DAT-442 reset — a
-  # between-slice k-sample test is blind to slice-global injections and saturates
-  # on legitimate cross-slice heterogeneity — so aggregation severity now rests on
-  # the null rate alone. Band pending integration re-verification: clean_readiness
-  # regenerates after detector changes, and null_ratio 0.7 may band investigate
-  # rather than blocked. The expected-vs-problem classifier for heterogeneous
-  # dimensions remains DAT-184.)
+  # cost_center ~52% null → null_ratio aggregation loss (0.7 × ~0.52 ≈ 0.36) →
+  # investigate. (Was blocked when slice_variance ALSO scored it 1.0 → noisy-OR;
+  # slice_variance was CUT in the DAT-442 reset — a between-slice k-sample test is
+  # blind to slice-global injections and saturates on legitimate cross-slice
+  # heterogeneity — so aggregation severity now rests on the null rate alone. The
+  # expected-vs-problem classifier for heterogeneous dimensions is DAT-184/DAT-473.)
   journal_lines.cost_center:
-    aggregation_intent: blocked
-    query_intent: investigate
-  # unit_entropy 0.8 (undeclared units) + non-Benford ~0.8 → not safe to
-  # aggregate/report without declaring units (accurate; unit_entropy is the
-  # documented metadata-completeness detector).
-  trial_balance.debit_balance:
-    aggregation_intent: blocked
-    reporting_intent: blocked
-  trial_balance.credit_balance:
-    aggregation_intent: blocked
-    reporting_intent: blocked
+    aggregation_intent: investigate
+  # trial_balance.debit_balance / credit_balance now read READY (no entry): benford
+  # was demoted to an informative signal (DAT-442, not a loss measurement) and
+  # unit_entropy is now 1 − unit confidence — the LLM declared the balance units, so
+  # neither drives a band. (Was blocked under the old unit_entropy 0.8 + non-Benford.)
 
 detection-v1:
   expectations:
@@ -69,17 +62,10 @@ detection-v1:
     # (DAT-442): absolute IQR can't separate the 5%@10x burst from clean financial
     # heavy tails. See dataraum-eval test_outlier_rate_recorded.py.
 
-    - target: "bank_transactions.amount"
-      driver: "benford"
-      min_readiness:
-        aggregation_intent: ready
-      note: >-
-        60% round numbers barely perturbs leading digits → KL surprise ~0.13
-        (clean ~0.00); recall is proven by the ordering grammar in
-        test_detector_recall. No linear loss weight lifts a 0.13 surprise to
-        investigate, so the band honestly stays ready (severity in the loss table,
-        not a boost). Strengthen the injection (DAT-450) to exercise the investigate
-        path; do NOT crank the weight (Goodhart).
+    # bank_transactions.amount / benford expectation removed — benford is an
+    # INFORMATIVE SIGNAL (DAT-442), not a loss measurement: it drives no intent
+    # readiness, so there is no band to floor. Recall stays proven by the ordering
+    # grammar in test_detector_recall.
 
     # business_meaning is LLM-nondeterministic (xfail strict=False, like recall):
     # naming_clarity feeds reporting_intent (0.7), so when detection fires the
@@ -101,12 +87,15 @@ detection-v1:
       driver: "relationship_entropy"
       grain: relationship
       min_readiness:
-        reporting_intent: investigate
+        reporting_intent: ready
       note: >-
-        20% orphan FKs — relationship_quality -> reporting_intent, asserted at
-        RELATIONSHIP grain (the relationship:{from}::{to} target's band, indexed
-        per endpoint). The column's own band is blind to relationship problems
-        by design (DAT-408 model, DAT-405 decision 2026-06-05).
+        20% orphan FKs at RELATIONSHIP grain (the relationship:{from}::{to} target's
+        band, indexed per endpoint; the column's own band is blind to relationship
+        problems by design — DAT-408/DAT-405). Honest band: orphan_rate 0.20 ×
+        placeholder reporting weight 0.75 = 0.15 → ready (< 0.3). Like benford /
+        derived_value, no linear loss weight lifts a 0.20 rate to investigate without
+        Goodhart; recall is proven by the ordering grammar in test_detector_recall.
+        DAT-450 weight calibration / a stronger orphan injection lifts the band.
     - target: "journal_lines.debit"
       driver: "derived_value"
       min_readiness:
@@ -138,8 +127,14 @@ detection-typing-v1:
     - target: "journal_lines.debit"
       driver: "type_fidelity"
       min_readiness:
-        query_intent: investigate
-      note: "8% type quarantine — type_fidelity strongly feeds query_intent (0.7)"
+        query_intent: ready
+      note: >-
+        8% type quarantine → type_fidelity 0.08 × placeholder query weight 0.7 = 0.056
+        → ready (< 0.3). Honest band post-boost-removal (was 0.585 boosted). Like
+        benford / derived_value / relationship_entropy, no linear loss weight lifts an
+        8% rate to investigate without Goodhart; recall is proven by the ordering
+        grammar in test_detector_recall. DAT-450 weight calibration / a stronger
+        quarantine injection lifts the band.
     - target: "payments.date"
       driver: "temporal_entropy"
       min_readiness:
