@@ -39,6 +39,13 @@ DETECTION_THRESHOLD = 0.3
 # max-aggregates the orphan rate with flat cardinality/semantic priors, so its ordering
 # needs the integration gate to confirm the orphan signal dominates the max — see note.)
 # A true rate that clears 0.3 honestly (null_ratio at 40%) keeps the point threshold.
+#
+# Two more boost-removed detectors are NOT yet in the asserted slice and so are absent
+# below: cross_table_consistency (validation phase not wired — see OUT_OF_SLICE_REASON;
+# its checks now emit the honest violation/discrepancy rate, e.g. 15% amount corruption
+# → ~0.10-0.15) and dimension_coverage (intrinsic-complexity, no injection — honest mean
+# NULL rate now). When validation wires in, add cross_table_consistency HERE so its
+# honest rate is judged by ordering, not the 0.3 point threshold.
 ORDERING_DETECTORS = frozenset(
     {"benford", "type_fidelity", "derived_value", "relationship_entropy"}
 )
