@@ -60,17 +60,38 @@ NOT_IMPLEMENTED = frozenset(
     }
 )
 
+# Detectors CUT in the DAT-442 reset. Their injection may remain in the strategy as
+# documented test data (the 1.35× drift, the 5%@10x outlier burst), but no live
+# detector asserts on it — the statistic provably can't separate the injection from
+# natural financial structure. Skip with the honest reason, not the "not yet wired"
+# default (which would wrongly imply the detector is coming back).
+CUT_DETECTORS: dict[str, str] = {
+    "temporal_drift": (
+        "CUT (DAT-442): distribution drift can't separate a shift from natural "
+        "volatility on additive flows; real drift → DAT-445 expected-variation model"
+    ),
+    "slice_variance": (
+        "CUT (DAT-442): a between-slice k-sample test is blind to the slice-global "
+        "injections the eval creates; see calibration/unit/test_slice_variance_recorded.py"
+    ),
+    "outlier_rate": (
+        "CUT (DAT-442): absolute single-column IQR/z-score can't separate an injected "
+        "burst from clean financial heavy tails; see calibration/unit/test_outlier_rate_recorded.py"
+    ),
+}
+
 # Detectors the current slice actually runs. Two workflows drive them:
 #   - addSourceWorkflow → terminal `detect` (DAT-394): the table-local +
 #     source-level detectors source-wide — type_fidelity, null_ratio,
-#     business_meaning, unit_entropy, temporal_entropy, outlier_rate, benford.
+#     business_meaning, unit_entropy, temporal_entropy, benford.
 #   - beginSessionWorkflow → terminal `session_detect` (DAT-408/DAT-403): the
 #     cross-table relationship detectors (relationship_entropy) plus the value
 #     layer — dimensional_entropy, derived_value (slicing → … → correlations,
 #     wired 2026-06-05; scoring verified after the DAT-405 loader head-fallback
-#     fix). (slice_variance was CUT in the DAT-442 reset — a between-slice
-#     k-sample test is blind to the slice-global injections the eval creates;
-#     see calibration/unit/test_slice_variance_recorded.py.)
+#     fix). (slice_variance AND outlier_rate were CUT in the DAT-442 reset — both
+#     hit the wall where the statistic can't separate the injection from natural
+#     financial structure; see calibration/unit/test_slice_variance_recorded.py
+#     and test_outlier_rate_recorded.py.)
 #     join_path_determinism ALSO runs here and its precision fix is verified
 #     (PR #207), but it has no recall fixture yet: add_duplicate_fk_paths tests
 #     redundancy the LLM dedupes, not genuine ambiguity — that needs two
@@ -85,7 +106,6 @@ CURRENT_SLICE_DETECTORS = frozenset(
         "business_meaning",
         "unit_entropy",
         "temporal_entropy",
-        "outlier_rate",
         "benford",
         "relationship_entropy",
         "dimensional_entropy",
@@ -224,6 +244,10 @@ def test_injection_detected(
     # Always skip unimplemented detectors
     if detector in NOT_IMPLEMENTED:
         pytest.skip(f"{detector} not implemented yet")
+
+    # Skip detectors cut in the DAT-442 reset (honest reason, not "not yet wired").
+    if detector in CUT_DETECTORS:
+        pytest.skip(CUT_DETECTORS[detector])
 
     # Skip detectors whose phase/detect-step the current workflow slice doesn't
     # run yet (DAT-370 add_source slice). Not a regression — the detector simply

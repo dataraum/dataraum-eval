@@ -83,11 +83,12 @@ All detectors except type-breaking. No `corrupt_types` or `corrupt_dates`
 injections, so all columns retain proper types. This allows temporal, dimensional,
 cross-table, and derived-value detectors to work without interference.
 
-Injections covering: null_ratio, outlier_rate, benford, unit_entropy,
+Injections covering: null_ratio, benford, unit_entropy,
 business_meaning, relationship_entropy, dimensional_entropy, derived_value,
-cross_table_consistency (3 validations). (temporal_drift + slice_variance were
-CUT in the DAT-442 reset — neither separates an injection from natural variation
-on real financial data; see entropy_eval_architecture.md.)
+cross_table_consistency (3 validations). (temporal_drift, slice_variance, and
+outlier_rate were CUT in the DAT-442 reset — none separates an injection from
+natural variation on real financial data; see entropy_eval_architecture.md. The
+drift + outlier injections stay as test data but no live detector asserts on them.)
 
 ### detection-typing-v1 (type-breaking)
 
@@ -115,14 +116,13 @@ stage-level detect steps that run the detectors their phases declare in
   child's typed table: `typing→type_fidelity`, `statistics→null_ratio`.
 - **`detect_source`** (after the reduce; `fix/dat-370-source-level-detectors`) —
   `semantic_per_column`'s detectors, source-wide: `business_meaning`,
-  `unit_entropy`, `temporal_entropy`, `outlier_rate`, `benford`.
+  `unit_entropy`, `temporal_entropy`, `benford`. (`outlier_rate` CUT, DAT-442.)
 
 Verified end-to-end through Temporal on the fix branch:
 
 | Strategy | Detector | Result |
 |---|---|---|
 | detection-v1 | `null_ratio` (journal_lines.cost_center) | ✅ pass |
-| detection-v1 | `outlier_rate` (journal_lines.credit) | ✅ pass |
 | detection-v1 | `benford` (bank_transactions.amount) | ✅ pass |
 | detection-v1 | `unit_entropy` (invoices.amount) | xfail (known-misaligned) |
 | detection-v1 | `business_meaning` (invoices.*) ×2 | xfail/xpass (LLM-nondeterministic) |
@@ -315,10 +315,10 @@ uv run pytest calibration/tools/ -v
 
 ### Calibration improvements
 - Update network.yaml with cross_table and business_cycle nodes + edges
-- dimension_coverage: add sqrt boost
 - unit_entropy: accept misalignment or create separate injection
-- Verify outlier_rate 1.0 scores on 5 columns (handoff concern: false positives?)
-- Verify temporal_drift 1.0 on bank_transactions.amount
+- (Resolved by the DAT-442 reset: the old outlier_rate / temporal_drift "verify 1.0
+  scores" items — both detectors CUT. The outlier_rate false-positive concern was
+  confirmed: linear IQR flags 25%+ of legitimate financial heavy-tail values.)
 
 ### Roadmap (see [Pipeline Redesign](https://linear.app/dataraum/project/pipeline-redesign-yaml-driven-dag-entropy-measurement-9c6b0d33aa5c))
 - Business pattern filter — LLM classification to distinguish expected patterns from real issues

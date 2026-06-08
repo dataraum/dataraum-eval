@@ -65,11 +65,9 @@ detection-v1:
         aggregation_intent: investigate
       note: "40% nulls — null_ratio strongly drives aggregation_safety (0.7)"
 
-    - target: "journal_lines.credit"
-      driver: "outlier_rate"
-      min_readiness:
-        aggregation_intent: investigate
-      note: "5% @ 10x — outlier_rate feeds aggregation_safety (0.6)"
+    # journal_lines.credit / outlier_rate expectation removed — outlier_rate CUT
+    # (DAT-442): absolute IQR can't separate the 5%@10x burst from clean financial
+    # heavy tails. See dataraum-eval test_outlier_rate_recorded.py.
 
     - target: "bank_transactions.amount"
       driver: "benford"
