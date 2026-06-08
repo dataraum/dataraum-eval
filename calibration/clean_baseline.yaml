@@ -1,12 +1,11 @@
 description: Clean data baseline scores. Scores above noise floor (0.15) are tracked
   here. Regenerate after detector changes.
 scores:
-  benford:bank_transactions.amount: 0.717
-  benford:invoices.amount: 0.746
-  benford:journal_lines.credit: 0.711
-  benford:payments.amount: 0.743
-  benford:trial_balance.credit_balance: 0.805
-  benford:trial_balance.debit_balance: 0.815
+  # benford entries removed — the DAT-442 second wave moved benford to KL-surprise
+  # (D_KL(observed ‖ Benford), squashed by 1−2^−D_KL). The old large-n chi-square
+  # scoring dumped every clean financial column at 0.71–0.82 (at n≈8000 the
+  # compliance test rejects any deviation, p<0.01); KL is intensive (per-observation),
+  # so clean columns now score ~0 — below the 0.15 noise floor, no longer tracked here.
   null_ratio:bank_transactions.payment_id: 0.53
   null_ratio:journal_lines.cost_center: 0.519
   # slice_variance + temporal_drift entries removed — both detectors were CUT in
