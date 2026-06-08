@@ -29,9 +29,19 @@ DETECTION_THRESHOLD = 0.3
 # KL surprise (benford). For these, recall is the ORDERING "injected > clean + margin"
 # (the column is measurably more entropic than clean), NOT a point threshold: >0.3 is
 # the Goodhart trap when the real signal is a clean separation from near-zero clean
-# (see test_adjudication_recall). Rates (null_ratio, outlier_rate) keep the point
-# threshold — a 40% null rate is honestly 0.40, no tuning involved.
-ORDERING_DETECTORS = frozenset({"benford"})
+# (see test_adjudication_recall).
+#
+# The DAT-442 boost-curve removals join the ordering grammar: type_fidelity (quarantine
+# rate), derived_value (formula-mismatch rate) and relationship_entropy (orphan rate)
+# now emit the HONEST rate — an 8% quarantine is 0.08, a 20% orphan rate 0.20 — which
+# sits below the old 0.3 point threshold the boosts were tuned to clear. Severity per
+# intent lives in loss.yaml; recall is the separation from clean. (relationship_entropy
+# max-aggregates the orphan rate with flat cardinality/semantic priors, so its ordering
+# needs the integration gate to confirm the orphan signal dominates the max — see note.)
+# A true rate that clears 0.3 honestly (null_ratio at 40%) keeps the point threshold.
+ORDERING_DETECTORS = frozenset(
+    {"benford", "type_fidelity", "derived_value", "relationship_entropy"}
+)
 ORDERING_MARGIN = 0.05
 
 EVAL_ROOT = Path(__file__).parent.parent
