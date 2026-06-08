@@ -83,9 +83,11 @@ All detectors except type-breaking. No `corrupt_types` or `corrupt_dates`
 injections, so all columns retain proper types. This allows temporal, dimensional,
 cross-table, and derived-value detectors to work without interference.
 
-14 injections covering: null_ratio, outlier_rate, benford, temporal_drift,
-unit_entropy, business_meaning, relationship_entropy, dimensional_entropy,
-derived_value, cross_table_consistency (3 validations), slice_variance.
+Injections covering: null_ratio, outlier_rate, benford, unit_entropy,
+business_meaning, relationship_entropy, dimensional_entropy, derived_value,
+cross_table_consistency (3 validations). (temporal_drift + slice_variance were
+CUT in the DAT-442 reset — neither separates an injection from natural variation
+on real financial data; see entropy_eval_architecture.md.)
 
 ### detection-typing-v1 (type-breaking)
 

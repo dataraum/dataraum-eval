@@ -48,10 +48,12 @@ NOT_IMPLEMENTED = frozenset(
 #     source-level detectors source-wide — type_fidelity, null_ratio,
 #     business_meaning, unit_entropy, temporal_entropy, outlier_rate, benford.
 #   - beginSessionWorkflow → terminal `session_detect` (DAT-408/DAT-403): the
-#     cross-table relationship detectors (relationship_entropy) plus the revived
-#     value layer — slice_variance, dimensional_entropy,
-#     derived_value (slicing → … → correlations, wired 2026-06-05; scoring
-#     verified after the DAT-405 loader head-fallback fix).
+#     cross-table relationship detectors (relationship_entropy) plus the value
+#     layer — dimensional_entropy, derived_value (slicing → … → correlations,
+#     wired 2026-06-05; scoring verified after the DAT-405 loader head-fallback
+#     fix). (slice_variance was CUT in the DAT-442 reset — a between-slice
+#     k-sample test is blind to the slice-global injections the eval creates;
+#     see calibration/unit/test_slice_variance_recorded.py.)
 #     join_path_determinism ALSO runs here and its precision fix is verified
 #     (PR #207), but it has no recall fixture yet: add_duplicate_fk_paths tests
 #     redundancy the LLM dedupes, not genuine ambiguity — that needs two
@@ -71,7 +73,6 @@ CURRENT_SLICE_DETECTORS = frozenset(
         "relationship_entropy",
         "dimensional_entropy",
         "derived_value",
-        "slice_variance",
     }
 )
 

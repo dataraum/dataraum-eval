@@ -9,9 +9,7 @@ scores:
   benford:trial_balance.debit_balance: 0.815
   null_ratio:bank_transactions.payment_id: 0.53
   null_ratio:journal_lines.cost_center: 0.519
-  slice_variance:invoices.payment_terms: 0.375
-  slice_variance:invoices.status: 0.5
-  slice_variance:journal_lines.cost_center: 1.0
-  slice_variance:payments.method: 0.375
-  temporal_drift:trial_balance.credit_balance: 0.447
-  temporal_drift:trial_balance.debit_balance: 0.535
+  # slice_variance + temporal_drift entries removed — both detectors were CUT in
+  # the DAT-442 reset, so they no longer produce clean scores. (slice_variance had
+  # fired only on non-injected columns: distinct-ratio artifacts on categorical
+  # dimensions + the per-slice null spread on cost_center.)

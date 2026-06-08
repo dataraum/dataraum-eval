@@ -6,9 +6,14 @@ description: >
   proper types. This allows temporal, dimensional, cross-table, and
   derived-value detectors to work without interference.
 
-# Detectors tested: null_ratio, outlier_rate, benford, temporal_drift,
-# unit_entropy, business_meaning, relationship_entropy, dimensional_entropy,
-# derived_value, cross_table_consistency, slice_variance
+# Detectors tested: null_ratio, outlier_rate, benford, unit_entropy,
+# business_meaning, relationship_entropy, dimensional_entropy, derived_value,
+# cross_table_consistency
+#
+# CUT (DAT-442 reset): temporal_drift + slice_variance — neither separates an
+# injection from natural variation on real financial data. The 1.35× drift
+# injection on bank_transactions.amount stays as test data for DAT-445's
+# expected-variation model, but no live detector asserts on it.
 #
 # NOT tested here (see detection-typing-v1):
 # type_fidelity, temporal_entropy

@@ -35,13 +35,15 @@ clean_readiness:
   # null_ratio ~0.52 on a nullable dimension → not aggregation-ready (accurate).
   bank_transactions.payment_id:
     aggregation_intent: investigate
-  # cost_center: 52% null AND the null rate varies sharply per slice — the
-  # revived slice_variance (DAT-403/405) scores 1.0 on top of null_ratio 0.52,
-  # noisy-OR → blocked for aggregation, investigate for query. Accepted as
-  # accurate (hybrid decision 2026-06-05): the column genuinely is heterogeneous;
-  # the long-term classifier for expected-vs-problem patterns is the
-  # business-pattern filter — DAT-184 (backlog; DAT-186's "suppress
-  # slice_variance on structural dimensions" was deduped into it).
+  # cost_center: 52% null → null_ratio aggregation loss (0.7) drives the band.
+  # (Previously slice_variance ALSO scored 1.0 here on the per-slice null spread,
+  # noisy-OR → firmly blocked; slice_variance was CUT in the DAT-442 reset — a
+  # between-slice k-sample test is blind to slice-global injections and saturates
+  # on legitimate cross-slice heterogeneity — so aggregation severity now rests on
+  # the null rate alone. Band pending integration re-verification: clean_readiness
+  # regenerates after detector changes, and null_ratio 0.7 may band investigate
+  # rather than blocked. The expected-vs-problem classifier for heterogeneous
+  # dimensions remains DAT-184.)
   journal_lines.cost_center:
     aggregation_intent: blocked
     query_intent: investigate

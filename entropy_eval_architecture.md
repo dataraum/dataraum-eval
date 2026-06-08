@@ -60,7 +60,7 @@ holds, for both a **clean** and an **injected** session:
 - raw per-period numeric **values** (for drift / KS) — from the DuckDB slice tables
 - **quarantine tokens** + counts (for null_semantics) — from the DuckDB quarantine tables
 - leading-digit **distributions** / numeric samples (for benford)
-- per-slice **statistical profiles** (for slice_variance) — from Postgres
+- per-slice **statistical profiles** (for dimensional_entropy) — from Postgres
 - **witness distributions** (for pooling C/U) — from `claim_witnesses`
 - **semantic annotations** (units, roles, null_tokens)
 
@@ -99,8 +99,8 @@ reframes measurements that only ever produced noise.
 | **unit_entropy** | undeclared/ambiguous units → aggregation correctness | **yes** | declaration completeness → **pooling** (DAT-428) | declare the unit |
 | **temporal_entropy** | broken time-role (unparseable dates) → time filtering | **yes** | type/role mismatch | re-type |
 | **cross_table_consistency** | cross-table reconciliation breaks → correctness | **yes** | orphan / violation **rate** | fix / teach |
-| **temporal_drift** | distribution shifted over time | **conditional** — meaningful only for **stationary / point-in-time** columns; transaction **flows** naturally vary (clean KS ≈ 0.5), so absolute drift tells nothing. Reframe as drift vs the column's **expected** variation, or scope to balances — else cut. | two-sample **KS** / **PSI** vs an **expected-variation reference** | document expected seasonality |
-| **slice_variance** | column behaves differently across slices | **conditional** — what decision? "don't aggregate across heterogeneous slices." If that isn't actionable here, cut. | **Kruskal–Wallis** / ANOVA **η²** | document segmentation |
+| **temporal_drift** | distribution shifted over time | **CUT** (DAT-442 reset) — meaningful only for **stationary / point-in-time** columns; transaction **flows** naturally vary (clean KS ≈ injected ≈ 0.53), so absolute drift can't separate a shift from noise. Real drift → DAT-445's **expected-variation** model. Proven: `calibration/unit/test_drift_recorded.py`. | two-sample **KS** / **PSI** vs an **expected-variation reference** | document expected seasonality |
+| **slice_variance** | column behaves differently across slices | **CUT** (DAT-442 reset) — a between-slice k-sample test is structurally **blind to the slice-GLOBAL injections** the eval creates (Δη² ≈ 0.00 vs clean) and **saturates on legitimate cross-slice heterogeneity** of real financial data (clean η² ≈ 0.78). No grounded statistic rescues it; the old max-of-spreads fired only on non-injected columns. The one defensible sliver (null-rate-across-slices) is a proportions test (**Cramér's V**), deferred to DAT-184 + a slice-conditional-null injection. Proven: `calibration/unit/test_slice_variance_recorded.py`. | **Kruskal–Wallis** / ANOVA **η²** (insufficient) | document segmentation |
 | **dimensional_entropy** | cross-column dependency (mutual exclusivity, …) | **conditional** — context for "these columns aren't independent." Earns it only if a downstream decision uses it. | normalized **mutual information** | document the rule |
 | **dimension_coverage** | fact-table dimension completeness | **review** | coverage ratio | teach |
 | **business_cycle_health** | business-cycle anomaly | **review** | (define) | teach |
