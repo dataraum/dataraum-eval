@@ -87,6 +87,23 @@ def column_values(
     return out
 
 
+def row_records(
+    conn: sqlite3.Connection,
+    strategy: str,
+    source: str,
+) -> list[dict[str, str]]:
+    """All raw rows for a (strategy, source) as parsed dicts, row order preserved.
+
+    For ALIGNED multi-column reads (cross-column dependency / mutual information),
+    where per-column loaders would misalign on independently-skipped empty cells.
+    """
+    rows = conn.execute(
+        "SELECT row_json FROM raw_values WHERE strategy=? AND source=?",
+        (strategy, source),
+    ).fetchall()
+    return [json.loads(row_json) for (row_json,) in rows]
+
+
 def grouped_values(
     conn: sqlite3.Connection,
     strategy: str,
