@@ -125,22 +125,19 @@ def _temporal_behavior_conflict(session_id: str, table_substr: str, column: str)
 
 
 @pytest.mark.llm
-@pytest.mark.xfail(
-    reason="needs the LLM to CLAIM flow on trial_balance.debit_balance against the "
-    "account_balance=point_in_time prior; it may read stock from the 'balance' name and "
-    "agree, leaving nothing to close — nondeterministic, like business_meaning",
-    strict=False,
-)
 def test_teach_concept_property_drops_temporal_conflict() -> None:
-    """Teaching the bound concept's behaviour to match the data closes temporal_behavior C.
+    """concept_property teach-closure HARNESS for temporal_behavior — awaiting a mislabel corpus.
 
-    ``trial_balance.debit_balance`` is a per-period FLOW named like a balance, so it binds
-    to the ``account_balance`` concept (point_in_time → stock prior) while the LLM, reading
-    the periodic movement, claims flow → the witnesses disagree (C high). Teaching
-    ``account_balance.temporal_behavior=additive`` flips the ontology_prior to flow; on the
-    re-run it agrees with the LLM claim and the pooled conflict collapses. Signed-delta
-    grammar (ADR-0009), never a point threshold. (The teach is workspace-scoped to this
-    eval run; it also re-labels ``balance_sheet.ending_balance``, which we do not assert on.)
+    The teach mechanism (``teach_concept_property_and_rerun``: a workspace-scoped
+    ``concept_property`` overlay flips a concept's ``temporal_behavior``, the re-run's
+    ontology_prior leans the taught way) is wired and exercised. But it can only CLOSE a
+    conflict where the prior and the LLM claim DISAGREE — and curated finance data produces
+    none (e2e 2026-06-09: on ``trial_balance.debit_balance`` BOTH witnesses name-anchor to
+    stock → C≈0, nothing to close; and teaching ``account_balance→additive`` would INDUCE a
+    conflict, not close one). A real two-witness teach-closure needs a prior≠claim mislabel
+    column (a column the LLM reads correctly while its concept's declared behaviour disagrees)
+    — deferred to the stock/flow mislabel corpus (DAT-450) / the reality witness (DAT-491).
+    Until then this skips when no baseline conflict exists, keeping the harness wired.
     """
     if not (DATA_DIR / _TB_STRATEGY).exists():
         pytest.skip(
@@ -157,8 +154,8 @@ def test_teach_concept_property_drops_temporal_conflict() -> None:
     before = _temporal_behavior_conflict(run.session_id, _TB_TABLE, _TB_COLUMN)
     if before is None or before <= _DROP_MARGIN:
         pytest.skip(
-            f"temporal_behavior surfaced no conflict on {_TB_TABLE}.{_TB_COLUMN} in the "
-            "baseline (the LLM agreed with the prior) — nothing to close"
+            f"no prior≠claim conflict on {_TB_TABLE}.{_TB_COLUMN} (both witnesses name-anchor "
+            "to stock — the DAT-491 boundary) → nothing to close; needs a mislabel corpus"
         )
 
     runner_mod.teach_concept_property_and_rerun(run, concept=_TB_CONCEPT, value="additive")

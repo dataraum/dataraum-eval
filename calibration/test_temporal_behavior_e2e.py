@@ -28,15 +28,21 @@ _MARGIN = 0.05
 
 @pytest.mark.llm
 @pytest.mark.xfail(
-    reason="recall needs the LLM to CLAIM flow on debit_balance against the "
-    "account_balance=point_in_time prior; it may read stock from the 'balance' name and "
-    "agree with the prior — nondeterministic, like business_meaning",
+    reason="DAT-491 BOUNDARY (proven by e2e 2026-06-09): debit_balance is a per-period FLOW, "
+    "but BOTH witnesses name-anchor to stock — the account_balance prior AND the LLM reading "
+    "the 'balance' name (live: prior=point_in_time, llm_claim=stock, C≈0.003). A two-witness "
+    "model only fires on prior≠claim, so it is BLIND here; only the events→measure reality "
+    "witness (DAT-491) can surface it. strict=False so an occasional LLM flow-read XPASSes.",
     strict=False,
 )
 def test_recall_debit_balance_flow_named_balance_fires(
     pipeline_scores: dict[tuple[str, str, str], float],
 ) -> None:
-    """trial_balance.debit_balance: a per-period flow whose prior says stock → conflict."""
+    """trial_balance.debit_balance: a per-period flow both witnesses name-read as stock.
+
+    The two-witness model's blind spot — see the xfail reason. Kept as the standing marker
+    for the DAT-491 reality witness; precision (below) is the real green signal for the core.
+    """
     recall = pipeline_scores.get(_RECALL)
     precision = pipeline_scores.get(_PRECISION, 0.0)
     assert recall is not None, "temporal_behavior did not score trial_balance.debit_balance"
