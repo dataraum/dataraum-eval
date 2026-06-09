@@ -31,6 +31,10 @@ _DROP_MARGIN = 0.02  # anti-noise floor on the signed delta, NOT a point thresho
 _UNIT_STRATEGY = "detection-unit-v1"
 _UNIT_TABLE, _UNIT_COLUMN, _TAUGHT_UNIT = "bank_transactions", "amount", "EUR"
 
+_TB_STRATEGY = "detection-v1"
+_TB_TABLE, _TB_COLUMN = "trial_balance", "debit_balance"
+_TB_CONCEPT = "account_balance"  # the concept debit_balance binds to (point_in_time prior)
+
 
 def _null_semantics_conflict(session_id: str, table_substr: str, column: str) -> float | None:
     """Head-resolved pooled conflict C for a column's null_semantics object."""
@@ -61,7 +65,9 @@ def _null_semantics_conflict(session_id: str, table_substr: str, column: str) ->
 def test_teach_null_value_drops_adjudication_conflict() -> None:
     """A null_value teach on the injected sentinels collapses the column's conflict C."""
     if not (DATA_DIR / _STRATEGY).exists():
-        pytest.skip(f"no data for {_STRATEGY}; run `python -m calibration.runner {_STRATEGY}` first")
+        pytest.skip(
+            f"no data for {_STRATEGY}; run `python -m calibration.runner {_STRATEGY}` first"
+        )
 
     sidecar = runner_mod.sidecar_path(_STRATEGY)
     run = (
@@ -87,6 +93,80 @@ def test_teach_null_value_drops_adjudication_conflict() -> None:
     assert after is not None, "null_semantics object vanished after the teach re-run"
     # Teach-closure: the taught vocabulary makes the vocabulary witness agree, so the
     # pooled conflict drops. Signed-delta grammar (ADR-0009), never a point threshold.
+    assert after < before - _DROP_MARGIN, (
+        f"teach did not close the conflict: C {before:.3f} -> {after:.3f} "
+        f"(delta {after - before:+.3f}, expected drop > {_DROP_MARGIN})"
+    )
+
+
+def _temporal_behavior_conflict(session_id: str, table_substr: str, column: str) -> float | None:
+    """Head-resolved pooled conflict C for a column's temporal_behavior object."""
+    runner_mod.bootstrap_engine()
+    mgr = ConnectionManager(ConnectionConfig.for_workspace())
+    mgr.initialize()
+    try:
+        with mgr.session_scope() as s:
+            read_schema = read_schema_name_for(
+                str(s.execute(text("SELECT current_schema()")).scalar())
+            )
+            rows = s.execute(
+                text(
+                    f'SELECT target, score FROM "{read_schema}".current_entropy_objects '
+                    "WHERE session_id = :sid AND detector_id = 'temporal_behavior'"
+                ),
+                {"sid": session_id},
+            ).all()
+    finally:
+        mgr.close()
+    for r in rows:
+        if table_substr in r.target and r.target.endswith("." + column):
+            return float(r.score)
+    return None
+
+
+@pytest.mark.llm
+@pytest.mark.xfail(
+    reason="needs the LLM to CLAIM flow on trial_balance.debit_balance against the "
+    "account_balance=point_in_time prior; it may read stock from the 'balance' name and "
+    "agree, leaving nothing to close — nondeterministic, like business_meaning",
+    strict=False,
+)
+def test_teach_concept_property_drops_temporal_conflict() -> None:
+    """Teaching the bound concept's behaviour to match the data closes temporal_behavior C.
+
+    ``trial_balance.debit_balance`` is a per-period FLOW named like a balance, so it binds
+    to the ``account_balance`` concept (point_in_time → stock prior) while the LLM, reading
+    the periodic movement, claims flow → the witnesses disagree (C high). Teaching
+    ``account_balance.temporal_behavior=additive`` flips the ontology_prior to flow; on the
+    re-run it agrees with the LLM claim and the pooled conflict collapses. Signed-delta
+    grammar (ADR-0009), never a point threshold. (The teach is workspace-scoped to this
+    eval run; it also re-labels ``balance_sheet.ending_balance``, which we do not assert on.)
+    """
+    if not (DATA_DIR / _TB_STRATEGY).exists():
+        pytest.skip(
+            f"no data for {_TB_STRATEGY}; run `python -m calibration.runner {_TB_STRATEGY}` first"
+        )
+
+    sidecar = runner_mod.sidecar_path(_TB_STRATEGY)
+    run = (
+        runner_mod.CalibrationRun.from_json(sidecar.read_text())
+        if sidecar.exists()
+        else runner_mod.run_pipeline(_TB_STRATEGY)
+    )
+
+    before = _temporal_behavior_conflict(run.session_id, _TB_TABLE, _TB_COLUMN)
+    if before is None or before <= _DROP_MARGIN:
+        pytest.skip(
+            f"temporal_behavior surfaced no conflict on {_TB_TABLE}.{_TB_COLUMN} in the "
+            "baseline (the LLM agreed with the prior) — nothing to close"
+        )
+
+    runner_mod.teach_concept_property_and_rerun(run, concept=_TB_CONCEPT, value="additive")
+
+    after = _temporal_behavior_conflict(run.session_id, _TB_TABLE, _TB_COLUMN)
+    assert after is not None, "temporal_behavior object vanished after the teach re-run"
+    # Teach-closure: the taught concept behaviour makes the ontology_prior agree with the
+    # LLM claim, so the pooled conflict drops. Signed-delta grammar, never a point threshold.
     assert after < before - _DROP_MARGIN, (
         f"teach did not close the conflict: C {before:.3f} -> {after:.3f} "
         f"(delta {after - before:+.3f}, expected drop > {_DROP_MARGIN})"
@@ -133,7 +213,9 @@ def test_teach_unit_lands_declaration() -> None:
     TestApplyUnitOverrides); this is the end-to-end confirmation through real Temporal.
     """
     if not (DATA_DIR / _UNIT_STRATEGY).exists():
-        pytest.skip(f"no data for {_UNIT_STRATEGY}; run `python -m calibration.runner {_UNIT_STRATEGY}`")
+        pytest.skip(
+            f"no data for {_UNIT_STRATEGY}; run `python -m calibration.runner {_UNIT_STRATEGY}`"
+        )
 
     sidecar = runner_mod.sidecar_path(_UNIT_STRATEGY)
     run = (
@@ -151,9 +233,7 @@ def test_teach_unit_lands_declaration() -> None:
         "pick a column with no declared unit so the teach has something to land"
     )
 
-    runner_mod.teach_unit_and_rerun(
-        run, table=_UNIT_TABLE, column=_UNIT_COLUMN, unit=_TAUGHT_UNIT
-    )
+    runner_mod.teach_unit_and_rerun(run, table=_UNIT_TABLE, column=_UNIT_COLUMN, unit=_TAUGHT_UNIT)
 
     after = _unit_entropy_detected_unit(run.session_id, _UNIT_TABLE, _UNIT_COLUMN)
     assert after is not None, "unit_entropy object vanished after the teach re-run"

@@ -98,7 +98,9 @@ def strategy_path(strategy: str) -> Path:
 
 # Data-file suffixes a source loads. entropy_map.yaml / ground_truth.yaml are
 # eval metadata (not source objects), so .yaml is excluded.
-_DATA_SUFFIXES = frozenset({".csv", ".tsv", ".parquet", ".json", ".jsonl", ".xlsx", ".db", ".sqlite"})
+_DATA_SUFFIXES = frozenset(
+    {".csv", ".tsv", ".parquet", ".json", ".jsonl", ".xlsx", ".db", ".sqlite"}
+)
 
 # Declared Source.source_type per suffix. Import dispatches file loads per-URI
 # by suffix anyway (only db_recipe consults source_type), so this is metadata,
@@ -482,7 +484,9 @@ def teach_null_value_and_rerun(
 
     output_dir = OUTPUT_DIR / run.strategy
     output_dir.mkdir(parents=True, exist_ok=True)
-    print(f"[eval] teach null_value {values} (category={category}) → re-run session {run.session_id}")
+    print(
+        f"[eval] teach null_value {values} (category={category}) → re-run session {run.session_id}"
+    )
     asyncio.run(
         _drive_pipeline(
             workspace_id=workspace_id,
@@ -545,6 +549,71 @@ def teach_unit_and_rerun(
             session_id=run.session_id,
             vertical=vertical,
             log_path=output_dir / "worker_teach_unit_rerun.log",
+        )
+    )
+    return run
+
+
+def teach_concept_property_and_rerun(
+    run: CalibrationRun,
+    *,
+    concept: str,
+    value: str,
+    prop: str = "temporal_behavior",
+    vertical: str = "finance",
+) -> CalibrationRun:
+    """Teach a concept-property override, then RE-RUN the pipeline for the SAME session.
+
+    The ontology-property teach (DAT-445 teach-closure for temporal_behavior). Writes
+    one workspace-scoped ``concept_property`` ConfigOverlay row
+    ``{vertical, concept, property, value}``, then re-drives addSource+beginSession
+    under the same ``session_id``. On the re-run ``_apply_concept_property`` patches the
+    named concept's ``property`` in ``verticals/<vertical>/ontology.yaml`` and
+    ``OntologyLoader`` folds it in, so the ``ontology_prior`` witness now leans the
+    taught way: when the taught value matches the LLM's independent stock/flow claim,
+    the pooled ``temporal_behavior`` conflict collapses to ε and the re-run's promoted
+    head returns the dropped score. ``value`` is the ontology vocabulary
+    (``point_in_time`` / ``additive``), NOT the claim vocabulary.
+    """
+    bootstrap_engine()
+
+    from dataraum.core.connections import ConnectionConfig, ConnectionManager
+    from dataraum.server.workspace import get_active_workspace_id
+    from dataraum.storage.overlay_models import ConfigOverlay
+
+    workspace_id = get_active_workspace_id()
+    workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
+    workspace_mgr.initialize()
+    try:
+        with workspace_mgr.session_scope() as s:
+            s.add(
+                ConfigOverlay(
+                    type="concept_property",
+                    payload={
+                        "vertical": vertical,
+                        "concept": concept,
+                        "property": prop,
+                        "value": value,
+                    },
+                    session_id=None,  # concept_property patches the vertical ontology
+                )
+            )
+    finally:
+        workspace_mgr.close()
+
+    output_dir = OUTPUT_DIR / run.strategy
+    output_dir.mkdir(parents=True, exist_ok=True)
+    print(
+        f"[eval] teach concept_property {vertical}.{concept}.{prop}={value} "
+        f"→ re-run session {run.session_id}"
+    )
+    asyncio.run(
+        _drive_pipeline(
+            workspace_id=workspace_id,
+            source_ids=list(run.source_ids),
+            session_id=run.session_id,
+            vertical=vertical,
+            log_path=output_dir / "worker_teach_concept_property_rerun.log",
         )
     )
     return run
