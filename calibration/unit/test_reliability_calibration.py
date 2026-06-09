@@ -33,13 +33,18 @@ from dataraum.entropy.measurements.null_semantics import (
     DEFAULT_RELIABILITIES,
     measure_null_semantics,
 )
-from testdata.entropy.families import CURATED_VOCAB, sample_null_token_family
+from testdata.entropy.families import (
+    CURATED_VOCAB,
+    NullTokenFamilyParams,
+    sample_null_token_family,
+)
 
 from calibration.reliability_rig import (
     LabeledToken,
     calibrate,
     collect_adjudications,
     estimate_reliabilities,
+    per_class_accuracy,
     pooled_brier_with,
     realize_population,
     reconstruct_inputs,
@@ -103,6 +108,21 @@ def test_conflict_rises_monotonically_with_corruption_rate() -> None:
     sweep = [_conflict_for_marker_count(c) for c in (5, 20, 50, 100, 250)]
     assert sweep == sorted(sweep)  # non-decreasing: more corruption → more entropy
     assert sweep[-1] - sweep[0] > 0.05  # and the movement is real, not flat noise
+
+
+def test_stress_family_exposes_quarantine_specificity() -> None:
+    """The decoy-clustering stress family closes the sensitivity-only honesty gap.
+
+    With DISTINCT decoys, quarantine_clustering abstains on every is-value token, so
+    its false-positive rate is structurally unmeasured. With CLUSTERED decoys it
+    finally faces a repeated genuine value, votes is-null on it (it scores any
+    cluster), and is wrong — so its specificity is now measured and is far below its
+    sensitivity (it is a clustering detector, not a marker/genuine discriminator)."""
+    stress = NullTokenFamilyParams(decoy_cluster_size=(2, 4))
+    pc = per_class_accuracy(witness_votes(collect_adjudications(range(0, 40), params=stress)))
+    quarantine = pc["quarantine_clustering"]
+    assert "specificity" in quarantine  # it NOW opines on is-value (clustered) tokens
+    assert quarantine["specificity"] < quarantine["sensitivity"]  # the FP rate is real
 
 
 @pytest.mark.parametrize("resolved_type", ["BIGINT", "DECIMAL(18,2)", "DOUBLE"])

@@ -83,14 +83,27 @@ def realize_population(sample: NullTokenFamilySample, n_rows: int = _DEFAULT_ROW
 
     marker_hits = Counter(place.choice(sample.markers) for _ in range(marker_count))
     tokens = [LabeledToken(tok, n, True) for tok, n in marker_hits.items()]
-
     seen = set(marker_hits)
-    for _ in range(decoy_count):
-        decoy = mint_decoy(place, sample.decoy_style)
-        if decoy in seen:
-            continue
-        seen.add(decoy)
-        tokens.append(LabeledToken(decoy, 1, False))
+
+    if sample.decoy_cluster_size > 0:
+        # Stress mode: decoys are a small repeated set → they CLUSTER like markers,
+        # so quarantine_clustering (which votes is-null on any cluster) now faces a
+        # clustered is-value and its false-positive rate enters the estimate.
+        pool: list[str] = []
+        while len(pool) < sample.decoy_cluster_size:
+            decoy = mint_decoy(place, sample.decoy_style)
+            if decoy not in seen and decoy not in pool:
+                pool.append(decoy)
+        decoy_hits = Counter(place.choice(pool) for _ in range(decoy_count))
+        tokens += [LabeledToken(decoy, n, False) for decoy, n in decoy_hits.items()]
+    else:
+        # Normal mode: decoys are minted DISTINCT (count 1) → they smear.
+        for _ in range(decoy_count):
+            decoy = mint_decoy(place, sample.decoy_style)
+            if decoy in seen:
+                continue
+            seen.add(decoy)
+            tokens.append(LabeledToken(decoy, 1, False))
     return tokens
 
 
@@ -194,6 +207,33 @@ def estimate_reliabilities(
         witness_id: (alpha0 + correct) / (alpha0 + beta0 + n)
         for witness_id, (correct, n) in tally.items()
     }
+
+
+def per_class_accuracy(votes: Iterable[WitnessVote]) -> dict[str, dict[str, float]]:
+    """Per-witness {sensitivity (on is-null), specificity (on is-value)} over opinions.
+
+    A diagnostic that exposes WHICH class a witness is unreliable on — a witness can
+    look strong on plain accuracy yet have ~0 specificity (votes is-null on every
+    cluster). Classes the witness never opines on are omitted. Not the shipped r;
+    the shipped r is plain accuracy over the realistic corpus.
+    """
+    tally: dict[str, dict[bool, list[int]]] = defaultdict(lambda: {True: [0, 0], False: [0, 0]})
+    for v in votes:
+        if not v.has_opinion:
+            continue
+        cell = tally[v.witness_id][v.label_is_null]
+        cell[1] += 1
+        if v.correct:
+            cell[0] += 1
+    out: dict[str, dict[str, float]] = {}
+    for witness_id, classes in tally.items():
+        d: dict[str, float] = {}
+        if classes[True][1]:
+            d["sensitivity"] = classes[True][0] / classes[True][1]
+        if classes[False][1]:
+            d["specificity"] = classes[False][0] / classes[False][1]
+        out[witness_id] = d
+    return out
 
 
 def opinion_counts(votes: Iterable[WitnessVote]) -> dict[str, int]:
