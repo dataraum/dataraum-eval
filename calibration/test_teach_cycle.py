@@ -31,6 +31,7 @@ _DROP_MARGIN = 0.02  # anti-noise floor on the signed delta, NOT a point thresho
 
 def _null_semantics_conflict(session_id: str, table_substr: str, column: str) -> float | None:
     """Head-resolved pooled conflict C for a column's null_semantics object."""
+    runner_mod.bootstrap_engine()  # PG/Temporal env + workspace schema (idempotent)
     mgr = ConnectionManager(ConnectionConfig.for_workspace())
     mgr.initialize()
     try:
