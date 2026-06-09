@@ -441,6 +441,60 @@ def run_pipeline(
     return run
 
 
+def teach_null_value_and_rerun(
+    run: CalibrationRun,
+    *,
+    values: list[str],
+    category: str = "missing_indicators",
+    vertical: str | None = "finance",
+) -> CalibrationRun:
+    """Teach ``values`` as null markers, then RE-RUN the pipeline for the SAME session.
+
+    The DAT-447 teach-closure primitive. Writes one workspace-scoped ``null_value``
+    ConfigOverlay row per value, then re-drives addSource+beginSession under the same
+    ``session_id``. On the re-run the null_semantics vocabulary witness HITS the taught
+    sentinels instead of dissenting, so the pooled conflict on those tokens collapses;
+    the re-run promotes a fresh head, so the head-resolved read surface returns the
+    dropped score. (Temporal's default ALLOW_DUPLICATE permits re-running a completed
+    workflow id with a fresh run_id.)
+    """
+    bootstrap_engine()
+
+    from dataraum.core.connections import ConnectionConfig, ConnectionManager
+    from dataraum.server.workspace import get_active_workspace_id
+    from dataraum.storage.overlay_models import ConfigOverlay
+
+    workspace_id = get_active_workspace_id()
+    workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
+    workspace_mgr.initialize()
+    try:
+        with workspace_mgr.session_scope() as s:
+            for value in values:
+                s.add(
+                    ConfigOverlay(
+                        type="null_value",
+                        payload={"category": category, "value": value},
+                        session_id=None,  # null_value is workspace-scoped
+                    )
+                )
+    finally:
+        workspace_mgr.close()
+
+    output_dir = OUTPUT_DIR / run.strategy
+    output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"[eval] teach null_value {values} (category={category}) → re-run session {run.session_id}")
+    asyncio.run(
+        _drive_pipeline(
+            workspace_id=workspace_id,
+            source_ids=list(run.source_ids),
+            session_id=run.session_id,
+            vertical=vertical,
+            log_path=output_dir / "worker_teach_rerun.log",
+        )
+    )
+    return run
+
+
 def calibration_run(
     strategy: str,
     *,
