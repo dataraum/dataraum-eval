@@ -1,0 +1,37 @@
+name: detection-unit-v1
+level: high
+description: >
+  Unit-consistency adjudication calibration (ADR-0009 / DAT-428 / DAT-450). Injects
+  the generative mixed-units (SCALE) FAMILY into numeric monetary columns: a recorded
+  seed samples a scale factor (a clean power of ten — kEUR among EUR) and a mix ratio
+  (15–40% of rows), then multiplies that fraction of the column's values by the
+  factor. The values now span two log-magnitude modes under one (still-declared) unit
+  — the case the unit_consistency detector adjudicates by pooling a magnitude-modality
+  witness (log10|v| bimodality, Pearson's coefficient) against the declared-unit
+  witness. Magnitude reads MIXED while the declared unit insists SINGLE → conflict.
+
+  Deliberately a SCALE mix, not a ×1.1 currency mix: a 10% shift is undetectable from
+  values (the old unit_entropy misalignment). Generative, not memorized — different
+  seeds vary scale factor + ratio, the recorded seed reproduces exactly (DAT-450 AC1).
+  Graded by ORDERING (injected conflict > clean baseline by a margin), never a point
+  threshold (ADR-0009 eval grammar).
+
+# Detector tested: unit_consistency (adjudication; ordering/delta grammar, NOT a
+# point threshold — see calibration/test_adjudication_recall.py)
+
+injections:
+  - injector: inject_scale_mix
+    table: invoices
+    detector_id: unit_consistency
+    params:
+      col: amount
+      seed: 20260610
+      severity: high
+
+  - injector: inject_scale_mix
+    table: bank_transactions
+    detector_id: unit_consistency
+    params:
+      col: amount
+      seed: 20260825
+      severity: high

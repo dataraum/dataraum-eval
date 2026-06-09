@@ -495,6 +495,61 @@ def teach_null_value_and_rerun(
     return run
 
 
+def teach_unit_and_rerun(
+    run: CalibrationRun,
+    *,
+    table: str,
+    column: str,
+    unit: str,
+    vertical: str | None = "finance",
+) -> CalibrationRun:
+    """Teach a column's unit, then RE-RUN the pipeline for the SAME session.
+
+    The column-scoped unit teach (DAT-428): writes one workspace-scoped ``unit``
+    ConfigOverlay row ``{table, column, unit}``, then re-drives the pipeline under the
+    same ``session_id``. On the re-run ``apply_overlay`` merges the row into
+    ``phases/typing.yaml`` ``overrides.units`` and ``typing_phase._apply_unit_overrides``
+    patches the column's best TypeCandidate (``detected_unit`` = the taught unit,
+    ``unit_confidence`` = 1.0) — the unit now LANDS on an already-typed numeric column
+    without having to win a type pattern. ``table`` is the bare name; the reader matches
+    it against the source-qualified raw table too.
+    """
+    bootstrap_engine()
+
+    from dataraum.core.connections import ConnectionConfig, ConnectionManager
+    from dataraum.server.workspace import get_active_workspace_id
+    from dataraum.storage.overlay_models import ConfigOverlay
+
+    workspace_id = get_active_workspace_id()
+    workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
+    workspace_mgr.initialize()
+    try:
+        with workspace_mgr.session_scope() as s:
+            s.add(
+                ConfigOverlay(
+                    type="unit",
+                    payload={"table": table, "column": column, "unit": unit},
+                    session_id=None,  # unit teach is workspace-scoped
+                )
+            )
+    finally:
+        workspace_mgr.close()
+
+    output_dir = OUTPUT_DIR / run.strategy
+    output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"[eval] teach unit {table}.{column}={unit} → re-run session {run.session_id}")
+    asyncio.run(
+        _drive_pipeline(
+            workspace_id=workspace_id,
+            source_ids=list(run.source_ids),
+            session_id=run.session_id,
+            vertical=vertical,
+            log_path=output_dir / "worker_teach_unit_rerun.log",
+        )
+    )
+    return run
+
+
 def calibration_run(
     strategy: str,
     *,

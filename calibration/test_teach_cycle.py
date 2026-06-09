@@ -28,6 +28,9 @@ _STRATEGY = "detection-null-v1"
 _TABLE, _COLUMN = "bank_transactions", "amount"
 _DROP_MARGIN = 0.02  # anti-noise floor on the signed delta, NOT a point threshold
 
+_UNIT_STRATEGY = "detection-unit-v1"
+_UNIT_TABLE, _UNIT_COLUMN, _TAUGHT_UNIT = "bank_transactions", "amount", "EUR"
+
 
 def _null_semantics_conflict(session_id: str, table_substr: str, column: str) -> float | None:
     """Head-resolved pooled conflict C for a column's null_semantics object."""
@@ -87,4 +90,76 @@ def test_teach_null_value_drops_adjudication_conflict() -> None:
     assert after < before - _DROP_MARGIN, (
         f"teach did not close the conflict: C {before:.3f} -> {after:.3f} "
         f"(delta {after - before:+.3f}, expected drop > {_DROP_MARGIN})"
+    )
+
+
+def _unit_entropy_detected_unit(
+    session_id: str, table_substr: str, column: str
+) -> tuple[float, str | None] | None:
+    """Head-resolved (score, evidence.detected_unit) for a column's unit_entropy object."""
+    runner_mod.bootstrap_engine()
+    mgr = ConnectionManager(ConnectionConfig.for_workspace())
+    mgr.initialize()
+    try:
+        with mgr.session_scope() as s:
+            read_schema = read_schema_name_for(
+                str(s.execute(text("SELECT current_schema()")).scalar())
+            )
+            rows = s.execute(
+                text(
+                    f'SELECT target, score, evidence FROM "{read_schema}".current_entropy_objects '
+                    "WHERE session_id = :sid AND detector_id = 'unit_entropy'"
+                ),
+                {"sid": session_id},
+            ).all()
+    finally:
+        mgr.close()
+    for r in rows:
+        if table_substr in r.target and r.target.endswith("." + column):
+            ev = r.evidence[0] if isinstance(r.evidence, list) and r.evidence else {}
+            return float(r.score), ev.get("detected_unit")
+    return None
+
+
+@pytest.mark.llm
+def test_teach_unit_lands_declaration() -> None:
+    """A unit teach makes the column's unit LAND (DAT-428): unit_entropy evidence
+    ``detected_unit`` goes ``None`` -> the taught unit after the re-run.
+
+    On this financial data unit_entropy already scores ~0 ("inferred_from_dimension" —
+    the unit is resolvable from a sibling currency column), so the teach's observable is
+    the EXPLICIT declaration landing on the column, not a score drop. The applier→reader
+    loop is proven deterministically in the engine (test_overlay + test_typing_phase's
+    TestApplyUnitOverrides); this is the end-to-end confirmation through real Temporal.
+    """
+    if not (DATA_DIR / _UNIT_STRATEGY).exists():
+        pytest.skip(f"no data for {_UNIT_STRATEGY}; run `python -m calibration.runner {_UNIT_STRATEGY}`")
+
+    sidecar = runner_mod.sidecar_path(_UNIT_STRATEGY)
+    run = (
+        runner_mod.CalibrationRun.from_json(sidecar.read_text())
+        if sidecar.exists()
+        else runner_mod.run_pipeline(_UNIT_STRATEGY)
+    )
+
+    before = _unit_entropy_detected_unit(run.session_id, _UNIT_TABLE, _UNIT_COLUMN)
+    if before is None:
+        pytest.skip(f"unit_entropy did not fire on {_UNIT_TABLE}.{_UNIT_COLUMN} (not a measure?)")
+    _, before_unit = before
+    assert before_unit is None, (
+        f"{_UNIT_TABLE}.{_UNIT_COLUMN} already has a declared unit {before_unit!r}; "
+        "pick a column with no declared unit so the teach has something to land"
+    )
+
+    runner_mod.teach_unit_and_rerun(
+        run, table=_UNIT_TABLE, column=_UNIT_COLUMN, unit=_TAUGHT_UNIT
+    )
+
+    after = _unit_entropy_detected_unit(run.session_id, _UNIT_TABLE, _UNIT_COLUMN)
+    assert after is not None, "unit_entropy object vanished after the teach re-run"
+    _, after_unit = after
+    # The taught unit lands on the already-typed numeric column — the dead link
+    # ("nothing writes overrides.units") is closed. Independent of type-pattern matching.
+    assert after_unit == _TAUGHT_UNIT, (
+        f"unit teach did not land: detected_unit {before_unit!r} -> {after_unit!r}"
     )
