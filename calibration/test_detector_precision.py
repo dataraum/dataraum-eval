@@ -24,6 +24,20 @@ BASELINE_PATH = EVAL_ROOT / "calibration" / "clean_baseline.yaml"
 # Scores at or below this are uninteresting — don't track them
 NOISE_FLOOR = 0.15
 
+# Per-detector floors where the default sits INSIDE the detector's natural
+# clean emission band. business_meaning hedges at 0.15-0.20 on a rotating
+# subset of legitimately-named clean columns (LLM confidence wobble — observed
+# across three batches: date/reference/amount entries shuffle every run, all
+# <= 0.2); the recall suite already classifies it LLM-nondeterministic. Above
+# 0.2 on clean IS a precision regression and stays tracked. The statistical
+# treatment of LLM-variance baselines (captured baseline vs generative seeds)
+# is a regroup/S2 item — this floor is the observed band, not a tuned knob.
+NOISE_FLOOR_BY_DETECTOR = {"business_meaning": 0.2}
+
+
+def _floor_for(detector: str) -> float:
+    return NOISE_FLOOR_BY_DETECTOR.get(detector, NOISE_FLOOR)
+
 
 def _load_baseline() -> dict[str, float]:
     """Load known clean baseline scores."""
@@ -61,7 +75,7 @@ def test_clean_scores_match_baseline(
 
     for (table, column, detector), score in sorted(clean_pipeline_scores.items()):
         key = _score_key(table, column, detector)
-        if score <= NOISE_FLOOR:
+        if score <= _floor_for(detector):
             continue
 
         if key in baseline:
@@ -112,7 +126,7 @@ def _write_baseline(
     """Write clean baseline YAML file."""
     entries: dict[str, float] = {}
     for (table, column, detector), score in sorted(scores.items()):
-        if score > NOISE_FLOOR:
+        if score > _floor_for(detector):
             key = _score_key(table, column, detector)
             entries[key] = round(score, 3)
 
