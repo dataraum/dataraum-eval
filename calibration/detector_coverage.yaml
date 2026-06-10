@@ -59,12 +59,14 @@ detectors:
       teach_closure: proven        # e2e 2026-06-10: concept_property teach C 0.305 -> 0.007
       in_slice: true
     note: >-
-      DAT-491 wired: the structural_reconciliation witness (events->measure aggregation
-      lineage; LLM proposes, deterministic R_flow/R_stock reconciliation disposes) joins
-      the pool at begin_session's session_detect and abstains at every add_source detect
-      (lineage rows are exact-run). It is the data-grounded witness for the
-      debit_balance boundary, where both name-witnesses anchor to stock together —
-      its live e2e (begin_session over the canonical corpus) is the open leg.
+      DAT-491 PROVEN live (e2e 2026-06-10): the structural_reconciliation witness is
+      deterministic arithmetic over the slice substrate (slicing agent names dimensions
+      + time axes; temporal slice analysis persists per-period sums; reconciliation
+      enumerates signed conventions) — no lineage LLM call. On the canonical corpus
+      the recall xfail FLIPPED (XPASS): trial_balance.debit_balance C 0.003 -> 0.363
+      (ontology+LLM say stock, data says per_period, convention "debit", match 0.75);
+      precision sharpened (ending_balance reconciled cumulative match 1.0, C 0.006).
+      Witness fires at session_detect only (exact-run rows), abstains at add_source.
 
   # ---- LATENT CANDIDATES (pool IFF an independent grounded 2nd witness exists) -
   # entry_criterion = the (b) adversarial gate: the 2nd witness must be DATA-GROUNDED and
