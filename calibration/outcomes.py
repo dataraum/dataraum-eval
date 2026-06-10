@@ -202,32 +202,41 @@ def _offline_tables(conn: duckdb.DuckDBPyConnection, strategy: str) -> dict[str,
 
 
 def _lake_tables(run: Any) -> dict[str, str]:
-    """Resolve logical names to THIS run's typed lake tables, session-scoped.
+    """Resolve logical names to THIS session's typed lake tables.
 
     A batch keeps several strategies' tables in ONE lake, all suffixed with the
     same logical names — suffix-matching information_schema read whichever leg
-    landed last (the first batch's false 16/16-right). The sidecar's source_ids
-    own exactly this strategy's tables, so resolve through the workspace
-    metadata instead.
+    landed last (the first batch's false 16/16-right). Source ids are NOT the
+    axis either: sources are content-keyed (``src_<digest>``, re-upload dedup),
+    so every file a strategy does not inject shares its Source row with the
+    other legs. The session's own typed-table selection (``session_tables``,
+    written by typing with a NOT-NULL session FK) is the identity the engine
+    itself uses — resolve through it.
     """
     from sqlalchemy import select
 
     from calibration.tools._runs import workspace_session
 
-    source_ids = set(run.source_ids)
     out: dict[str, str] = {}
     with workspace_session() as session:
+        from dataraum.investigation.db_models import SessionTable
         from dataraum.storage import Table
 
-        for t in session.execute(select(Table)).scalars():
-            if t.layer != "typed" or t.source_id not in source_ids or not t.duckdb_path:
+        table_ids = {
+            st.table_id
+            for st in session.execute(
+                select(SessionTable).where(SessionTable.session_id == run.session_id)
+            ).scalars()
+        }
+        for t in session.execute(select(Table).where(Table.table_id.in_(table_ids))).scalars():
+            if t.layer != "typed" or not t.duckdb_path:
                 continue
             logical = short(t.table_name)
             if logical in _TABLES:
                 out[logical] = f'lake.typed."{t.duckdb_path}"'
     missing = [t for t in _TABLES if t not in out]
     if missing:
-        raise SystemExit(f"run's typed tables missing from metadata: {missing}")
+        raise SystemExit(f"session's typed tables missing from metadata: {missing}")
     return out
 
 
