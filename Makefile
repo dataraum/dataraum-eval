@@ -38,14 +38,19 @@ list-strategies:
 	@ls strategies/*.yaml 2>/dev/null | xargs -I{} basename {} .yaml
 
 VENDOR_COMPOSE := vendor/dataraum-context/packages/infra/docker-compose.yml
+# The eval stack runs as an ISOLATED docker project (own ports/volume) so it never
+# touches the shared cockpit `infra` stack — clean-pg only wipes the eval project.
+EVAL_PROJECT := dataraum-eval
+EVAL_PORTS := calibration/compose.eval-ports.yml
 
 # Wipe generated data, pipeline output, the local DuckLake parquet store,
 # and the workspace overlay. Run `make clean-pg` separately for PG state.
 clean:
 	rm -rf data output lake_data workspace
 
-# Drop the Postgres container + volume (wipes all engine metadata).
+# Drop the eval project's Postgres container + volume (wipes engine metadata for the
+# ISOLATED eval stack only — never the shared cockpit `infra` stack).
 clean-pg:
-	docker compose -f $(VENDOR_COMPOSE) --env-file .docker.env down -v
+	docker compose -p $(EVAL_PROJECT) -f $(VENDOR_COMPOSE) -f $(EVAL_PORTS) --env-file .docker.env down -v
 
 .PHONY: test list-strategies calibrate calibrate-typing clean clean-pg

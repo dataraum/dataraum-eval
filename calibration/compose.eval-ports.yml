@@ -1,0 +1,23 @@
+# Calibration host-port remap (DAT-445, shared-stack isolation).
+#
+# Layered over the vendor infra compose and run under a DISTINCT project name
+# (`-p dataraum-eval`, see calibration/stack.py) so the eval stack is a fully
+# isolated docker project — own containers, network, and `postgres_data` volume
+# (project-prefixed → `dataraum-eval_postgres_data`) — on non-conflicting host
+# ports. It coexists with the shared cockpit stack (`infra`: 5432 / 7233 / 8333)
+# instead of tearing it down. The container-side ports are unchanged, so all
+# in-compose service references (temporal→postgres, seaweedfs-init→seaweedfs)
+# still work; only the HOST-published ports move, and stack.py points the engine
+# worker + eval client at them.
+# `!override` REPLACES the base ports list instead of merging (compose appends by
+# default, which would also bind the shared 5432/7233/8333 → conflict with cockpit).
+services:
+  postgres:
+    ports: !override
+      - "5433:5432"
+  temporal:
+    ports: !override
+      - "7234:7233"
+  seaweedfs:
+    ports: !override
+      - "8334:8333"

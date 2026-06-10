@@ -27,6 +27,12 @@ from pathlib import Path
 EVAL_ROOT = Path(__file__).resolve().parent.parent
 VENDOR_DIR = EVAL_ROOT / "vendor" / "dataraum-context"
 COMPOSE_FILE = VENDOR_DIR / "packages" / "infra" / "docker-compose.yml"
+# Layered over the vendor compose to remap host ports, and run under EVAL_PROJECT so the
+# calibration stack is a fully ISOLATED docker project — own containers, network, and
+# `postgres_data` volume — coexisting with the shared cockpit `infra` stack instead of
+# tearing it down. `clean-pg`/`down -v` then only ever touch the eval project (DAT-445).
+OVERRIDE_FILE = EVAL_ROOT / "calibration" / "compose.eval-ports.yml"
+EVAL_PROJECT = "dataraum-eval"
 ENV_FILE = EVAL_ROOT / ".docker.env"
 
 # Local host workspace dir (DATARAUM_HOME). Gitignored. DuckLake *data* no
@@ -39,7 +45,9 @@ POSTGRES_DB = "dataraum"
 POSTGRES_LAKE_CATALOG_DB = "dataraum_lake_catalog"
 POSTGRES_COCKPIT_DB = "cockpit_db"  # unused here, but postgres-init requires it set
 POSTGRES_HOST = "127.0.0.1"
-POSTGRES_PORT = 5432
+# Isolated host ports (remapped in compose.eval-ports.yml) so the eval stack coexists
+# with the shared cockpit stack (5432 / 7233 / 8333) — the container ports are unchanged.
+POSTGRES_PORT = 5433
 
 # Active workspace_id (DAT-339 schema-per-workspace). The engine resolves the
 # Postgres schema name as ws_<id-with-dashes-as-underscores>; the worker and the
@@ -48,10 +56,10 @@ DATARAUM_WORKSPACE_ID = "00000000-0000-0000-0000-000000000001"
 
 # Temporal (DAT-344). The vendor compose runs the server against the same
 # Postgres instance; the worker + eval client reach it at the published port.
-TEMPORAL_HOST = f"{POSTGRES_HOST}:7233"
+TEMPORAL_PORT = 7234  # isolated host port (→ container 7233)
+TEMPORAL_HOST = f"{POSTGRES_HOST}:{TEMPORAL_PORT}"
 TEMPORAL_NAMESPACE = "default"
 TEMPORAL_TASK_QUEUE = "dataraum-pipeline"
-TEMPORAL_PORT = 7233
 
 # Pinned image versions, mirrored from vendor packages/infra/.env.example.
 TEMPORAL_VERSION = "1.31.0"
@@ -63,7 +71,7 @@ TEMPORAL_UI_VERSION = "2.49.1"
 # reaches the same gateway at the published port. Values mirror vendor
 # packages/infra/.env.example. Creds are nominal — this dev SeaweedFS runs
 # without an S3 auth config — but DuckDB still wants them non-empty.
-S3_PORT = 8333
+S3_PORT = 8334  # isolated host port (→ container 8333)
 S3_ENDPOINT = f"{POSTGRES_HOST}:{S3_PORT}"  # host:port, no scheme (DuckDB ENDPOINT form)
 S3_BUCKET = "dataraum-lake"
 S3_REGION = "us-east-1"
@@ -124,27 +132,9 @@ def _ensure_env_file() -> None:
 
 
 def _pg_ready() -> bool:
-    """Probe Postgres via ``pg_isready`` inside the postgres container."""
-    result = subprocess.run(
-        [
-            "docker",
-            "compose",
-            "-f",
-            str(COMPOSE_FILE),
-            "--env-file",
-            str(ENV_FILE),
-            "exec",
-            "-T",
-            "postgres",
-            "pg_isready",
-            "-U",
-            POSTGRES_USER,
-            "-d",
-            POSTGRES_DB,
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
+    """Probe Postgres via ``pg_isready`` inside the eval project's postgres container."""
+    result = _compose(
+        "exec", "-T", "postgres", "pg_isready", "-U", POSTGRES_USER, "-d", POSTGRES_DB
     )
     return result.returncode == 0
 
@@ -191,9 +181,17 @@ def _seaweedfs_ready() -> bool:
 
 
 def _compose(*args: str) -> subprocess.CompletedProcess[str]:
-    """Run a docker compose subcommand against the vendor file + generated env."""
+    """Run a docker compose subcommand for the ISOLATED eval project.
+
+    Always carries ``-p dataraum-eval`` + the port-override file, so every operation —
+    up, exec, wait, down — targets the eval project, never the shared cockpit ``infra``.
+    """
     return subprocess.run(
-        ["docker", "compose", "-f", str(COMPOSE_FILE), "--env-file", str(ENV_FILE), *args],
+        [
+            "docker", "compose", "-p", EVAL_PROJECT,
+            "-f", str(COMPOSE_FILE), "-f", str(OVERRIDE_FILE),
+            "--env-file", str(ENV_FILE), *args,
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -254,19 +252,9 @@ def up() -> None:
 
 
 def down(volumes: bool = False) -> None:
-    """Stop the Postgres service. Pass ``volumes=True`` to drop PG data."""
-    args = ["down"]
-    if volumes:
-        args.append("-v")
-    subprocess.run(
-        [
-            "docker",
-            "compose",
-            "-f",
-            str(COMPOSE_FILE),
-            "--env-file",
-            str(ENV_FILE),
-            *args,
-        ],
-        check=False,
-    )
+    """Tear down the ISOLATED eval stack — never the shared cockpit project.
+
+    ``volumes=True`` drops the eval project's ``postgres_data`` volume (a clean baseline)
+    without touching cockpit's postgres or any cockpit container.
+    """
+    _compose("down", "-v") if volumes else _compose("down")
