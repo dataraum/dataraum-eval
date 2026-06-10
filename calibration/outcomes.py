@@ -201,19 +201,33 @@ def _offline_tables(conn: duckdb.DuckDBPyConnection, strategy: str) -> dict[str,
     return out
 
 
-def _lake_tables(conn: duckdb.DuckDBPyConnection) -> dict[str, str]:
-    """Resolve logical names to the lake's typed tables (src_<digest>__ prefixed)."""
-    rows = conn.execute(
-        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'typed'"
-    ).fetchall()
+def _lake_tables(run: Any) -> dict[str, str]:
+    """Resolve logical names to THIS run's typed lake tables, session-scoped.
+
+    A batch keeps several strategies' tables in ONE lake, all suffixed with the
+    same logical names — suffix-matching information_schema read whichever leg
+    landed last (the first batch's false 16/16-right). The sidecar's source_ids
+    own exactly this strategy's tables, so resolve through the workspace
+    metadata instead.
+    """
+    from sqlalchemy import select
+
+    from calibration.tools._runs import workspace_session
+
+    source_ids = set(run.source_ids)
     out: dict[str, str] = {}
-    for (name,) in rows:
-        logical = short(name)
-        if logical in _TABLES and not name.startswith("slicing_"):
-            out[logical] = f'lake.typed."{name}"'
+    with workspace_session() as session:
+        from dataraum.storage import Table
+
+        for t in session.execute(select(Table)).scalars():
+            if t.layer != "typed" or t.source_id not in source_ids or not t.duckdb_path:
+                continue
+            logical = short(t.table_name)
+            if logical in _TABLES:
+                out[logical] = f'lake.typed."{t.duckdb_path}"'
     missing = [t for t in _TABLES if t not in out]
     if missing:
-        raise SystemExit(f"lake is missing typed tables: {missing}")
+        raise SystemExit(f"run's typed tables missing from metadata: {missing}")
     return out
 
 
@@ -244,8 +258,9 @@ def label(strategy: str, *, offline: bool = False) -> dict[str, Any]:
         from calibration import runner as runner_mod
         from calibration.tools._runs import load_run
 
-        load_run(strategy)  # read-only over a completed run; never triggers one
+        run = load_run(strategy)  # read-only over a completed run; never triggers one
         runner_mod.bootstrap_engine()
+        tables = _lake_tables(run)
         from dataraum.worker.bootstrap import (
             bootstrap_worker_substrate,
             shutdown_worker_substrate,
@@ -254,7 +269,6 @@ def label(strategy: str, *, offline: bool = False) -> dict[str, Any]:
         manager = bootstrap_worker_substrate()
         try:
             with manager.duckdb_cursor() as cursor:
-                tables = _lake_tables(cursor)
                 computed = compute_metrics(cursor, tables, window)
         finally:
             shutdown_worker_substrate(manager)

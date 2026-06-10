@@ -45,10 +45,28 @@ clean_readiness:
   # expected-vs-problem classifier for heterogeneous dimensions is DAT-184/DAT-473.)
   journal_lines.cost_center:
     aggregation_intent: investigate
-  # trial_balance.debit_balance / credit_balance now read READY (no entry): benford
-  # was demoted to an informative signal (DAT-442, not a loss measurement) and
-  # unit_entropy is now 1 − unit confidence — the LLM declared the balance units, so
-  # neither drives a band. (Was blocked under the old unit_entropy 0.8 + non-Benford.)
+  # Rebaselined 2026-06-11 (wave-1 batch): trial_balance debit/credit_balance,
+  # invoices.amount and balance_sheet.ending_balance read non-ready on clean —
+  # all ACCURATE metadata-gap signals, each closable by a cheap teach: the LLM
+  # did not declare TB units this run (unit_entropy 1.0 → unit teach) and
+  # temporal_behavior correctly contests named-balance-behaves-flow (C≈0.5, the
+  # standing data-true ambiguity → concept_property teach); invoices.amount adds
+  # the grounding-variance conflict (accounts_payable point_in_time prior vs the
+  # flow claim). None of these columns sit in a deliverable metric's lineage —
+  # the clean outcomes scoreboard stays 8/8 right with no warnings.
+  balance_sheet.ending_balance:
+    aggregation_intent: blocked
+    reporting_intent: investigate
+  invoices.amount:
+    aggregation_intent: blocked
+    query_intent: investigate
+    reporting_intent: investigate
+  trial_balance.credit_balance:
+    aggregation_intent: blocked
+    reporting_intent: investigate
+  trial_balance.debit_balance:
+    aggregation_intent: blocked
+    reporting_intent: investigate
 
 detection-v1:
   expectations:
@@ -115,12 +133,13 @@ detection-v1:
     # temporal_drift CUT (DAT-442 reset): distribution drift can't separate a shift
     # from natural volatility on flow columns (clean KS ≈ injected ≈ 0.53). Proven
     # in calibration/unit/test_drift_recorded.py; real drift → DAT-445.
-    - target: "invoices.amount"
-      driver: "cross_table_consistency"
-      min_readiness:
-        reporting_intent: investigate
-        aggregation_intent: investigate
-      note: "GL/invoice mismatch -> cross_table_consistency (slice-2)"
+    # cross_table_consistency on invoices.amount: WIRED (L7) and measuring — the
+    # gl_invoice_match failure fans out to the column at the honest 0.29 mismatch
+    # rate (warning severity → rate, not categorical). 0.29 × placeholder weight
+    # 0.8 = 0.23 < the 0.3 band, so the floor honestly stays ready until S2 fits
+    # the loss weights against outcomes labels — do NOT crank the weight (same
+    # rule as benford above). The TB↔GL leg (critical → categorical 1.0) is the
+    # banding path; this one is the rate path.
 
 detection-typing-v1:
   expectations:
