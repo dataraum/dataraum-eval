@@ -1,326 +1,133 @@
 # DataRaum Eval
 
-Calibration harness for the DataRaum entropy detection and fix system.
-This repo is a **testing and evaluation framework** — it owns the ground truth
-about whether detectors work, and drives changes to detector code and injection
-strategies until they do.
+Calibration harness for the DataRaum entropy system. This repo owns the **ground
+truth**: it proves — fast — that every entropy measurement is *right* (a grounded
+statistic), *useful* (actionable for a practitioner), and *stable* (a teach closes
+it), and it drives changes to detector code and test data until they are.
 
-## Architecture
+**The method doc is [`entropy_eval_architecture.md`](entropy_eval_architecture.md)**
+— the tiered test architecture, the measurement contract, and the catalog of every
+measurement with its grounded statistic and every CUT with its reason. Read it
+before designing or tuning any measurement. This file is the map; that file is
+the law. Historical results and the pre-reset saga live in `docs/history.md`.
 
-Three repos, vendored as git submodules under `vendor/`:
+## You are a data scientist first
 
-| Repo | Role | Editable from here? |
-|------|------|---------------------|
-| `dataraum-testdata` | Generates data with known injections (`entropy_map.yaml`) | Yes — `vendor/dataraum-testdata` |
-| `dataraum-context` | Pipeline: phases, detectors, fix system | Yes — `vendor/dataraum-context` |
-| `dataraum-eval` (this) | Strategies, calibration tests, runner | Yes |
+The product is analytical correctness, not green tests or compiling code. Hard
+rules, each learned the expensive way:
 
-Testdata generation runs via a direct Python API call. The **pipeline now runs
-as a Temporal workflow** (DAT-344/DAT-370): the engine is a Temporal activity
-worker, so calibration brings up Postgres + Temporal in docker, runs the engine
-worker on the host, and triggers `addSourceWorkflow` as a client (see below).
+- **No statistic without a name.** Every measurement is grounded in a named,
+  established method (KS, Wasserstein, MI, Cramér's V, KL, JSD, PSI,
+  Kruskal–Wallis, …) **before** any code is written. Boost curves, sqrt-boosts,
+  and piecewise score maps are the smell of skipping this step.
+- **No string heuristics where the design calls for statistics or LLM judgment.**
+  Pattern-matching on names or value strings is not a detector and not a
+  semantic claim.
+- **No deterministic overrides of LLM judgments.** Entropy *is* disagreement;
+  patching an LLM's answer (or its score) to make a test pass is Goodhart at the
+  harness level. Non-determinism is handled with xfail(strict=False) and pooling,
+  never with overrides.
+- **Recall is ordering, not a point threshold.** Assert injected > clean + margin
+  and monotonicity in severity. Never tune an injection ratio, threshold, or
+  scoring curve so one fixed dataset crosses 0.3.
+- **The 10-minute pipeline is never the dev loop.** Pure math is designed and
+  debugged in milliseconds (Tier 1/2 below). Think first, then probe, then build.
+  Tier 3 runs once per milestone as a wiring gate.
+- **One statistical approach per probe, compared cleanly.** When testing
+  alternatives, each gets the same fixture, the same legs, and a reported
+  separation margin — not sequential hacking until something fires.
 
-## Running Calibration
+### The ground-first kill gate
+
+No measurement leaves research until its named statistic separates the injected
+family from natural variation **by a margin** in a millisecond probe on the
+existing fixtures. Pass → build. Fail after **one** grounded attempt → **CUT and
+record why** in the catalog. The default outcome of a research idea is CUT;
+survival requires a grounded separation result up front. WIP = 1 on the spike
+lane. Precedents that died here: `temporal_drift`, `outlier_rate`,
+`slice_variance`, the bimodality `unit_consistency`, the DAT-459 stock/flow
+trajectory signature.
+
+## The tiered loop
+
+| Tier | Speed | Docker | Proves | Run |
+|---|---|---|---|---|
+| **1 — unit** | ms | no | the statistic as a pure function over synthetic fixtures: ordering, calibration shape, edge cases, teach-closure | `uv run pytest calibration/unit -q` |
+| **2 — recorded** | sec | no | the statistic over frozen real pipeline outputs — `calibration/fixtures/entropy_inputs.sqlite`, loaders in `calibration/unit/fixture.py` | same command |
+| **3 — integration** | min | yes | the assembled framework end-to-end — **milestone gate, NOT the dev loop** | `make calibrate` |
+
+Refresh the recorded fixture only when the pipeline's *output shape* changes
+(schema/phase change): `python scripts/capture_fixture.py` (one docker run).
+
+## Skills drive the work
+
+| Intent | Skill |
+|---|---|
+| "would statistic X detect Y?" — any new measurement idea | `/ground` — the kill gate as a procedure |
+| a detector misses, over-fires, or needs tuning | `/tune-detector` |
+| new injection family, fixture, or ground-truth values | `/evolve-testdata` |
+| check detector recall + financial accuracy via MCP | `/investigate` |
+| produce + validate a business deliverable | `/deliver` |
+| product acceptance of the tool surface | `/accept` |
+
+**Probes are disposable.** They live in `scripts/probes/<ticket-or-slug>/`, never
+at the repo root, and are deleted once the verdict (BUILD, or CUT + why) is
+recorded in the catalog. No `output_*.log` files at the repo root — logs go under
+`output/`.
+
+## Three repos
+
+| Repo | Role | Editable from here |
+|---|---|---|
+| `vendor/dataraum-testdata` | generates data with known injections → `entropy_map.yaml`, `ground_truth.yaml` | yes |
+| `vendor/dataraum-context` | the engine — pipeline, detectors, teach system | yes |
+| `dataraum-eval` (this) | strategies, calibration tests, runner | yes |
+
+When editing engine code, the engine's rules apply: read
+`vendor/dataraum-context/CLAUDE.md` and `packages/engine/CLAUDE.md` first, and
+**read the subsystem you're changing from code — not from memory or this file —
+before designing**. Feature branches inside the submodule, commit green work,
+update `.claude/handoff.md` there for detector changes. The engine's e2e tests
+make real LLM calls — never run them as an iteration loop.
+
+## Running calibration (Tier 3)
+
+The pipeline runs as a Temporal workflow (DAT-344/DAT-370): `calibration.stack`
+brings up Postgres + Temporal from the vendor compose, `calibration.worker` runs
+the engine worker as a host subprocess (live working-tree code, host `data/` →
+host `lake_data/`), and `calibration.runner.run_pipeline` triggers
+`addSourceWorkflow` as a Temporal client and awaits the result.
 
 ```bash
-# Full run: generate + pipeline + test
-make calibrate                         # detection-v1 (comprehensive)
+make calibrate                         # detection-v1: generate + pipeline + suite
 make calibrate-typing                  # detection-typing-v1 (type-breaking only)
 
-# Or step by step:
+# stepwise
 make generate-detection-v1             # testdata → data/detection-v1/
 make pipeline-detection-v1             # addSourceWorkflow → scores in PG
 uv run pytest calibration/ --strategy detection-v1 -v
 
-# Clean everything
-make clean       # local dirs    ·    make clean-pg  # drop PG + Temporal volume
+make clean                             # local dirs
 ```
 
-`calibration.stack` brings up `postgres` + the `temporal` server from the vendor
-compose (same Postgres backs Temporal). `calibration.worker` starts the engine
-worker as a **host subprocess** (`python -m dataraum.worker.main` on the eval
-interpreter — live working-tree code, reads host `data/`, writes host
-`lake_data/`). `calibration.runner.run_pipeline` is then a Temporal **client**:
-it writes the `Source` row, triggers `addSourceWorkflow`, awaits `AddSourceResult`,
-and tears the worker down. Strategy YAML in `strategies/` controls injection
-parameters and `detector_id` overrides.
-
-## How Calibration Works
-
-1. **Strategy YAML** defines injections with known parameters (rate, target column,
-   detector_id override)
-2. **testdata** generates clean financial data, applies injections, writes
-   `entropy_map.yaml` listing exactly what was injected
-3. **`addSourceWorkflow`** imports the source, **fans out one `processTableWorkflow`
-   per raw table** (`typing → statistics → column_eligibility → statistical_quality
-   → temporal → detect_table`), then runs `semantic_per_column` as the source-level
-   reduce. The one `detect_table` step per table runs the **table-local** detectors
-   (`type_fidelity`, `null_ratio`) and writes `EntropyObjectRecord` rows.
-4. **conftest.py** calls `measure_entropy()` to aggregate detector records into
-   `(table, column, detector_id) → score`
-5. **test_detector_recall.py** asserts each injection's detector scores above
-   `DETECTION_THRESHOLD` (0.3); detectors whose phase/detect-step the current
-   slice doesn't run yet are **skipped** (see "Current slice" below), not failed.
-
-## What We Test
-
-### 4a: Detection calibration (current focus)
-Inject → run pipeline → measure entropy → assert thresholds.
-Pure data, no LLM involvement in the test loop (LLM runs during pipeline's
-semantic phase, but tests only check scores).
-
-### 4b: Fix calibration
-Detector fires → agent proposes fix → fix applied → score drops.
-LLM-in-the-loop. Requires MCP `apply_fix` tool.
-
-## Strategy Design
-
-Two strategies, split by data source type:
-
-### detection-v1 (comprehensive)
-
-All detectors except type-breaking. No `corrupt_types` or `corrupt_dates`
-injections, so all columns retain proper types. This allows temporal, dimensional,
-cross-table, and derived-value detectors to work without interference.
-
-Injections covering: null_ratio, benford, unit_entropy,
-business_meaning, relationship_entropy, dimensional_entropy, derived_value,
-cross_table_consistency (3 validations). (temporal_drift, slice_variance, and
-outlier_rate were CUT in the DAT-442 reset — none separates an injection from
-natural variation on real financial data; see entropy_eval_architecture.md. The
-drift + outlier injections stay as test data but no live detector asserts on them.)
-
-### detection-typing-v1 (type-breaking)
-
-Type-breaking injections only: `corrupt_types` (journal_lines.debit) +
-`corrupt_dates` (payments.date). Only relevant for text-based sources
-(CSV, Excel, SQLite) where the pipeline must infer types.
-
-Tests: type_fidelity, temporal_entropy.
-
-### Strategy parameters
-
-- `detector_id`: override which detector this injection targets (used in
-  entropy_map.yaml for test assertions)
-- `ratio`: injection rate — must be high enough for the detector's scoring
-  curve to cross threshold
-- `formats` (corrupt_dates): must use injector's dispatch names, not strftime
-
-## Current slice (DAT-370, 2026-05-27) — what actually runs
-
-The `addSourceWorkflow` slice runs phases **up to `semantic_per_column`** plus two
-stage-level detect steps that run the detectors their phases declare in
-`pipeline.yaml`:
-
-- **`detect_table`** (per child workflow) — table-local detectors scoped to each
-  child's typed table: `typing→type_fidelity`, `statistics→null_ratio`.
-- **`detect_source`** (after the reduce; `fix/dat-370-source-level-detectors`) —
-  `semantic_per_column`'s detectors, source-wide: `business_meaning`,
-  `unit_entropy`, `temporal_entropy`, `benford`. (`outlier_rate` CUT, DAT-442.)
-
-Verified end-to-end through Temporal on the fix branch:
-
-| Strategy | Detector | Result |
-|---|---|---|
-| detection-v1 | `null_ratio` (journal_lines.cost_center) | ✅ pass |
-| detection-v1 | `benford` (bank_transactions.amount) | ✅ pass |
-| detection-v1 | `unit_entropy` (invoices.amount) | xfail (known-misaligned) |
-| detection-v1 | `business_meaning` (invoices.*) ×2 | xfail/xpass (LLM-nondeterministic) |
-| detection-typing-v1 | `type_fidelity` (journal_lines.debit) | ✅ pass |
-| detection-typing-v1 | `temporal_entropy` (payments.date) | ✅ pass |
-
-**History:** DAT-370 originally orphaned `semantic_per_column`'s five detectors —
-it ran the phase but wired no detect step for them (only `detect_table` for
-table-local phases). Eval caught this; the fix added `detect_source`. The
-detectors were never broken, only unwired.
-
-Still **skipped** by `test_detector_recall.py` (slice-2 phases not in the chain):
-`relationship_entropy`, `dimensional_entropy`, `derived_value`, `temporal_drift`,
-`cross_table_consistency` (in `semantic_per_table` / `enriched_views` /
-`validation` / …). As those phases get wired, move detector ids out of
-`OUT_OF_SLICE_REASON` / into `CURRENT_SLICE_DETECTORS` in
-`test_detector_recall.py` and the assertions re-apply. The results table below is
-the **pre-Temporal baseline** (all phases ran in-process) — the target once the
-full workflow chain lands.
-
-## Detection Calibration Results (2026-04-17, detection-v1) — pre-Temporal baseline
-
-**Detection recall: 12/14 pass, 2 xfail, 2 non-deterministic (LLM)**
-
-### Passing (score > 0.3)
-
-| Detector | Target | Score | Notes |
-|---|---|---|---|
-| null_ratio | journal_lines.cost_center | ~0.71 | 40% injection rate |
-| outlier_rate | journal_lines.credit | 1.000 | 5% at 10x multiplier |
-| benford | bank_transactions.amount | ~0.80 | 60% round numbers |
-| temporal_drift | bank_transactions.amount | 1.000 | 1.35x shift after mid-year |
-| relationship_entropy | payments.invoice_id | ~0.45 | sqrt-boosted 20% orphan rate |
-| dimensional_entropy | journal_lines.debit/credit | ~0.70 | Natural debit/credit mutex |
-| derived_value | journal_lines.net_amount | ~0.71 | 10% formula drift, boost curve |
-| cross_table (gl_invoice) | invoices.amount | pass | 15% amount corruption, FK join |
-| cross_table (payment_bank) | payments.amount | pass | 15% amount corruption, FK join |
-| cross_table (trial_balance) | trial_balance.credit_balance | pass | 10% balance corruption |
-
-### Non-deterministic (xfail strict=False)
-
-| Detector | Target | Score | Notes |
-|---|---|---|---|
-| business_meaning | invoices.rrflp_11_zp00 | ~0.38 | LLM sometimes infers concept from data → ontology_bonus reduces score below threshold |
-| business_meaning | invoices.xq_v7kl | ~0.35 | Same — shows XPASS when detection works, XFAIL when LLM grounding hides it |
-
-### Known misaligned (xfail)
-
-| Detector | Target | Root cause |
-|---|---|---|
-| unit_entropy | invoices.amount | Measures metadata completeness, not value consistency. Injection targets values |
-| derived_value | trial_balance.debit_balance | Cross-table aggregate (TB vs GL), not within-table formula. Out of scope for derived_value |
-
-### Detection-typing-v1 results (type-breaking)
-
-| Detector | Target | Score | Notes |
-|---|---|---|---|
-| type_fidelity | journal_lines.debit | 0.585 | Boost function on 8% quarantine rate |
-| temporal_entropy | payments.date | 0.800 | Corrupt dates → VARCHAR → type/role mismatch |
-
-## Teach Loop Calibration (4b)
-
-The old fix system (ResolutionOptions, FixSchema, apply_fix) was retired in
-DAT-256. The teach system (DAT-251) replaced it. Teach loop tests live in
-`calibration/tools/test_adhoc_teach_loop.py` (7 tests: 5 pass, 2 xfail for
-config teach re-run bugs documented in handoff).
-
-## Key Learnings
-
-### Detector scoring needs non-linear amplification
-Linear `score = rate` under-weights real problems. 8% quarantine means 8% of
-your data is broken — that's not 0.08 severity. The `_boost_rate()` function
-in type_fidelity uses `((1+rate)^2/-log10(rate))-0.5` to map small rates to
-scores that match actual severity.
-
-### LLM confidence must be calibrated at both tiers
-The business_meaning detector relies on LLM confidence to catch garbage column
-names. Without guidance, LLMs report 0.85-0.90 confidence on garbage names
-because they infer meaning from data. The fix: add `<confidence_guidance>` to
-BOTH tier 1 and tier 2 prompts, update the Pydantic field description, and
-tell tier 2 to PRESERVE (not UPGRADE) confidence reflecting name readability.
-Tier 2 was the main problem — it "upgraded" low tier-1 confidence to high.
-
-### Weighted average composites hide problems
-relationship_entropy's weighted average (0.5 RI + 0.3 cardinality + 0.2 semantic)
-made 20% orphan rates invisible. Max aggregation with sqrt-boosted RI is direct:
-the worst problem drives the score.
-
-### Injector dispatch must match strategy format names
-The corrupt_dates injector uses human-readable format names (`DD/MM/YYYY`) for
-dispatch. The strategy had strftime format strings (`%d/%m/%Y`). Nothing matched
-→ fallback to isoformat → zero corruption. **Always verify injector output.**
-
-### unit_entropy is correctly misaligned
-The detector measures whether the pipeline identified and declared units
-(metadata completeness). The mix_units injection corrupts values. These are
-different things. The detector works — the injection doesn't test it.
-
-### Documentation-debt detectors need fix-loop testing
-dimensional_entropy measures intrinsic data complexity, not injected corruption.
-Clean data scores 0.5-0.7 because the patterns are real business rules.
-Injection delta is zero. The calibration test is: document_business_rule fix → score drops.
-
-### derived_value scoring uses boost + formula chain attribution
-The correlations dedup prefers sum over difference: `debit = net_amount + credit`
-wins over `net_amount = debit - credit`. Injecting drift on net_amount causes the
-debit formula to break, so the score appears on `debit`, not the injected column.
-The `_find_score` fallback handles this by checking all columns in the table.
-
-### Cross-table validations need explicit FK join paths
-LLM agents fall back to fuzzy date+amount matching when FK paths aren't obvious,
-masking corruption. Testdata must include explicit FK columns (e.g., Invoice.entry_id,
-BankTransaction.payment_id) and validation specs must mandate FK-first join strategy.
-
-### Aggregate evaluator must check rates against tolerance
-The validation agent's aggregate handler was returning `passed=True` unconditionally.
-Must extract orphan_rate/violation_rate from results and compare against the
-tolerance parameter. Otherwise cross-table validations never fail.
-
-## Tool Surface Validation (DAT-191)
-
-After each phase of the MCP Practitioner API (DAT-173), we run tool-level eval tests
-against the same ground truth data used for detector calibration. See
-[DAT-191](https://linear.app/dataraum/issue/DAT-191/eval-tool-surface-validation-per-phase-ground-truth-regression)
-for the full plan.
-
-### MCP Tool Surface (Phase 1 shipped)
-
-9 active tools, 6 deferred. See `vendor/dataraum-context/plans/mcp-interface-design/`
-for full design docs.
-
-| Tool | Verb | Status |
-|---|---|---|
-| `look` | "What am I looking at?" | Phase 1 ✅ |
-| `measure` | "How much entropy?" | Phase 1 ✅ |
-| `begin_session` | "Start investigation" | Phase 1 ✅ |
-| `query` | "Answer my question" (LLM) | Phase 1 ✅ |
-| `run_sql` | "Execute this SQL" | Phase 1 ✅ |
-| `add_source` | "Register data source" | Phase 1 ✅ |
-| `why` | "Why this score?" (LLM) | Phase 2 |
-| `hypothesize` | "What if X?" (BBN) | Phase 3 |
-| `teach` | "Tell the system something" | Phase 3 |
-
-Retired tools: `get_quality`, `apply_fix`, `get_context`, `analyze`,
-`continue_pipeline`, `discover_sources`, `export`. `fix` absorbed into `teach`.
-
-### Eval skills (mothership)
-
-Skills in `.claude/skills/` exercise the MCP surface against ground truth:
-
-| Skill | Purpose |
-|---|---|
-| `/investigate` | Check detector recall + financial accuracy via look → measure → query |
-| `/deliver` | Fix issues via teach, produce deliverable, validate against ground truth |
-| `/accept` | Product acceptance — exercise tools as a practitioner, devil's advocate |
-
-Deliverable specs in `deliverables/` define expected output metrics with tolerances.
-Design doc: [Eval as Mothership](https://linear.app/dataraum/document/eval-as-mothership-skill-driven-development-harness-for-dataraum-0a61a28363c0)
-
-### Handoff protocol
-
-`vendor/dataraum-context/.claude/handoff.md` is updated by `/implement` sessions
-in the context repo and consumed by `/accept` in this repo. Each entry describes
-what changed, what it affects, and what to calibrate.
-
-### Test rounds
-
-Tests live in `calibration/tools/` and assert against `ground_truth.yaml` (exact
-financial figures) and `entropy_map.yaml` (known injections). One round per phase:
-
-| Round | After phase | Tests |
-|---|---|---|
-| 1 | look + measure + begin_session + run_sql | Schema correctness, measurement points, SQL enrichment |
-| 2 | why + query | Evidence targeting, financial accuracy, ground truth regression |
-| 3 | hypothesize + teach | BBN predictions, teach loop (hypothesize → teach → measure) |
-| 4 | deliver + report + session lifecycle | Goodhart firewall, assumption integration, end-to-end flow |
-
-`query` and `why` tests are LLM-in-the-loop (mark `@pytest.mark.llm`). All others
-are deterministic. Each round is additive.
-
-```bash
-# After Phase 1:
-uv run pytest calibration/tools/test_look.py calibration/tools/test_measure.py -v
-
-# Full tool surface (after all phases):
-uv run pytest calibration/tools/ -v
-```
-
-## Backlog
-
-### Calibration improvements
-- Update network.yaml with cross_table and business_cycle nodes + edges
-- unit_entropy: accept misalignment or create separate injection
-- (Resolved by the DAT-442 reset: the old outlier_rate / temporal_drift "verify 1.0
-  scores" items — both detectors CUT. The outlier_rate false-positive concern was
-  confirmed: linear IQR flags 25%+ of legitimate financial heavy-tail values.)
-
-### Roadmap (see [Pipeline Redesign](https://linear.app/dataraum/project/pipeline-redesign-yaml-driven-dag-entropy-measurement-9c6b0d33aa5c))
-- Business pattern filter — LLM classification to distinguish expected patterns from real issues
-- Pipeline YAML redesign — single source of truth, post-step declarations
-- Showcase playbooks — real-world test scenarios for demo
+- Strategy YAML in `strategies/` defines injections (injector, table,
+  `detector_id`, params); testdata writes `entropy_map.yaml` listing exactly what
+  was injected, and tests assert against it.
+- Scores come from `measure_entropy()` aggregation in `conftest.py`
+  (`(table, column, detector_id) → score`) — never from PhaseLog.
+- Detectors whose phase isn't wired into the current workflow slice are skipped
+  via `OUT_OF_SLICE_REASON` in `test_detector_recall.py`; move ids into
+  `CURRENT_SLICE_DETECTORS` as phases land.
+- **Caution:** `make clean-pg` (`down -v`) tears down the *shared* cockpit stack
+  and wipes Postgres + the Temporal volume. Don't run it while anything else
+  uses the stack — prefer an engine-schema-only reset or a quiet window.
+- Long pipeline runs go to the background — line up other work while they run;
+  don't idle.
+
+## Where things live
+
+- Method + measurement catalog (every measure, every CUT and why): `entropy_eval_architecture.md`
+- Historical record (pre-reset results, slice log, old learnings): `docs/history.md`
+- Active epic state: Jira (DAT-442 and children) + session memory — not this file
+- Deliverable specs with tolerances: `deliverables/`
+- Engine→eval handoff: `vendor/dataraum-context/.claude/handoff.md`
