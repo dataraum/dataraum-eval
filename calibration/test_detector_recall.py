@@ -47,7 +47,13 @@ DETECTION_THRESHOLD = 0.3
 # NULL rate now). When validation wires in, add cross_table_consistency HERE so its
 # honest rate is judged by ordering, not the 0.3 point threshold.
 ORDERING_DETECTORS = frozenset(
-    {"benford", "type_fidelity", "derived_value", "relationship_entropy"}
+    {
+        "benford",
+        "type_fidelity",
+        "derived_value",
+        "relationship_entropy",
+        "cross_table_consistency",
+    }
 )
 ORDERING_MARGIN = 0.05
 
@@ -110,16 +116,15 @@ CURRENT_SLICE_DETECTORS = frozenset(
         "relationship_entropy",
         "dimensional_entropy",
         "derived_value",
+        # DAT-432/L7: the eval driver now runs operatingModelWorkflow, whose
+        # terminal operating_model_detect scores the executed validations.
+        "cross_table_consistency",
     }
 )
 
-# Why each out-of-slice detector produces no score yet:
-_SLICE_2_PHASE = (
-    "owning phase is not in a driven workflow chain yet (slice-2+: validation / cycles / ...)"
-)
-OUT_OF_SLICE_REASON: dict[str, str] = {
-    "cross_table_consistency": _SLICE_2_PHASE,
-}
+# Why each out-of-slice detector produces no score yet (empty since DAT-432
+# wired validation; repopulate as new phases land ahead of their detect).
+OUT_OF_SLICE_REASON: dict[str, str] = {}
 
 # Detectors where the injection is known-misaligned (documents the gap)
 KNOWN_MISALIGNED = frozenset(
@@ -130,12 +135,9 @@ KNOWN_MISALIGNED = frozenset(
 
 # Injections where the detector can't see the specific target column.
 # Key: (detector_id, table, column). Reason documented inline.
-KNOWN_DETECTOR_GAPS: dict[tuple[str, str, str], str] = {
-    ("derived_value", "trial_balance", "debit_balance"): (
-        "Cross-table aggregate formula (SUM(journal_lines.debit) GROUP BY account, period) — "
-        "out of scope for within-table correlation detector"
-    ),
-}
+# (Empty since DAT-444 remapped the trial_balance drift_formula injection to
+# cross_table_consistency — the TB↔GL identity is a cross-table aggregate.)
+KNOWN_DETECTOR_GAPS: dict[tuple[str, str, str], str] = {}
 
 # Detectors where LLM non-determinism makes the score vary across runs.
 # Use @pytest.mark.xfail(strict=False) — test shows XPASS when detection works,

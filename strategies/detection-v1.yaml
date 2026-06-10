@@ -139,11 +139,14 @@ injections:
       ratio: 0.10
       severity: medium
 
-  # --- Computational layer (known gaps) ---
+  # --- Computational layer ---
 
+  # DAT-444: the corrupted cells break the TB↔GL identity — the watcher is
+  # cross_table_consistency (tb_gl_reconciliation), not the within-table
+  # correlation detector (the formula is a cross-table aggregate).
   - injector: drift_formula
     table: trial_balance
-    detector_id: derived_value
+    detector_id: cross_table_consistency
     params:
       derived_col: debit_balance
       source_cols:

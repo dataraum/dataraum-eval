@@ -170,8 +170,18 @@ detectors:
     coverage: { recall: unverified, precision: unverified, reliabilities: n/a, teach_closure: none, in_slice: false }
 
   cross_table_consistency:
-    disposition: scalar               # validation violation rate
-    coverage: { recall: unverified, precision: unverified, reliabilities: n/a, teach_closure: none, in_slice: false }
+    disposition: scalar               # failed-critical categorical 1.0; honest rates below
+    coverage: { recall: unverified, precision: unverified, reliabilities: n/a, teach_closure: none, in_slice: true }
+    note: >-
+      L7 (2026-06-11): wired — operatingModelWorkflow's terminal
+      operating_model_detect scores executed validations; failed checks fan out
+      to COLUMN-grain objects via the now-persisted columns_used, so bands reach
+      the GL columns deliverable metrics flow through (scoreboard baseline was
+      0 prevented / 8 wrong-delivered with the GL unbanded). New
+      tb_gl_reconciliation spec (critical) is the TB↔GL watcher; DAT-444 remap
+      done. Score shape: failed critical = categorical 1.0 (the spec's own
+      tolerance decided pass/fail); ERROR = 0.0 + warning (was a clean-leg
+      false-alarm machine at 0.5). Recall/precision land with the next batch.
 
   dimensional_entropy:
     disposition: scalar               # NMI (grounded stat, DAT-472)

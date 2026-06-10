@@ -334,6 +334,12 @@ async def _drive_pipeline(
     so every ``EntropyObjectRecord`` reads back together. The worker is torn
     down when both workflows complete.
 
+    ``operating_model`` then runs the lifecycle spine over the same session —
+    resolve → validation (LLM SQL per declared check) → the terminal
+    ``operating_model_detect`` (cross_table_consistency: table + column bands,
+    DAT-432/L7) → business_cycles → metrics (graph-agent SQL — the product's
+    own answer path) → promote.
+
     Returns ``(AddSourceResult, BeginSessionResult)``.
     """
     from dataraum.worker.contracts import (
@@ -341,6 +347,8 @@ async def _drive_pipeline(
         AddSourceResult,
         BeginSessionInput,
         BeginSessionResult,
+        OperatingModelInput,
+        OperatingModelResult,
         SessionIdentity,
         SourceIdentity,
         add_source_workflow_id,
@@ -377,6 +385,23 @@ async def _drive_pipeline(
             id=begin_session_workflow_id(workspace_id, session_id),
             task_queue=stack.TEMPORAL_TASK_QUEUE,
             result_type=BeginSessionResult,
+            execution_timeout=timedelta(minutes=30),
+        )
+
+        print(
+            f"[eval] operatingModelWorkflow: lifecycle spine for session {session_id} "
+            f"(validation + detect + cycles + metrics)"
+        )
+        # Workflow id mirrors the cockpit's convention (workflow-id.ts) — no
+        # Python helper exists in contracts.py for this one.
+        await client.execute_workflow(
+            "operatingModelWorkflow",
+            OperatingModelInput(
+                identity=SessionIdentity(workspace_id=workspace_id, session_id=session_id)
+            ),
+            id=f"operatingmodel-{workspace_id}-{session_id}",
+            task_queue=stack.TEMPORAL_TASK_QUEUE,
+            result_type=OperatingModelResult,
             execution_timeout=timedelta(minutes=30),
         )
     return add_result, begin_result
