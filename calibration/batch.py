@@ -102,6 +102,12 @@ def main() -> None:
         buckets = row.get("outcomes", {}).get("buckets", {})
         print(f"  {row['strategy']}: {buckets or '-'} | {verdict}")
 
+    # Exit non-zero only on INFRASTRUCTURE failure (a strategy that errored).
+    # Suite reds are data — recorded per row, judged at the regroup, never an
+    # abort signal (review wave-1).
+    if any("error" in row for row in doc["runs"]):
+        raise SystemExit(1)
+
 
 if __name__ == "__main__":
     main()

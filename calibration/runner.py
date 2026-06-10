@@ -393,17 +393,25 @@ async def _drive_pipeline(
             f"(validation + detect + cycles + metrics)"
         )
         # Workflow id mirrors the cockpit's convention (workflow-id.ts) — no
-        # Python helper exists in contracts.py for this one.
-        await client.execute_workflow(
-            "operatingModelWorkflow",
-            OperatingModelInput(
-                identity=SessionIdentity(workspace_id=workspace_id, session_id=session_id)
-            ),
-            id=f"operatingmodel-{workspace_id}-{session_id}",
-            task_queue=stack.TEMPORAL_TASK_QUEUE,
-            result_type=OperatingModelResult,
-            execution_timeout=timedelta(minutes=30),
-        )
+        # Python helper exists in contracts.py for this one. An OM failure is a
+        # FINDING, not an abort (review wave-1): the expensive add_source +
+        # begin_session results above must survive into the sidecar so the
+        # detection axes stay readable. 60min timeout: the OM spine is the
+        # longest chain (~22 LLM calls) and the activity retry budget must fit
+        # inside the workflow's execution window.
+        try:
+            await client.execute_workflow(
+                "operatingModelWorkflow",
+                OperatingModelInput(
+                    identity=SessionIdentity(workspace_id=workspace_id, session_id=session_id)
+                ),
+                id=f"operatingmodel-{workspace_id}-{session_id}",
+                task_queue=stack.TEMPORAL_TASK_QUEUE,
+                result_type=OperatingModelResult,
+                execution_timeout=timedelta(minutes=60),
+            )
+        except Exception as exc:
+            print(f"[eval] operatingModelWorkflow FAILED (recorded, run kept): {exc}")
     return add_result, begin_result
 
 

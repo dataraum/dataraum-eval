@@ -25,13 +25,54 @@ _READ_PREFIXES = ("select", "with", "describe", "show", "from")
 _MAX_ROWS = 200
 
 
+def _assert_read_only(statement: str) -> None:
+    """Parse-level guard: exactly one statement, and it must be a pure read.
+
+    Prefix sniffing alone is bypassable ("WITH x AS (...) DELETE ..." starts
+    with a read prefix but mutates — review wave-1). sqlglot's AST decides:
+    the statement must parse to a SELECT-shaped expression (or DESCRIBE/SHOW),
+    with no data-modifying node anywhere in the tree.
+    """
+    import sqlglot
+    from sqlglot import expressions as exp
+
+    try:
+        parsed = sqlglot.parse(statement, read="duckdb")
+    except sqlglot.errors.ParseError as err:
+        raise SystemExit(f"read-only tool: could not parse statement: {err}") from err
+    statements = [p for p in parsed if p is not None]
+    if len(statements) != 1:
+        raise SystemExit("read-only tool: one statement only")
+    (tree,) = statements
+    if isinstance(tree, (exp.Describe, exp.Show)):
+        return
+    if not isinstance(tree, (exp.Select, exp.Union)):
+        raise SystemExit("read-only tool: only SELECT / DESCRIBE / SHOW are allowed")
+    banned = (
+        exp.Insert,
+        exp.Update,
+        exp.Delete,
+        exp.Merge,
+        exp.Create,
+        exp.Drop,
+        exp.Alter,
+        exp.Copy,
+        exp.Attach,
+        exp.Command,
+    )
+    for node in tree.walk():
+        if isinstance(node, banned):
+            raise SystemExit(
+                f"read-only tool: {type(node).__name__} is not allowed inside the statement"
+            )
+
+
 def run_sql(statement: str) -> dict[str, Any]:
     """Execute one read-only statement on the lake; return columns + rows."""
     lowered = statement.lstrip().lower()
     if not lowered.startswith(_READ_PREFIXES):
         raise SystemExit(f"read-only tool: statement must start with one of {_READ_PREFIXES}")
-    if ";" in statement.rstrip().rstrip(";"):
-        raise SystemExit("read-only tool: one statement only")
+    _assert_read_only(statement)
 
     from calibration import runner as runner_mod
 

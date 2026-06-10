@@ -103,6 +103,12 @@ LINEAGE: dict[str, list[str]] = {
         "journal_entries.status",
         "journal_entries.date",
     ],
+    "journal_balanced": [
+        "journal_lines.credit",
+        "journal_lines.debit",
+        "journal_entries.status",
+        "journal_entries.date",
+    ],
 }
 
 
@@ -124,7 +130,7 @@ def _in_list(accounts: tuple[str, ...]) -> str:
 
 def compute_metrics(
     conn: duckdb.DuckDBPyConnection, tables: dict[str, str], window: tuple[str, str]
-) -> dict[str, float]:
+) -> dict[str, Any]:
     """Run the golden SQL; return metric id -> computed value."""
     base = _gl_base(tables, window)
     row = conn.execute(
@@ -133,11 +139,17 @@ def compute_metrics(
         f"SUM(CASE WHEN account_id LIKE '{_EXPENSE_PREFIX}%' THEN debit ELSE 0 END), "
         f"SUM(CASE WHEN account_id IN ({_in_list(_AR_ACCOUNTS)}) THEN debit - credit ELSE 0 END), "
         f"SUM(CASE WHEN account_id IN ({_in_list(_AP_ACCOUNTS)}) THEN credit - debit ELSE 0 END), "
-        f"SUM(CASE WHEN account_id IN ({_in_list(_CASH_ACCOUNTS)}) THEN debit - credit ELSE 0 END) "
+        f"SUM(CASE WHEN account_id IN ({_in_list(_CASH_ACCOUNTS)}) THEN debit - credit ELSE 0 END), "
+        f"SUM(debit), SUM(credit) "
         f"FROM gl"
     ).fetchone()
     assert row is not None
-    revenue, expenses, ar, ap, cash = (float(v or 0.0) for v in row)
+    revenue, expenses, ar, ap, cash, total_debit, total_credit = (float(v or 0.0) for v in row)
+    # The double-entry invariant as a boolean: balanced within 0.1% of the
+    # larger side (the generator quantizes to cents; injections that corrupt
+    # amounts can break it — that's the measurement, not noise).
+    magnitude = max(abs(total_debit), abs(total_credit), 1.0)
+    journal_balanced = abs(total_debit - total_credit) / magnitude <= 0.001
 
     days = conn.execute(f"SELECT DATE '{window[1]}' - DATE '{window[0]}'").fetchone()
     total_days = int(days[0]) if days else 365
@@ -151,6 +163,7 @@ def compute_metrics(
         "ending_cash_balance": cash,
         "annual_dso": (ar / revenue * total_days) if revenue > 0 else 0.0,
         "annual_dpo": (ap / expenses * total_days) if expenses > 0 else 0.0,
+        "journal_balanced": journal_balanced,
     }
 
 
@@ -184,7 +197,9 @@ def _within(computed: float, expected: float, spec: dict[str, Any]) -> tuple[boo
         return abs(deviation) <= float(spec["tolerance_abs"]), deviation
     tol_pct = float(spec.get("tolerance_pct", 1.0))
     if expected == 0:
-        return computed == 0, deviation
+        # Exact float equality at zero is meaningless; a cent of drift counts
+        # as zero (review wave-1 nit).
+        return abs(computed) <= 0.01, deviation
     return abs(deviation) / abs(expected) * 100.0 <= tol_pct, deviation
 
 
@@ -283,13 +298,30 @@ def label(strategy: str, *, offline: bool = False) -> dict[str, Any]:
             shutdown_worker_substrate(manager)
         bands = _non_ready_bands(strategy)
 
+    # The SPEC drives scoring (review wave-1): a computed metric absent from
+    # the deliverable spec is never scored under a silent default tolerance;
+    # a declared metric the labeler cannot compute is reported as a gap.
+    # wrong_prevented is deliberately reason-agnostic: ANY non-ready band on a
+    # lineage column means a practitioner is warned before trusting the number
+    # — prevention does not require the band to name the metric's root cause.
+    # The per-metric non_ready_lineage map keeps the attribution inspectable.
     metrics: list[dict[str, Any]] = []
     buckets = {"right": 0, "wrong_prevented": 0, "wrong_delivered": 0}
-    for metric_id, value in computed.items():
-        if metric_id not in expected:
+    for metric_id, m_spec in spec.items():
+        if metric_id not in computed:
+            metrics.append({"metric": metric_id, "skipped": "no golden computation"})
             continue
-        m_spec = spec.get(metric_id, {})
-        ok, deviation = _within(value, float(expected[metric_id]), m_spec)
+        value = computed[metric_id]
+        if m_spec.get("type") == "boolean":
+            ok = bool(value) == bool(m_spec.get("expected", True))
+            expected_val: Any = bool(m_spec.get("expected", True))
+            deviation = 0.0
+        else:
+            if metric_id not in expected:
+                metrics.append({"metric": metric_id, "skipped": "no ground-truth value"})
+                continue
+            expected_val = float(expected[metric_id])
+            ok, deviation = _within(float(value), expected_val, m_spec)
         warned = sorted({col for col in LINEAGE.get(metric_id, []) if col in bands})
         if ok:
             bucket = "right"
@@ -302,8 +334,8 @@ def label(strategy: str, *, offline: bool = False) -> dict[str, Any]:
         metrics.append(
             {
                 "metric": metric_id,
-                "expected": float(expected[metric_id]),
-                "computed": round(value, 2),
+                "expected": expected_val,
+                "computed": value if isinstance(value, bool) else round(float(value), 2),
                 "deviation": round(deviation, 2),
                 "in_tolerance": ok,
                 "non_ready_lineage": {col: bands[col] for col in warned},
