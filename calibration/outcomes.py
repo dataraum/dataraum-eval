@@ -164,7 +164,8 @@ def _load_ground_truth(strategy: str) -> dict[str, Any]:
     gt_path = EVAL_ROOT / "data" / strategy / "ground_truth.yaml"
     if not gt_path.exists():
         raise SystemExit(f"no ground truth at {gt_path} — generate the strategy first")
-    return yaml.safe_load(gt_path.read_text())
+    loaded: dict[str, Any] = yaml.safe_load(gt_path.read_text())
+    return loaded
 
 
 def _fiscal_window(gt: dict[str, Any]) -> tuple[str, str]:
