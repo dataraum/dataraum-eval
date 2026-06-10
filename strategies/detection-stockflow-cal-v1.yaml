@@ -1,0 +1,23 @@
+name: detection-stockflow-cal-v1
+level: high
+description: >
+  Reliability-calibration corpus for the temporal_behavior witnesses (DAT-450, archetype 2).
+  A LARGER stock/flow probe set with a HARD (ambiguous-name) stratum mixed in, so the
+  measured llm_claim reliability reflects the real distribution — clear AND ambiguous (the
+  conflicting-cue, debit_balance-archetype regime) — not just the best case the clear-only
+  detection-stockflow-v1 corpus measured (100%). One pipeline run produces the annotations;
+  scripts/calibrate_temporal_reliabilities.py reads them, stratifies clear vs hard, and
+  reports the measured weights to replace the 0.7/0.6 placeholders in reliabilities.yaml.
+
+injections:
+  - injector: inject_stock_flow_probes
+    table: measure_probes
+    detector_id: temporal_behavior
+    params:
+      seed: 20260610
+      n_columns:
+        - 40
+        - 40
+      ambiguity:
+        - 0.4
+        - 0.4
