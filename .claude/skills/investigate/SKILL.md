@@ -1,13 +1,21 @@
 ---
 name: investigate
-description: Investigate calibration data via MCP tools — check detector recall against entropy_map and financial accuracy against ground_truth
+description: Investigate calibration output via the direct engine reads — check detector recall against entropy_map and financial accuracy against ground_truth
 ---
 
 # Investigate: $ARGUMENTS
 
 You are investigating the calibration output for strategy **$0** (default: `detection-v1`).
 
-The dataraum MCP server is connected and points at `output/$0/`. The pipeline has already run. Your job: use the MCP tools to assess data quality AND financial accuracy, then write structured findings.
+The pipeline has already run (the sidecar at `output/$0/calibration_run.json` proves it; if it is missing, stop and say so — do not trigger a run). The engine's MCP server is retired (ADR-0002); you read the run through the direct tools in `calibration/tools/`:
+
+```bash
+uv run python -m calibration.tools.look $0 [table]            # schema + profiles
+uv run python -m calibration.tools.measure $0 [--target t.c]  # scores + readiness + evidence
+uv run python -m calibration.tools.sql $0 "SELECT ..."        # read-only SQL on the lake
+```
+
+Your job: assess data quality AND financial accuracy, then write structured findings.
 
 ## Step 1: Load ground truth
 
@@ -15,29 +23,27 @@ Read `data/$0/ground_truth.yaml` — the correct financial metrics (computed fro
 
 Read `data/$0/entropy_map.yaml` — the known injections with target columns and detector IDs. Only read the first ~100 lines to get the injection summary (the file is large due to row indices). Focus on the `injection_id`, `target_file`, `target_column`, `detector_id`, and `parameters` fields.
 
-## Step 2: Start session and look at the data
+## Step 2: Look at the data
 
-Call `begin_session` to initialize. Note the contract and sources info.
+Run `look` with no table for the full overview — tables, row counts, identified time axes, enriched views.
 
-Call `look` (no target) to get the full schema overview — tables, columns, types, roles.
-
-For 2-3 tables that have known injections, call `look` with a target to see column profiles and distributions. Check: does the metadata make sense? Are injected columns showing signs of corruption?
+For 2-3 tables that have known injections, run `look $0 <table>` to see column profiles. Check: does the metadata make sense? Are injected columns showing signs of corruption?
 
 ## Step 3: Measure entropy
 
-Call `measure` (no target) to get all measurement points, BBN readiness, and pipeline status.
+Run `measure $0` for all column-scoped detector scores and the loss-rollup readiness (per-intent `ready` / `investigate` / `blocked` — the Bayesian network is gone, readiness is a deterministic loss rollup; DAT-442).
 
 For each injection in entropy_map, check:
-- Is there a measurement point for the target column + expected dimension?
+- Is there a score for the target column + expected detector?
 - Is the score > 0.3?
-- What is the BBN readiness for the column? (should be "investigate" or "blocked" for injected columns)
+- What is the worst intent readiness for the column? (should be `investigate` or `blocked` for injected columns)
 - Record: injection_id, detector_id, target, expected score > 0.3, actual score, readiness, pass/fail
 
-Call `measure` with `target` on specific tables to drill into per-column detail when the dataset-level view is ambiguous.
+Run `measure $0 --target <table.column>` to drill into a specific column's evidence: every entropy object with its witness claims plus the `claim_witnesses` provenance (which witness said what, with what reliability).
 
 ## Step 4: Check financial accuracy
 
-Use `query` for these key metrics from ground_truth:
+YOU write the SQL now — the retired `query` tool wrapped an LLM, and that judgment is yours. Use `sql` for these key metrics from ground_truth:
 
 1. "What is total revenue for fiscal year 2025?"
 2. "What is total expenses for fiscal year 2025?"
@@ -45,9 +51,9 @@ Use `query` for these key metrics from ground_truth:
 4. "What is the ending cash balance as of December 2025?"
 5. "Are all journal entries balanced (total debits equal total credits)?"
 
-For each: record the question, expected value (from ground_truth), actual value from MCP, deviation percentage, confidence level, and any assumptions the query agent applied.
+Mind the trial-balance semantics: the trial balance is PERIODIC, not cumulative — balance-sheet items need the right aggregation over periods, and a column's `temporal_behavior` evidence (stock vs flow) tells you whether SUM is even meaningful. When the entropy evidence flags a column you are querying, factor that into your confidence.
 
-If `query` errors, fall back to `run_sql` with direct SQL against the DuckDB tables.
+For each: record the question, the SQL you ran, expected value (from ground_truth), actual value, deviation percentage, and the assumptions you applied.
 
 ## Step 5: Write findings
 
@@ -79,20 +85,18 @@ metric_accuracy:
   details:
     - id: total_revenue
       question: "What is total revenue for fiscal year 2025?"
+      sql: "<the statement you ran>"
       expected: 51766199.72
       actual: <value>
       deviation_pct: <pct>
       tolerance_pct: 1.0
       passed: true/false
-      confidence: <from query response>
-      assumptions: [<list from query response>]
+      assumptions: [<the judgments you applied>]
 
 quality_state:
-  pipeline_status: <from measure>
-  overall_readiness: <from measure BBN>
+  overall_readiness: <worst band across columns>
   columns_blocked: <N>
   columns_investigate: <N>
-  columns_ready: <N>
   top_issues: [<highest scoring measurement points>]
 
 tool_observations:
@@ -104,6 +108,6 @@ tool_observations:
 Print a concise summary table showing:
 - Detector recall: X/Y pass
 - Metric accuracy: X/Y within tolerance
-- BBN readiness: X blocked, Y investigate, Z ready
+- Readiness: X blocked, Y investigate, Z ready
 - Top issues found
 - Key observations about tool surface gaps (if any)

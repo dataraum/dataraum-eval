@@ -1,6 +1,6 @@
 ---
 name: accept
-description: Product acceptance — exercise the MCP tool surface as a practitioner would, verify against ground truth, catch what code review cannot
+description: Product acceptance — exercise the eval tool surface as a practitioner would, verify against ground truth, catch what code review cannot
 ---
 
 # Accept: $ARGUMENTS
@@ -8,6 +8,14 @@ description: Product acceptance — exercise the MCP tool surface as a practitio
 You are a product owner performing acceptance testing. Code review already happened. Your job is different: **does this actually work when a practitioner uses it?**
 
 A code review checks if the code is correct. Acceptance checks if the product is useful.
+
+The engine's MCP server is retired (ADR-0002; the cockpit is the product's client). What you exercise here is the eval read surface over the engine-as-library — the same live functions the product reads through:
+
+```bash
+uv run python -m calibration.tools.look $0 [table]            # schema + profiles
+uv run python -m calibration.tools.measure $0 [--target t.c]  # scores + readiness + evidence
+uv run python -m calibration.tools.sql $0 "SELECT ..."        # read-only SQL on the lake
+```
 
 ## Input
 
@@ -19,12 +27,12 @@ $ARGUMENTS is one of:
 
 **If handoff mode:**
 Read `vendor/dataraum-context/.claude/handoff.md`. For each pending item, identify:
-- Which MCP tools are affected
+- Which read surface or pipeline behavior is affected
 - What behavior changed
 - What ground truth to check against
 
 **If full acceptance:**
-All tools, all ground truth.
+The whole surface, all ground truth.
 
 Load ground truth:
 - `data/$0/ground_truth.yaml` — correct financial metrics
@@ -39,49 +47,44 @@ uv run pytest calibration/ -q --strategy $0
 
 If tests fail: STOP. Report failures. These are blocking — no point exercising tools on broken output.
 
-## Step 3: Exercise tools as a practitioner
+## Step 3: Exercise the surface as a practitioner
 
-This is the core of acceptance. Do not just call tools and check return values. Use them as a financial analyst would, asking "does this make sense?"
+This is the core of acceptance. Do not just run tools and check return values. Use them as a financial analyst would, asking "does this make sense?"
 
 ### look
-- Call `look` on each table. Does the output tell you something useful about the data?
+- Run `look $0`, then `look $0 <table>` on each table. Does the output tell you something useful about the data?
 - Would a practitioner understand the column roles, types, distributions?
-- Are there obvious problems visible in the samples that the system should have caught?
+- Are there obvious problems visible in the profiles that the system should have caught?
 
 ### measure
-- Call `measure`. Do entropy scores align with what you know from entropy_map?
+- Run `measure $0`. Do entropy scores align with what you know from entropy_map?
 - For CLEAN columns: are scores low? High scores on clean data = false alarm = bug.
 - For INJECTED columns: are scores high? Low scores on injected data = missed detection = bug.
-- Does the BBN readiness make sense? Injected columns should be "investigate" or "blocked."
-- Does the contract check pass/fail correctly?
+- Does the loss-rollup readiness make sense? Injected columns should be `investigate` or `blocked`.
 
-### why
-- For the top 3 injected columns: call `why`. Does the evidence make sense?
-- Does it identify the right detector? The right problem?
+### measure --target (the why-equivalent)
+- For the top 3 injected columns: run `measure $0 --target <table.column>`. Does the evidence make sense?
+- Does it identify the right detector? The right problem? Do the witness claims (`claim_witnesses`) tell a coherent story — who disagreed with whom, and why did the score follow?
 - Would a practitioner understand the explanation, or is it jargon?
 
-### query
-- Ask the ground truth questions:
+### sql (you write the SQL — that judgment moved from the retired query tool to you)
+- Answer the ground truth questions:
   1. "What is total revenue for fiscal year 2025?" (expected: from ground_truth.yaml, tolerance: 1%)
   2. "What is the DSO?" (expected: from ground_truth.yaml, tolerance: +/-1.0)
   3. "What is gross profit?" (expected: from ground_truth.yaml, tolerance: 1%)
   4. "What is revenue for March 2025?" (expected: from ground_truth.yaml, tolerance: 1%)
   5. "What is the ending AR balance?" (expected: from ground_truth.yaml, tolerance: 1%)
-- Check: are assumptions declared? Is confidence provided? Is the response useful?
-
-### run_sql
-- Run a SQL query that aggregates across accounts without grouping. Are warnings emitted?
-- Run a query against an injected column. Are quality warnings present?
+- For each: before trusting your own SQL, check the entropy evidence on the columns you aggregate. Did the surface warn you where it should have (stock-vs-flow on a SUM, unit conflicts, null semantics)? The trial balance is PERIODIC, not cumulative — does the evidence surface that?
 
 ## Step 4: Devil's advocate
 
 Now actively try to break things:
 
-- **Edge cases**: Query something not in the ground truth. Does the system handle uncertainty gracefully, or does it hallucinate?
-- **False confidence**: Ask a question where data quality should make the answer unreliable. Does the system warn, or does it answer confidently?
-- **Useless correctness**: Is any tool output technically correct but practically useless? (e.g., measure returns scores but no context about what they mean)
-- **Missing connections**: If a column is injected AND queried, does the query response acknowledge the quality issue?
-- **Format and UX**: Would a practitioner understand these responses without reading source code?
+- **Edge cases**: Query something not in the ground truth. Does the surface give you what you need to handle uncertainty, or does it leave you guessing?
+- **False confidence**: Find a question where data quality should make the answer unreliable. Does the evidence warn you, or would a practitioner confidently compute a wrong number?
+- **Useless correctness**: Is any tool output technically correct but practically useless? (e.g., scores with no context about what they mean)
+- **Missing connections**: If a column is injected AND needed for a metric, does the evidence chain (`measure --target`) actually connect the dots?
+- **Format and UX**: Would a practitioner understand these outputs without reading source code?
 
 ## Step 5: Report
 
@@ -106,7 +109,10 @@ tool_acceptance:
     status: pass | fail | degraded
     findings:
       - "..."
-  # ... for each tool tested
+  - tool: sql
+    status: pass | fail | degraded
+    findings:
+      - "..."
 
 ground_truth_queries:
   - id: total_revenue
@@ -114,7 +120,7 @@ ground_truth_queries:
     actual: <value>
     deviation_pct: <pct>
     passed: true | false
-    assumptions_declared: true | false
+    evidence_warned_where_needed: true | false
     response_useful: true | false
   # ...
 
@@ -136,14 +142,14 @@ observations:
 ## Step 6: Close the loop
 
 - Update `vendor/dataraum-context/.claude/handoff.md`: change status of tested items from `pending` to `verified` or `failed`
-- If blocking issues: create or update Linear issue with specific findings
+- If blocking issues: report them with specific findings (Jira lives at DAT-*)
 - Print summary to user: verdict, blocking issues, key observations
 
 ## Rules
 
-- "Tests pass" is necessary but NOT sufficient — you must USE the tools
+- "Tests pass" is necessary but NOT sufficient — you must USE the surface
 - A tool that returns correct data in an unusable format is BROKEN
 - Compare against ground_truth.yaml and entropy_map.yaml, not "looks reasonable"
 - If a detector misses a known injection, it's a bug — not a design gap
-- If a query returns the wrong number, that's blocking — not "within tolerance" (unless it actually is within the declared tolerance)
+- If your SQL returns the wrong number, decide honestly whether the surface failed you (no warning where evidence existed) or the data did — the first is blocking
 - Your job is to find what's wrong, not to confirm what's right

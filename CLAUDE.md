@@ -66,9 +66,15 @@ Refresh the recorded fixture only when the pipeline's *output shape* changes
 | "would statistic X detect Y?" — any new measurement idea | `/ground` — the kill gate as a procedure |
 | a detector misses, over-fires, or needs tuning | `/tune-detector` |
 | new injection family, fixture, or ground-truth values | `/evolve-testdata` |
-| check detector recall + financial accuracy via MCP | `/investigate` |
+| check detector recall + financial accuracy via the direct read tools | `/investigate` |
 | produce + validate a business deliverable | `/deliver` |
 | product acceptance of the tool surface | `/accept` |
+
+The MCP server the skills used to drive was retired with the product pivot
+(ADR-0002; deleted in DAT-487). The skills now read the engine **as a library**
+through `calibration/tools/` — `look` / `measure` / `sql`, all read-only over a
+completed run's sidecar. SQL judgment (the old `query` tool's LLM) belongs to
+the investigating agent itself.
 
 **Probes are disposable.** They live in `scripts/probes/<ticket-or-slug>/`, never
 at the repo root, and are deleted once the verdict (BUILD, or CUT + why) is
