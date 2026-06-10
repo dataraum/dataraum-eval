@@ -21,7 +21,6 @@ Run:  uv run python scripts/calibrate_temporal_reliabilities.py            # mea
 
 from __future__ import annotations
 
-import argparse
 from dataclasses import dataclass
 
 import yaml
@@ -31,15 +30,6 @@ from calibration.conftest import DATA_DIR
 from calibration.reliability_rig import WitnessVote, estimate_reliabilities
 
 _STRATEGY = "detection-stockflow-cal-v1"
-_RELIABILITIES_YAML = (
-    runner_mod.EVAL_ROOT
-    / "vendor"
-    / "dataraum-context"
-    / "packages"
-    / "dataraum-config"
-    / "entropy"
-    / "reliabilities.yaml"
-)
 
 _PRIOR_PSTOCK = {"point_in_time": 1.0, "additive": 0.0}
 _CLAIM_PSTOCK = {"stock": 1.0, "flow": 0.0}
@@ -131,10 +121,6 @@ def _accuracy(rows: list[ProbeRow], witness: str) -> tuple[float, int]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--write", action="store_true", help="update reliabilities.yaml")
-    args = parser.parse_args()
-
     if not (DATA_DIR / _STRATEGY).exists():
         raise SystemExit(
             f"no data for {_STRATEGY}; run `python -m calibration.runner {_STRATEGY}` first"
@@ -164,19 +150,11 @@ def main() -> None:
         print(
             f"      clear accuracy={acc_c:.0%} (n={n_c})  |  ambiguous accuracy={acc_h:.0%} (n={n_h})"
         )
-
-    if not args.write:
-        print("\n(dry run — pass --write to update reliabilities.yaml)")
-        return
-
-    data = yaml.safe_load(_RELIABILITIES_YAML.read_text())
-    tb = data.setdefault("witnesses", {}).setdefault("temporal_behavior", {})
-    for w in ("ontology_prior", "llm_claim"):
-        if w in reliabilities:
-            tb[w] = round(reliabilities[w], 4)
-    _RELIABILITIES_YAML.write_text(yaml.safe_dump(data, sort_keys=False))
-    print(f"\nwrote measured temporal_behavior reliabilities → {_RELIABILITIES_YAML}")
-    print("NOTE: review the provenance comment block by hand — this writer updates values only.")
+    # Print-only: the shipped artifact (dataraum-config/entropy/reliabilities.yaml) is
+    # hand-curated WITH a provenance comment block (ADR-0009 source #1), which an automated
+    # yaml dump would strip. Copy the values + the per-stratum provenance above into the
+    # witnesses.temporal_behavior block by hand.
+    print("\nApply the measured values + this provenance into reliabilities.yaml by hand.")
 
 
 if __name__ == "__main__":
