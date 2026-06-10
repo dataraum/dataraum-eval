@@ -1,0 +1,145 @@
+# DAT-442 release scorecard — every engine entropy detector, its disposition on the
+# entropy-as-disagreement architecture, and its empirical coverage status.
+#
+# Guarded by test_detector_coverage.py: every detector the engine REGISTERS
+# (get_default_registry().get_all_detectors()) must appear here with a valid
+# disposition — the "no orphan detector" lock. Disposition is the ARCHITECTURAL
+# claim (which layer); coverage is the EMPIRICAL claim (is it proven on the eval).
+#
+# Two-dimensional scale proof:
+#   * architectural — every detector on a principled layer, no boost-Goodhart, coherent
+#     loss/readiness composition. DONE + grounded (pooling/models.py, loss.yaml).
+#   * empirical — recall + precision per detector through the full Temporal workflow,
+#     real reliabilities for pools, teach-closure for teachables. THE OPEN GATE — this
+#     file makes the gaps visible. Most cells are `unverified` on purpose.
+#
+# disposition:
+#   pool        — adjudication: a claim + >=2 INDEPENDENT witnesses that can disagree
+#                 (pooled into conflict C + ignorance U). The only layer that teaches.
+#   scalar      — honest goodness-of-fit / rate / divergence; one grounded signal, no
+#                 competing witness. Pooling it would invent fake disagreement (Goodhart).
+#   informative — a forensic signal deliberately EXCLUDED from the loss/readiness rollup.
+#   candidate   — currently single-witness; becomes a `pool` IFF an independent, data-
+#                 grounded 2nd witness exists (entry_criterion). Until then scored scalar.
+#
+# coverage vocab:
+#   recall / precision : proven | baseline | out_of_slice | unverified | n/a
+#       proven       = green through the current Temporal workflow on the eval
+#       baseline     = recorded pre-Temporal / in-process only, not re-verified through Temporal
+#       out_of_slice = the current addSource/beginSession chain does not run its phase yet
+#       unverified   = not confirmed this cycle (a gap to close)
+#       n/a          = no injection exercises this leg
+#   reliabilities : real | placeholder | n/a    (n/a = not a pool)
+#   teach_closure : proven | wired | none | n/a (the teach overlay that drives C->eps)
+#   in_slice      : true | false | unknown      (does the current Temporal chain run it)
+
+detectors:
+
+  # ---- POOLED (adjudication; the generalized layer) --------------------------
+  null_semantics:
+    disposition: pool
+    witnesses: [quarantine_clustering, type_claim, null_vocabulary]
+    coverage:
+      recall: proven
+      precision: proven
+      reliabilities: real          # DAT-450 rig, null_tokens-v2 corpus
+      teach_closure: proven        # test_teach_null_value (@llm); the DAT-447 reference
+      in_slice: true
+    proven_by: "detection-null-v1 (bank_transactions.amount); reliabilities.yaml calibrated:true"
+
+  temporal_behavior:
+    disposition: pool
+    witnesses: [ontology_prior, llm_claim]
+    coverage:
+      recall: out_of_slice         # see note: structurally the DAT-491 boundary, not a slice gap
+      precision: proven            # e2e 2026-06-10: balance_sheet.ending_balance quiet
+      reliabilities: placeholder   # 0.7/0.6, uncalibrated (safe: C is weight-robust)
+      teach_closure: wired         # harness exists; skips until a prior!=claim mislabel corpus
+      in_slice: true
+    note: >-
+      Recall on trial_balance.debit_balance can't fire two-witness: both prior and LLM
+      name-anchor to stock (proven e2e). It is the DAT-491 reality-witness boundary, not a
+      coverage gap. Real recall + teach-closure need a prior!=claim mislabel corpus.
+
+  # ---- LATENT CANDIDATES (pool IFF an independent grounded 2nd witness exists) -
+  # entry_criterion = the (b) adversarial gate: the 2nd witness must be DATA-GROUNDED and
+  # INDEPENDENT (grounded on data the existing witness does NOT use), not a collinear echo.
+  unit_entropy:
+    disposition: candidate
+    coverage:
+      recall: baseline
+      precision: baseline
+      reliabilities: n/a
+      teach_closure: wired         # unit teach (DAT-428) lands the declaration
+      in_slice: true
+    entry_criterion: >-
+      UNVERIFIED. Today single witness (1 - unit_confidence). Pool only if a 2nd witness
+      is grounded independently — e.g. an LLM unit hypothesis checked by a reconciliation
+      that the declared unit aggregates correctly (DAT-491-class). Must not echo confidence.
+
+  relationship_entropy:
+    disposition: candidate
+    coverage:
+      recall: unverified
+      precision: unverified
+      reliabilities: n/a
+      teach_closure: none
+      in_slice: false
+    entry_criterion: >-
+      UNVERIFIED. Today the orphan RATE. The latent pool is the discovery claim "is this
+      relationship genuine?" — value-overlap vs ontology-expectation vs LLM name-judgment,
+      which CAN disagree. join_path_determinism over-fires by ignoring confidence (the
+      adjacent signal). Confirm an independent grounded 2nd witness before promoting.
+
+  # ---- PERMANENT SCALAR (one grounded signal; pooling = Goodhart) -------------
+  # derived_value is the zero-cost probe of the LLM-measurable-witness pattern.
+  derived_value:
+    disposition: scalar
+    coverage:
+      recall: unverified
+      precision: unverified
+      reliabilities: n/a
+      teach_closure: none
+      in_slice: false
+    note: >-
+      CHEAP PATTERN PROBE (no DAT-491 lineage needed): it already has a deterministic
+      formula-discovery (correlation) + grounding (row match-rate). Add one LLM-hypothesized
+      formula witness; if its domain-expected formula disagrees with the data-discovered one
+      AND the disagreement is grounded by match-rate, it becomes a candidate. Fastest read
+      on whether "LLM hypothesis vs deterministic discovery" yields genuine grounded conflict.
+
+  benford:
+    disposition: informative          # KL surprise; excluded from loss.yaml by design
+    coverage: { recall: baseline, precision: baseline, reliabilities: n/a, teach_closure: none, in_slice: true }
+
+  null_ratio:
+    disposition: scalar               # completeness rate
+    coverage: { recall: baseline, precision: baseline, reliabilities: n/a, teach_closure: none, in_slice: true }
+
+  type_fidelity:
+    disposition: scalar               # max(1-parse_success, quarantine) — honest, no boost
+    coverage: { recall: baseline, precision: baseline, reliabilities: n/a, teach_closure: none, in_slice: true }
+
+  dimension_coverage:
+    disposition: scalar               # mean null rate over dimension columns
+    coverage: { recall: unverified, precision: unverified, reliabilities: n/a, teach_closure: none, in_slice: false }
+
+  cross_table_consistency:
+    disposition: scalar               # validation violation rate
+    coverage: { recall: unverified, precision: unverified, reliabilities: n/a, teach_closure: none, in_slice: false }
+
+  dimensional_entropy:
+    disposition: scalar               # NMI (grounded stat, DAT-472)
+    coverage: { recall: unverified, precision: unverified, reliabilities: n/a, teach_closure: none, in_slice: false }
+
+  temporal_entropy:
+    disposition: scalar               # binary type/role mismatch
+    coverage: { recall: baseline, precision: baseline, reliabilities: n/a, teach_closure: none, in_slice: true }
+
+  business_meaning:
+    disposition: scalar               # 1 - LLM naming confidence (single witness by ADR-0009)
+    coverage: { recall: baseline, precision: baseline, reliabilities: n/a, teach_closure: none, in_slice: true }
+
+  join_path_determinism:
+    disposition: scalar               # join-path count; deterministic
+    coverage: { recall: unverified, precision: unverified, reliabilities: n/a, teach_closure: none, in_slice: false }
