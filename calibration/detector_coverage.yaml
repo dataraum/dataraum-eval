@@ -85,18 +85,47 @@ detectors:
       that the declared unit aggregates correctly (DAT-491-class). Must not echo confidence.
 
   relationship_entropy:
-    disposition: candidate
+    disposition: scalar              # honest orphan RATE; the pooled discovery claim
+                                     # lives in relationship_discovery (lane L2)
     coverage:
-      recall: unverified
-      precision: unverified
+      recall: baseline
+      precision: baseline
       reliabilities: n/a
       teach_closure: none
-      in_slice: false
-    entry_criterion: >-
-      UNVERIFIED. Today the orphan RATE. The latent pool is the discovery claim "is this
-      relationship genuine?" — value-overlap vs ontology-expectation vs LLM name-judgment,
-      which CAN disagree. join_path_determinism over-fires by ignoring confidence (the
-      adjacent signal). Confirm an independent grounded 2nd witness before promoting.
+      in_slice: true
+    note: >-
+      Lane L2 (2026-06-10) fixed the live recall=0 bug: teach-materialized
+      manual/keeper rows (overlay-only evidence, no RI metrics) shadowed the
+      measured candidate/llm rows in load_relationship_for_pair — the orphan
+      measurement vanished exactly when a user taught the relationship. Loader
+      now backfills measured RI keys from the highest-precedence donor row
+      (ri_evidence_source provenance); honest silence preserved when no measured
+      row exists.
+
+  relationship_discovery:
+    disposition: pool
+    witnesses: [value_overlap, llm_judgment, manual_curation, keeper_retention]
+    coverage:
+      recall: unverified            # lane L2 ordering probe on recorded rows:
+                                    # injected-confirmed C=0.147 vs clean-confirmed
+                                    # C=0.013 (+0.134); not yet driven through Temporal
+      precision: unverified
+      reliabilities: placeholder    # rig needs a generative relationship family
+                                    # (clean FK / orphan-broken / spurious-overlap)
+      teach_closure: none           # the relationship overlay family (add/keep/reject)
+                                    # IS the teach surface and re-enters as witnesses;
+                                    # closure test pending. Gap: an explicit confirm
+                                    # overlay never materializes a row -> human witness
+                                    # silent on confirm-taught pairs.
+      in_slice: true                # declared on semantic_per_table (session detect)
+    note: >-
+      Lane L2 (2026-06-10): the discovery-claim pool built on EXISTING rows of the
+      directional pair — value_overlap (jc = max(Jaccard, containment) damped by
+      statistical_confidence; reads values, never names — the data witness),
+      llm_judgment, manual_curation, keeper_retention. Entry criterion satisfied.
+      Known structural gap: pure LLM declines never become focal pairs (the engine
+      enumerates the defined catalog only), so decline-vs-strong-overlap stays
+      unmeasurable until a focal-pair enumeration change + a decline-witness rig.
 
   # ---- PERMANENT SCALAR (one grounded signal; pooling = Goodhart) -------------
   # derived_value is the zero-cost probe of the LLM-measurable-witness pattern.
