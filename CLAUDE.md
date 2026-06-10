@@ -93,21 +93,26 @@ make real LLM calls — never run them as an iteration loop.
 ## Running calibration (Tier 3)
 
 The pipeline runs as a Temporal workflow (DAT-344/DAT-370): `calibration.stack`
-brings up Postgres + Temporal from the vendor compose, `calibration.worker` runs
+brings up Postgres + Temporal from the vendor compose as an **isolated docker
+project** (`-p dataraum-eval`, remapped host ports via
+`calibration/compose.eval-ports.yml`, own volume — it coexists with the shared
+cockpit `infra` stack and never touches it; DAT-445). `calibration.worker` runs
 the engine worker as a host subprocess (live working-tree code, host `data/` →
 host `lake_data/`), and `calibration.runner.run_pipeline` triggers
 `addSourceWorkflow` as a Temporal client and awaits the result.
 
 ```bash
 make calibrate                         # detection-v1: generate + pipeline + suite
+make calibrate STRATEGY=<name>         # any strategy (make list-strategies)
 make calibrate-typing                  # detection-typing-v1 (type-breaking only)
 
-# stepwise
-make generate-detection-v1             # testdata → data/detection-v1/
-make pipeline-detection-v1             # addSourceWorkflow → scores in PG
+# stepwise (pattern targets wrap calibration.runner)
+uv run python -m calibration.runner detection-v1 --generate-only --seed 42
+uv run python -m calibration.runner detection-v1 --pipeline-only
 uv run pytest calibration/ --strategy detection-v1 -v
 
-make clean                             # local dirs
+make clean                             # local dirs (data/ output/ lake_data/ workspace/)
+make clean-pg                          # eval project's PG/Temporal state only
 ```
 
 - Strategy YAML in `strategies/` defines injections (injector, table,
@@ -118,9 +123,9 @@ make clean                             # local dirs
 - Detectors whose phase isn't wired into the current workflow slice are skipped
   via `OUT_OF_SLICE_REASON` in `test_detector_recall.py`; move ids into
   `CURRENT_SLICE_DETECTORS` as phases land.
-- **Caution:** `make clean-pg` (`down -v`) tears down the *shared* cockpit stack
-  and wipes Postgres + the Temporal volume. Don't run it while anything else
-  uses the stack — prefer an engine-schema-only reset or a quiet window.
+- `make clean-pg` wipes only the isolated eval project's Postgres + Temporal
+  volume; the shared cockpit stack is a separate docker project and is
+  untouched — safe to run anytime.
 - Long pipeline runs go to the background — line up other work while they run;
   don't idle.
 

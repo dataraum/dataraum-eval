@@ -10,6 +10,8 @@ data/
 output/
 lake_data/
 workspace/
+# no logs at the repo root — logs belong under output/
+/output_*.log
 
 # IDE
 .idea/
