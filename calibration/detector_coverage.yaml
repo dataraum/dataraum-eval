@@ -49,17 +49,22 @@ detectors:
 
   temporal_behavior:
     disposition: pool
-    witnesses: [ontology_prior, llm_claim]
+    witnesses: [ontology_prior, llm_claim, structural_reconciliation]
     coverage:
-      recall: out_of_slice         # see note: structurally the DAT-491 boundary, not a slice gap
-      precision: proven            # e2e 2026-06-10: balance_sheet.ending_balance quiet
-      reliabilities: placeholder   # 0.7/0.6, uncalibrated (safe: C is weight-robust)
-      teach_closure: wired         # harness exists; skips until a prior!=claim mislabel corpus
+      recall: proven               # e2e 2026-06-10: concept mislabel C 0.000 -> 0.305
+      precision: proven            # e2e 2026-06-10: clear-name corpus quiet (C ~ 0)
+      reliabilities: real          # 0.762/0.838 measured (clear+ambiguous strata);
+                                   # structural_reconciliation 0.85 = probe-derived
+                                   # placeholder (needs an events-backed family to rig)
+      teach_closure: proven        # e2e 2026-06-10: concept_property teach C 0.305 -> 0.007
       in_slice: true
     note: >-
-      Recall on trial_balance.debit_balance can't fire two-witness: both prior and LLM
-      name-anchor to stock (proven e2e). It is the DAT-491 reality-witness boundary, not a
-      coverage gap. Real recall + teach-closure need a prior!=claim mislabel corpus.
+      DAT-491 wired: the structural_reconciliation witness (events->measure aggregation
+      lineage; LLM proposes, deterministic R_flow/R_stock reconciliation disposes) joins
+      the pool at begin_session's session_detect and abstains at every add_source detect
+      (lineage rows are exact-run). It is the data-grounded witness for the
+      debit_balance boundary, where both name-witnesses anchor to stock together —
+      its live e2e (begin_session over the canonical corpus) is the open leg.
 
   # ---- LATENT CANDIDATES (pool IFF an independent grounded 2nd witness exists) -
   # entry_criterion = the (b) adversarial gate: the 2nd witness must be DATA-GROUNDED and
