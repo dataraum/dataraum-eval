@@ -130,19 +130,28 @@ detectors:
   # ---- PERMANENT SCALAR (one grounded signal; pooling = Goodhart) -------------
   # derived_value is the zero-cost probe of the LLM-measurable-witness pattern.
   derived_value:
-    disposition: scalar
+    disposition: pool
+    witnesses: [formula_discovery, llm_hypothesis]
     coverage:
-      recall: unverified
+      recall: baseline              # obj.score unchanged (honest discovered mismatch
+                                    # rate — stays in ORDERING_DETECTORS); the pooled
+                                    # formula axis (formula_conflict/_ignorance evidence
+                                    # keys -> loss) not yet driven through Temporal
       precision: unverified
-      reliabilities: n/a
-      teach_closure: none
-      in_slice: false
+      reliabilities: placeholder    # rig needs a formula-divergence family (column
+                                    # named for one formula, values following another)
+      teach_closure: none           # natural teach: expected_formula overlay (not built)
+      in_slice: true
     note: >-
-      CHEAP PATTERN PROBE (no DAT-491 lineage needed): it already has a deterministic
-      formula-discovery (correlation) + grounding (row match-rate). Add one LLM-hypothesized
-      formula witness; if its domain-expected formula disagrees with the data-discovered one
-      AND the disagreement is grounded by match-rate, it becomes a candidate. Fastest read
-      on whether "LLM hypothesis vs deterministic discovery" yields genuine grounded conflict.
+      Lane L3 (2026-06-10): the LLM-hypothesis witness BUILT — the cheap probe of
+      "LLM hypothesizes, data grounds". Supply path mirrors temporal_behavior
+      (column_annotation prompt field pair -> SemanticAnnotation -> loaders);
+      independence preserved by prompt design (the hypothesis states what the NAME
+      implies, ungraded by samples); novel hypotheses graded over lake.typed by the
+      same match-rate statistic (hallucinated source columns -> abstain). Formula
+      identity compared as sqlglot structures with commutative-operand sorting,
+      never strings. obj.score stays the scalar mismatch rate; conflict rides in
+      evidence keys. No resolve write-back (no consumer field yet).
 
   benford:
     disposition: informative          # KL surprise; excluded from loss.yaml by design
