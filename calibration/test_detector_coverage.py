@@ -32,7 +32,9 @@ _IN_SLICE = {True, False, "unknown"}
 
 @pytest.fixture(scope="module")
 def scorecard() -> dict[str, Any]:
-    return yaml.safe_load(_COVERAGE.read_text())["detectors"]
+    loaded = yaml.safe_load(_COVERAGE.read_text())
+    detectors: dict[str, Any] = loaded["detectors"]
+    return detectors
 
 
 @pytest.fixture(scope="module")
