@@ -1,0 +1,22 @@
+name: detection-stockflow-v1
+level: high
+description: >
+  Stock/flow calibration (DAT-445). Generates a `measure_probes` table of clearly-named
+  measure columns of KNOWN true temporal behaviour — half carried-forward levels
+  (stock), half per-period movements (flow) — from the generative stock/flow family.
+
+  This is the corpus for the temporal_behavior `llm_claim` witness. The e2e's first
+  job is to measure the LLM's clear-name stock/flow accuracy (the ground-first gate's
+  load-bearing residual): for each probe column, does the LLM's temporal_behavior_claim
+  match the recorded `true_behavior`? A genuine prior!=claim mislabel (recall +
+  concept_property teach-closure) is exercised on top via a config overlay.
+
+injections:
+  - injector: inject_stock_flow_probes
+    table: measure_probes
+    detector_id: temporal_behavior
+    params:
+      seed: 20260610
+      n_columns:
+        - 16
+        - 24
