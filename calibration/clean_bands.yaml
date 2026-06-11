@@ -1,10 +1,9 @@
 provenance:
   source: A4 clean seed sweep (scripts/probes/a4-seed-sweep driver)
   seeds:
-  - 42
-  - 43
-  - 44
-  - 45
+  - 46
+  - 47
+  - 48
   date: '2026-06-11'
   notes: "Observed [min, max] per key across seeds; 'seen' < len(seeds) means the\
     \ key was not emitted on every run (LLM annotation coverage varies \u2014 normal,\
@@ -18,27 +17,27 @@ bands:
       max: 1.0
       seen: 3
     bank_transactions.amount:business_meaning:
-      min: 0.1
+      min: 0.15
       max: 0.15
-      seen: 4
+      seen: 3
     bank_transactions.date:business_meaning:
       min: 0.1
       max: 0.15
-      seen: 4
-    bank_transactions.payment_id:business_meaning:
-      min: 0.05
-      max: 0.15
-      seen: 4
+      seen: 3
     bank_transactions.payment_id:null_ratio:
-      min: 0.518
-      max: 0.5302
-      seen: 4
+      min: 0.5104
+      max: 0.5166
+      seen: 3
     bank_transactions.reference:business_meaning:
+      min: 0.15
+      max: 0.15
+      seen: 3
+    fx_rates.date:business_meaning:
       min: 0.1
       max: 0.15
-      seen: 4
+      seen: 3
     fx_rates.from_ccy:business_meaning:
-      min: 0.1
+      min: 0.15
       max: 0.15
       seen: 3
     fx_rates.rate:business_meaning:
@@ -50,124 +49,84 @@ bands:
       max: 0.15
       seen: 3
     fx_rates.to_ccy:business_meaning:
-      min: 0.1
+      min: 0.15
       max: 0.15
       seen: 3
     invoices.amount:business_meaning:
       min: 0.15
       max: 0.15
-      seen: 4
+      seen: 3
     invoices.amount:temporal_behavior:
-      min: 0.5721
+      min: 0.0
       max: 0.6155
-      seen: 4
+      seen: 3
     invoices.date:business_meaning:
       min: 0.1
       max: 0.15
-      seen: 4
-    invoices.date:cross_table_consistency:
-      min: 0.0011
-      max: 0.6455
-      seen: 4
-    invoices.due_date:cross_table_consistency:
-      min: 0.0011
-      max: 0.6455
-      seen: 4
-    invoices.invoice_id:cross_table_consistency:
-      min: 0.0011
-      max: 0.6455
-      seen: 4
-    invoices.vendor_id:business_meaning:
-      min: 0.05
-      max: 0.15
-      seen: 4
-    journal_lines.cost_center:null_ratio:
-      min: 0.5157
-      max: 0.5196
-      seen: 4
-    journal_lines.net_amount:business_meaning:
+      seen: 3
+    journal_entries.date:business_meaning:
       min: 0.1
       max: 0.15
-      seen: 4
+      seen: 3
+    journal_lines.cost_center:null_ratio:
+      min: 0.5164
+      max: 0.5171
+      seen: 3
     payments.amount:business_meaning:
       min: 0.15
       max: 0.15
-      seen: 4
-    payments.amount:temporal_behavior:
-      min: 0.0019
-      max: 0.6649
-      seen: 4
+      seen: 3
     payments.date:business_meaning:
       min: 0.1
       max: 0.15
-      seen: 4
-    payments.date:cross_table_consistency:
-      min: 0.0011
-      max: 0.6455
-      seen: 4
-    payments.invoice_id:cross_table_consistency:
-      min: 0.0011
-      max: 0.6455
-      seen: 4
+      seen: 3
     trial_balance.credit_balance:benford:
-      min: 0.2393
-      max: 0.2897
-      seen: 4
+      min: 0.199
+      max: 0.2573
+      seen: 3
     trial_balance.credit_balance:temporal_behavior:
-      min: 0.347
-      max: 0.5063
-      seen: 4
+      min: 0.3081
+      max: 0.5127
+      seen: 3
     trial_balance.credit_balance:unit_entropy:
       min: 1.0
       max: 1.0
-      seen: 4
+      seen: 3
     trial_balance.debit_balance:benford:
-      min: 0.1682
-      max: 0.2377
-      seen: 4
+      min: 0.2315
+      max: 0.3005
+      seen: 3
     trial_balance.debit_balance:temporal_behavior:
-      min: 0.2866
-      max: 0.5063
-      seen: 4
+      min: 0.2434
+      max: 0.5127
+      seen: 3
     trial_balance.debit_balance:unit_entropy:
       min: 1.0
       max: 1.0
-      seen: 4
+      seen: 3
   table:
     bank_transactions:dimension_coverage:
-      min: 0.208
-      max: 0.2651
-      seen: 4
+      min: 0.2552
+      max: 0.2583
+      seen: 3
     bank_transactions:dimensional_entropy:
-      min: 0.2253
-      max: 0.2275
-      seen: 4
+      min: 0.2274
+      max: 0.2329
+      seen: 3
     fx_rates:dimensional_entropy:
       min: 0.5
       max: 0.5
-      seen: 4
-    invoices:cross_table_consistency:
-      min: 0.0011
-      max: 0.6455
-      seen: 4
+      seen: 3
     invoices:dimensional_entropy:
-      min: 0.8105
-      max: 0.8134
-      seen: 4
-    journal_entries:dimensional_entropy:
-      min: 0.0319
-      max: 0.5455
-      seen: 4
+      min: 0.8102
+      max: 0.8124
+      seen: 3
     journal_lines:dimensional_entropy:
       min: 1.0
       max: 1.0
-      seen: 4
-    payments:cross_table_consistency:
-      min: 0.0011
-      max: 0.6455
-      seen: 4
+      seen: 3
     trial_balance:dimensional_entropy:
       min: 0.3768
       max: 0.3768
-      seen: 4
+      seen: 3
   relationship: {}
