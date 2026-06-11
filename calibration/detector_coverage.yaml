@@ -185,6 +185,12 @@ detectors:
       DAT-444 drift_formula remap); clean leg quiet (table grain 0.0-0.0012, no
       column fan-out). Prevention attribution (B3) credits it with all 6
       wrong_prevented metrics on detection-v1 (related: TB↔GL fan-out).
+      A4 seed-sweep caveat: stage_date_ordering's sql_hints exemplar treated
+      due_date as a process stage, so on 2 of 4 clean seeds the generated SQL
+      flagged the 65% of payments that arrive EARLY (0.64 on invoices/payments
+      date columns; warning severity; no deliverable lineage; scoreboard 7/0/0
+      all seeds). Hint fixed (engine c98f00fd); the wide clean band stays in
+      clean_bands.yaml until a post-fix resweep tightens it.
     note: >-
       L7 (2026-06-11): wired — operatingModelWorkflow's terminal
       operating_model_detect scores executed validations; failed checks fan out

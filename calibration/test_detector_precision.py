@@ -1,25 +1,32 @@
-"""Detector precision — behavior on clean data.
+"""Detector precision — behavior on clean data, guarded by MEASURED bands.
 
 On clean data (no injections), detector scores reflect baseline data
-characteristics, not problems. This test establishes the clean baseline
-and catches regressions where detectors start scoring higher than expected.
+characteristics, not problems — and a clean emission is a DISTRIBUTION, not a
+point: LLM annotation coverage and confidence vary run to run (the A4 seed
+sweep measured 145-208 column emissions across four seeds of the same clean
+strategy). The guard is therefore a measured band per key
+(``calibration/clean_bands.yaml``, built by ``scripts/build_clean_bands.py``
+from the sweep dumps), at every grain the rollup scores — column, table,
+relationship. A score above its band's max (plus tolerance) is a regression;
+a high score with no band is a NEW emission to triage. Scores at or below the
+noise floor are uninteresting at any grain.
 
-Scores above threshold on clean data aren't necessarily "false alarms" —
-financial data naturally has outliers, non-Benford distributions, and
-nullable columns. The test distinguishes between:
-- Known baseline scores (expected, documented)
-- Unexpected high scores (potential detector regressions)
+Regenerate bands only by resweeping (the driver in scripts/probes/ is recreated
+per sweep) and rebuilding — never by hand-editing a band to make a run pass.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
 
+from calibration.conftest import DetectorScores
+
 EVAL_ROOT = Path(__file__).parent.parent
-BASELINE_PATH = EVAL_ROOT / "calibration" / "clean_baseline.yaml"
+BANDS_PATH = EVAL_ROOT / "calibration" / "clean_bands.yaml"
 
 # Scores at or below this are uninteresting — don't track them
 NOISE_FLOOR = 0.15
@@ -29,79 +36,77 @@ NOISE_FLOOR = 0.15
 # subset of legitimately-named clean columns (LLM confidence wobble — observed
 # across three batches: date/reference/amount entries shuffle every run, all
 # <= 0.2); the recall suite already classifies it LLM-nondeterministic. Above
-# 0.2 on clean IS a precision regression and stays tracked. The statistical
-# treatment of LLM-variance baselines (captured baseline vs generative seeds)
-# is a regroup/S2 item — this floor is the observed band, not a tuned knob.
+# 0.2 on clean IS a precision regression and stays tracked.
 NOISE_FLOOR_BY_DETECTOR = {"business_meaning": 0.2}
+
+# Band max + this much is a regression (sampling slack atop a 4-seed band).
+BAND_TOLERANCE = 0.05
 
 
 def _floor_for(detector: str) -> float:
     return NOISE_FLOOR_BY_DETECTOR.get(detector, NOISE_FLOOR)
 
 
-def _load_baseline() -> dict[str, float]:
-    """Load known clean baseline scores."""
-    if not BASELINE_PATH.exists():
-        return {}
-    with open(BASELINE_PATH) as f:
-        data = yaml.safe_load(f) or {}
-    result: dict[str, float] = data.get("scores", {})
+def _load_bands() -> dict[str, dict[str, dict[str, Any]]]:
+    if not BANDS_PATH.exists():
+        pytest.skip(
+            f"No measured bands at {BANDS_PATH} — run a clean seed sweep and "
+            "scripts/build_clean_bands.py."
+        )
+    data = yaml.safe_load(BANDS_PATH.read_text()) or {}
+    result: dict[str, dict[str, dict[str, Any]]] = data.get("bands", {})
     return result
 
 
-def _score_key(table: str, column: str, detector: str) -> str:
-    """Canonical key for baseline YAML."""
-    return f"{detector}:{table}.{column}"
+def _scored_keys(scores: DetectorScores) -> dict[str, dict[str, tuple[str, float]]]:
+    """Per grain: band key -> (detector, score), matching the sweep dump's keys."""
+    return {
+        "column": {f"{t}.{c}:{d}": (d, s) for (t, c, d), s in scores.column.items()},
+        "table": {f"{t}:{d}": (d, s) for (t, d), s in scores.table.items()},
+        "relationship": {f"{t}.{c}:{d}": (d, s) for (t, c, d), s in scores.relationship.items()},
+    }
 
 
-def test_clean_scores_match_baseline(
-    clean_pipeline_scores: dict[tuple[str, str, str], float],
+def test_clean_scores_within_measured_bands(
+    clean_detector_scores: DetectorScores,
 ) -> None:
-    """Scores on clean data should match the known baseline within tolerance.
+    """Every clean score above its floor sits within its measured band (+tolerance).
 
-    If no baseline exists yet, this test generates one and skips.
-    Unexpected new high scores or large deviations from baseline fail the test.
+    Covers ALL scored grains — the old captured baseline guarded column grain
+    only, leaving dimension_coverage (table) and the relationship scalars
+    unguarded (B2 finding).
     """
-    baseline = _load_baseline()
+    bands = _load_bands()
+    regressions: list[str] = []
+    new_high: list[str] = []
 
-    if not baseline:
-        # First run — generate baseline
-        _write_baseline(clean_pipeline_scores)
-        pytest.skip(f"No baseline existed. Generated {BASELINE_PATH}. Review and re-run.")
-
-    tolerance = 0.05
-    regressions = []
-    new_high_scores = []
-
-    for (table, column, detector), score in sorted(clean_pipeline_scores.items()):
-        key = _score_key(table, column, detector)
-        if score <= _floor_for(detector):
-            continue
-
-        if key in baseline:
-            expected = baseline[key]
-            if score > expected + tolerance:
+    for grain, keyed in _scored_keys(clean_detector_scores).items():
+        grain_bands = bands.get(grain, {})
+        for key, (detector, score) in sorted(keyed.items()):
+            if score <= _floor_for(detector):
+                continue
+            band = grain_bands.get(key)
+            if band is None:
+                new_high.append(f"  [{grain}] {key}: {score:.3f} (NEW — no band)")
+            elif score > float(band["max"]) + BAND_TOLERANCE:
                 regressions.append(
-                    f"  {key}: {score:.3f} (was {expected:.3f}, delta +{score - expected:.3f})"
+                    f"  [{grain}] {key}: {score:.3f} > band [{band['min']:.3f}, "
+                    f"{band['max']:.3f}] + {BAND_TOLERANCE} (seen {band['seen']}x)"
                 )
-        else:
-            new_high_scores.append(f"  {key}: {score:.3f} (NEW)")
 
     lines = []
     if regressions:
-        lines.append(f"{len(regressions)} regressions (score increased):")
+        lines.append(f"{len(regressions)} regressions above measured bands:")
         lines.extend(regressions)
-    if new_high_scores:
-        lines.append(f"{len(new_high_scores)} new high scores:")
-        lines.extend(new_high_scores)
-
+    if new_high:
+        lines.append(f"{len(new_high)} new high scores with no measured band:")
+        lines.extend(new_high)
     if lines:
         lines.append("")
         lines.append(
-            "If these are expected, regenerate the baseline: delete "
-            "calibration/clean_baseline.yaml and re-run this test (it "
-            "rewrites the file from the current clean scores), then review "
-            "the diff."
+            "If a detector or spec change makes these expected, resweep (clean at "
+            ">= 2 seeds) and rebuild: uv run python scripts/build_clean_bands.py. "
+            "Never hand-edit a band."
         )
         raise AssertionError("\n".join(lines))
 
@@ -109,7 +114,7 @@ def test_clean_scores_match_baseline(
 def test_clean_average_below_threshold(
     clean_pipeline_scores: dict[tuple[str, str, str], float],
 ) -> None:
-    """Average score across all columns on clean data should be low.
+    """Average column score across clean data should be low.
 
     This catches systematic drift where many detectors start scoring higher.
     """
@@ -118,25 +123,3 @@ def test_clean_average_below_threshold(
 
     avg = sum(clean_pipeline_scores.values()) / len(clean_pipeline_scores)
     assert avg < 0.15, f"Average clean score {avg:.3f} too high — detectors are noisy"
-
-
-def _write_baseline(
-    scores: dict[tuple[str, str, str], float],
-) -> None:
-    """Write clean baseline YAML file."""
-    entries: dict[str, float] = {}
-    for (table, column, detector), score in sorted(scores.items()):
-        if score > _floor_for(detector):
-            key = _score_key(table, column, detector)
-            entries[key] = round(score, 3)
-
-    content = {
-        "description": (
-            "Clean data baseline scores. Scores above noise floor (0.15) "
-            "are tracked here. Regenerate after detector changes."
-        ),
-        "scores": entries,
-    }
-
-    with open(BASELINE_PATH, "w") as f:
-        yaml.dump(content, f, default_flow_style=False, sort_keys=True)
