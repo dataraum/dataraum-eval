@@ -70,7 +70,9 @@ def dump(strategy: str) -> dict[str, object]:
                 for r in records
             ]
             ctx = assemble_readiness_context(objects)
-            table_names = {t.table_id: t.table_name for t in session.execute(select(Table)).scalars()}
+            table_names = {
+                t.table_id: t.table_name for t in session.execute(select(Table)).scalars()
+            }
             col_names = {
                 c.column_id: (table_names.get(c.table_id, ""), c.column_name)
                 for c in session.execute(select(Column)).scalars()

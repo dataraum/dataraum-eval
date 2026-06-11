@@ -1,6 +1,6 @@
 """Stock/flow clear-name accuracy — the DAT-445 ground-first gate's load-bearing residual.
 
-The offline gate (scripts/dat445_stockflow_gate.py) proved the family SEPARATES and the
+The offline gate (DAT-445 probe, deleted — verdict in the scorecard) proved the family SEPARATES and the
 reliability rig GENERALISES, conditional on one thing it could not measure offline: does
 the LLM read stock/flow accurately from a CLEAR name? (kill-gate v3 says the LLM is
 name-anchored → a clear name should yield the true read.) This e2e measures exactly that.

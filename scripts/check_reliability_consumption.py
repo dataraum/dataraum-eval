@@ -74,8 +74,14 @@ def main() -> int:
         ok = ok and match
         print(f"  {witness_id:<22} persisted={sorted(values)}  expected={expected}  [{flag}]")
 
-    print("\n" + ("PASS — live run consumed the shipped calibrated artifact" if ok
-                  else "FAIL — persisted reliabilities are not the shipped values"))
+    print(
+        "\n"
+        + (
+            "PASS — live run consumed the shipped calibrated artifact"
+            if ok
+            else "FAIL — persisted reliabilities are not the shipped values"
+        )
+    )
     return 0 if ok else 1
 
 

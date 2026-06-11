@@ -4,8 +4,9 @@
 # The agent must produce these answers despite injected data quality issues
 # (nulls, outliers, temporal drift, orphan FKs, formula drift, etc.)
 #
-# This is the simplest deliverable: "can the MCP surface answer basic
-# financial questions correctly on corrupted data?"
+# This is the simplest deliverable: "can the read surface (calibration/tools
+# + the investigating agent's SQL) answer basic financial questions correctly
+# on corrupted data?"
 
 name: annual_financial_summary
 description: >

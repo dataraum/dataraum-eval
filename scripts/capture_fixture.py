@@ -74,10 +74,7 @@ def _cell(value: Any) -> Any:
 
 
 def capture_pg(sqlite_conn: sqlite3.Connection) -> None:
-    dsn = (
-        f"host=localhost port=5432 dbname=dataraum user=dataraum "
-        f"password={_pg_password()}"
-    )
+    dsn = f"host=localhost port=5432 dbname=dataraum user=dataraum password={_pg_password()}"
     with psycopg.connect(dsn) as pg:
         for table in PG_TABLES:
             cur = pg.execute(f'SELECT * FROM {SCHEMA}."{table}"')  # noqa: S608 (fixed names)
@@ -148,9 +145,7 @@ def _keep_columns(rows: list[dict[str, str]]) -> list[str]:
 def capture_raw_values(sqlite_conn: sqlite3.Connection) -> None:
     """Per-row numeric/date source values per (strategy, table) — drift's real CDFs."""
     sqlite_conn.execute("DROP TABLE IF EXISTS raw_values")
-    sqlite_conn.execute(
-        "CREATE TABLE raw_values (strategy TEXT, source TEXT, row_json TEXT)"
-    )
+    sqlite_conn.execute("CREATE TABLE raw_values (strategy TEXT, source TEXT, row_json TEXT)")
     for strat in STRATEGIES:
         data_dir = EVAL_ROOT / "data" / strat
         if not data_dir.exists():
@@ -162,9 +157,7 @@ def capture_raw_values(sqlite_conn: sqlite3.Connection) -> None:
             keep = _keep_columns(rows)
             if not keep:
                 continue  # no numeric/date column → nothing drift/benford can use
-            out = [
-                (strat, csv_path.stem, json.dumps({c: r[c] for c in keep})) for r in rows
-            ]
+            out = [(strat, csv_path.stem, json.dumps({c: r[c] for c in keep})) for r in rows]
             sqlite_conn.executemany("INSERT INTO raw_values VALUES (?, ?, ?)", out)
             print(f"  raw.{strat}/{csv_path.stem}: {len(out)} rows, cols={keep}")
 
