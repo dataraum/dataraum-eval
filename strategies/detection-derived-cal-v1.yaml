@@ -1,0 +1,18 @@
+name: detection-derived-cal-v1
+level: high
+description: >
+  Reliability-calibration corpus for the derived_value witnesses (DAT-442,
+  ADR-0009). A formula_probes table of labelled formula groups where the
+  target's NAME advertises one formula and its VALUES follow another, across
+  agree / wholesale / partial strata (plus a labelled out-of-space scaled
+  stress kind). One pipeline run produces the annotations; the derived rig
+  stratifies per witness (formula_discovery reads rows, llm_hypothesis reads
+  names) and replaces the 0.9/0.6 placeholders in reliabilities.yaml.
+
+injections:
+  - injector: inject_formula_divergence
+    table: formula_probes
+    detector_id: derived_value
+    params:
+      seed: 20260611
+      n_groups: [10, 14]

@@ -1,0 +1,24 @@
+name: detection-relationship-cal-v1
+level: high
+description: >
+  Reliability-calibration corpus for the relationship_discovery witnesses
+  (DAT-408/DAT-450): sampled labelled pairs across genuine_clean /
+  genuine_broken / spurious_overlap strata on the ref_entities/ref_activity
+  probe tables. Every pair's designed value overlap stays above the
+  relationship phase's 0.5 candidate floor so it measures something. Isolated
+  from detection-v1 (the DAT-405 recall-theft lesson). The rig scores
+  value_overlap from candidate join_confidence and llm_judgment from the LLM
+  rows against the pair labels, replacing the 0.7/0.7 placeholders
+  (manual_curation/keeper_retention need teach actions — a later protocol).
+
+injections:
+  # NOTE: no detector_id override — this injector records one entry per pair
+  # with the correct default (relationship_discovery) already set.
+  - injector: inject_relationship_pairs
+    table: ref_activity
+    params:
+      seed: 20260611
+      n_clean: [4, 6]
+      n_broken: [4, 6]
+      n_spurious: [4, 6]
+      severity: high

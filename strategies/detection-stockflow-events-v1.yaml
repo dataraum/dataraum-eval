@@ -1,0 +1,22 @@
+name: detection-stockflow-events-v1
+level: high
+description: >
+  Reliability-calibration corpus for the temporal_behavior STRUCTURAL witness
+  (DAT-491): events-backed stock/flow probes. Each backed stock column comes
+  with a probe_events table whose per-(series, period) sums reconcile to the
+  stock's deltas; a sampled fraction is BROKEN by a constant per-cell deviation.
+  One pipeline run produces the lineage rows; the temporal rig scores the
+  witness's confirm/degrade/abstain behaviour against the backed/reconciles
+  labels and replaces the 0.85 probe-derived placeholder in reliabilities.yaml.
+  E2E dependency (lane F1): the slicing agent must pick series_id as a slice
+  dimension on BOTH tables — same class as the proven account_id case.
+
+injections:
+  - injector: inject_stock_flow_probes
+    table: measure_probes
+    detector_id: temporal_behavior
+    params:
+      seed: 20260611
+      n_columns: [16, 24]
+      backed_fraction: [0.6, 0.9]
+      broken_fraction: [0.3, 0.5]
