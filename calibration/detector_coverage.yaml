@@ -54,8 +54,9 @@ detectors:
       recall: proven               # e2e 2026-06-10: concept mislabel C 0.000 -> 0.305
       precision: proven            # e2e 2026-06-10: clear-name corpus quiet (C ~ 0)
       reliabilities: real          # 0.762/0.838 measured (clear+ambiguous strata);
-                                   # structural_reconciliation 0.85 = probe-derived
-                                   # placeholder (needs an events-backed family to rig)
+                                   # structural_reconciliation 0.889 MEASURED wave-2
+                                   # (events-backed corpus: 7/7 backed columns,
+                                   # principled abstention on unbacked/flows; small n)
       teach_closure: proven        # e2e 2026-06-10: concept_property teach C 0.305 -> 0.007
       in_slice: true
     note: >-
@@ -110,8 +111,11 @@ detectors:
                                     # injected-confirmed C=0.147 vs clean-confirmed
                                     # C=0.013 (+0.134); not yet driven through Temporal
       precision: unverified
-      reliabilities: placeholder    # rig needs a generative relationship family
-                                    # (clean FK / orphan-broken / spurious-overlap)
+      reliabilities: placeholder    # value_overlap MEASURED 0.615 (wave-2 corpus:
+                                    # 100% genuine, 0% designed spurious); llm_judgment
+                                    # kept 0.7 (n=4, one-sided, selector falsely
+                                    # rejects suffix-mismatched genuine pairs);
+                                    # manual/keeper need the teach protocol
       teach_closure: none           # the relationship overlay family (add/keep/reject)
                                     # IS the teach surface and re-enters as witnesses;
                                     # closure test pending. Gap: an explicit confirm
@@ -133,13 +137,17 @@ detectors:
     disposition: pool
     witnesses: [formula_discovery, llm_hypothesis]
     coverage:
-      recall: baseline              # obj.score unchanged (honest discovered mismatch
-                                    # rate — stays in ORDERING_DETECTORS); the pooled
-                                    # formula axis (formula_conflict/_ignorance evidence
-                                    # keys -> loss) not yet driven through Temporal
-      precision: unverified
-      reliabilities: placeholder    # rig needs a formula-divergence family (column
-                                    # named for one formula, values following another)
+      recall: proven                # wave-2: partial strata via the graded mismatch
+                                    # (batch); WHOLESALE divergence was a silent false
+                                    # negative (scalar 0.0 while the name-vs-data
+                                    # conflict rode evidence-only) — score is now
+                                    # max(mismatch, identity conflict) and the re-run
+                                    # flipped all 3 wholesale columns green
+      precision: baseline           # corroborated clean columns score the residual
+                                    # pooled conflict (~0.01-0.05, below every floor)
+      reliabilities: real           # wave-2 rig: formula_discovery 0.75 (partial
+                                    # divergence defeats match-rate grading at ~20% —
+                                    # surfaced not tuned), llm_hypothesis 0.357
       teach_closure: none           # natural teach: expected_formula overlay (not built)
       in_slice: true
     note: >-
