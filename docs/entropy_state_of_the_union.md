@@ -183,7 +183,13 @@ level, on any seed.
 3. **Teach closure is proven for 3 of the 9 applier-backed teach types**
    (null_value, concept_property, unit). The other six appliers exist and are
    guarded by the suggestion-vocabulary test, but none has a closure proof —
-   that, plus the relationship overlays, is the DAT-447 lane.
+   that, plus the relationship overlays, is the DAT-447 lane. Related gap
+   (PR #284 review finding): only 2 of the 4 pooled measurements route their
+   conflict into a teach suggestion — `relationship_discovery` and
+   `derived_value` band a column without handing the user an executable
+   action. relationship routing maps cleanly onto the overlay family;
+   derived_value needs a decision (new `expected_formula` family vs the
+   existing `validation` teach).
 4. **Run-to-run LLM variance vs captured baselines.** Clean scores now have
    measured bands (replacing point captures), but the readiness baseline is
    still a point capture; one column (`payments.amount`) flips its temporal
