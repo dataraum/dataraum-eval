@@ -9,6 +9,17 @@ program):
     wrong_delivered  out of tolerance with every lineage column banded ready
                      (the silently-wrong number — the only real failure)
 
+Each prevention additionally carries an ATTRIBUTION (B3): ``causal`` when a
+warned lineage column is itself an injected column AND its band was driven by
+the detector the injection targets (the warning names the actual corruption);
+``related`` when the banding detector matches an injection elsewhere in the
+strategy (the watcher fired for the injected failure mode, anchored to a
+connected column — the validation fan-out pattern); ``coincidental`` otherwise
+(warned for a reason unrelated to any injection — still a prevention, headline
+unchanged, but it would not survive that unrelated reason being fixed).
+Banding detectors come from the loss rollup's own ranked intent drivers;
+injected columns from the generator's entropy_map.
+
 Golden SQL mirrors the GENERATOR's definitions (testdata ground_truth.py):
 posted journal entries inside the fiscal window; revenue = credits to 4xxx
 accounts; expenses = debits to 5xxx; AR/AP/cash = cumulative debit-credit over
@@ -255,15 +266,77 @@ def _lake_tables(run: Any) -> dict[str, str]:
     return out
 
 
-def _non_ready_bands(strategy: str) -> dict[str, str]:
-    """'table.column' -> worst non-ready band, from the loss-rollup readiness."""
+def _non_ready_lineage(strategy: str) -> tuple[dict[str, str], dict[str, set[str]]]:
+    """Per warned 'table.column': worst non-ready band + the detectors that banded it.
+
+    Banding detectors come from the rollup's own ranked drivers (intent risk is the
+    max over measurements, so each listed driver's contribution alone reaches a
+    non-ready band) — never re-derived from scores here.
+    """
     from calibration.tools.measure import _BAND_RANK, _dataset_view
 
     view = _dataset_view(strategy)
-    out: dict[str, str] = {}
+    bands: dict[str, str] = {}
+    detectors: dict[str, set[str]] = {}
     for key, intents in view["readiness"]["non_ready_intents"].items():
-        out[key] = max(intents.values(), key=lambda band: _BAND_RANK[band])
+        bands[key] = max(intents.values(), key=lambda band: _BAND_RANK[band])
+        per_intent = view["readiness"]["non_ready_drivers"].get(key, {})
+        detectors[key] = {d["detector"] for ds in per_intent.values() for d in ds}
+    return bands, detectors
+
+
+def _injected_lineage(strategy: str) -> dict[str, set[str]]:
+    """'table.column' -> detector ids the strategy's injections target there.
+
+    The entropy_map is the generator's own record of what was corrupted where —
+    the ground truth a CAUSAL prevention must match: the warning came from the
+    injected column, raised by the detector the injection targets.
+    """
+    emap_path = EVAL_ROOT / "data" / strategy / "entropy_map.yaml"
+    if not emap_path.exists():
+        return {}
+    emap = yaml.safe_load(emap_path.read_text()) or {}
+    out: dict[str, set[str]] = {}
+    for inj in emap.get("injections", []):
+        table = Path(str(inj.get("target_file", ""))).stem
+        column = inj.get("target_column")
+        detector = inj.get("detector_id")
+        if table and column and detector:
+            out.setdefault(f"{table}.{column}", set()).add(str(detector))
     return out
+
+
+def _attribute_prevention(
+    warned: list[str],
+    banding: dict[str, set[str]],
+    injected: dict[str, set[str]],
+) -> tuple[str, list[str]]:
+    """('causal' | 'related' | 'coincidental', the columns carrying the causal warning).
+
+    Causal: some warned lineage column is itself an injected column AND its band
+    was driven by a detector the injection targets — the system warned on the
+    corrupted input for the corruption's own reason. Related: the banding
+    detector matches an injection's detector elsewhere in the strategy — the
+    watcher fired for the injected FAILURE MODE but anchored the warning to a
+    connected column (the validation fan-out pattern: TB↔GL tampering banding
+    the GL columns that participate in the broken identity). Coincidental: the
+    band has no relation to any injection (e.g. clean-data hedging). All three
+    prevent — the headline bucket is deliberately reason-agnostic — but the
+    split makes prevention quality measurable. Limitation, kept inspectable via
+    banding_detectors: 'related' matches at detector granularity, so a noise
+    band from a detector that also happens to be injected elsewhere would be
+    over-credited.
+    """
+    causal_cols = sorted(
+        col for col in warned if banding.get(col, set()) & injected.get(col, set())
+    )
+    if causal_cols:
+        return "causal", causal_cols
+    strategy_detectors = set().union(*injected.values()) if injected else set()
+    banding_anywhere = {d for col in warned for d in banding.get(col, set())}
+    if banding_anywhere & strategy_detectors:
+        return "related", []
+    return "coincidental", []
 
 
 def label(strategy: str, *, offline: bool = False) -> dict[str, Any]:
@@ -278,6 +351,8 @@ def label(strategy: str, *, offline: bool = False) -> dict[str, Any]:
         tables = _offline_tables(conn, strategy)
         computed = compute_metrics(conn, tables, window)
         bands: dict[str, str] = {}
+        banding: dict[str, set[str]] = {}
+        injected: dict[str, set[str]] = {}
     else:
         from calibration import runner as runner_mod
         from calibration.tools._runs import load_run
@@ -296,7 +371,8 @@ def label(strategy: str, *, offline: bool = False) -> dict[str, Any]:
                 computed = compute_metrics(cursor, tables, window)
         finally:
             shutdown_worker_substrate(manager)
-        bands = _non_ready_bands(strategy)
+        bands, banding = _non_ready_lineage(strategy)
+        injected = _injected_lineage(strategy)
 
     # The SPEC drives scoring (review wave-1): a computed metric absent from
     # the deliverable spec is never scored under a silent default tolerance;
@@ -304,9 +380,14 @@ def label(strategy: str, *, offline: bool = False) -> dict[str, Any]:
     # wrong_prevented is deliberately reason-agnostic: ANY non-ready band on a
     # lineage column means a practitioner is warned before trusting the number
     # — prevention does not require the band to name the metric's root cause.
-    # The per-metric non_ready_lineage map keeps the attribution inspectable.
+    # The causal/related/coincidental split (B3) measures prevention QUALITY
+    # without touching the headline: causal warned on the injected column for
+    # the injection's own detector; related warned by the injected failure
+    # mode anchored to a connected column; coincidental warned for an
+    # unrelated reason and would not survive that reason being fixed.
     metrics: list[dict[str, Any]] = []
     buckets = {"right": 0, "wrong_prevented": 0, "wrong_delivered": 0}
+    attribution_counts = {"causal": 0, "related": 0, "coincidental": 0}
     for metric_id, m_spec in spec.items():
         if metric_id not in computed:
             metrics.append({"metric": metric_id, "skipped": "no golden computation"})
@@ -331,6 +412,15 @@ def label(strategy: str, *, offline: bool = False) -> dict[str, Any]:
             bucket = "wrong_delivered"
         if not offline:
             buckets[bucket] += 1
+        prevention: dict[str, Any] = {}
+        if bucket == "wrong_prevented":
+            attribution, causal_cols = _attribute_prevention(warned, banding, injected)
+            attribution_counts[attribution] += 1
+            prevention = {
+                "attribution": attribution,
+                "banding_detectors": {col: sorted(banding.get(col, set())) for col in warned},
+                **({"causal_columns": causal_cols} if causal_cols else {}),
+            }
         metrics.append(
             {
                 "metric": metric_id,
@@ -340,6 +430,7 @@ def label(strategy: str, *, offline: bool = False) -> dict[str, Any]:
                 "in_tolerance": ok,
                 "non_ready_lineage": {col: bands[col] for col in warned},
                 **({} if offline else {"bucket": bucket}),
+                **({"prevention": prevention} if prevention else {}),
             }
         )
 
@@ -349,6 +440,7 @@ def label(strategy: str, *, offline: bool = False) -> dict[str, Any]:
         "fiscal_window": list(window),
         "metrics": metrics,
         **({} if offline else {"buckets": buckets}),
+        **({} if offline else {"prevention_attribution": attribution_counts}),
     }
 
 

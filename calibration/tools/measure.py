@@ -28,12 +28,16 @@ _BAND_RANK = {"ready": 0, "investigate": 1, "blocked": 2}
 def _dataset_view(strategy: str) -> dict[str, Any]:
     # Reuse the conftest read paths verbatim — these are the canonical score
     # and readiness sources (the sidecar exists, so no pipeline is triggered).
+    from dataraum.entropy.loss import get_loss_config
+
     from calibration.conftest import _assemble_readiness, _load_scores_for_strategy
 
     scores = _load_scores_for_strategy(strategy)
     ctx, _col_names = _assemble_readiness(strategy)
+    loss_config = get_loss_config()
 
     bands: dict[str, dict[str, str]] = {}
+    drivers: dict[str, dict[str, list[dict[str, Any]]]] = {}
     for target, col in ctx.columns.items():
         if not target.startswith("column:"):
             continue
@@ -43,7 +47,21 @@ def _dataset_view(strategy: str) -> dict[str, Any]:
         tbl, column = ref.split(".", 1)
         intents = {i.intent_name: i.readiness for i in col.intents}
         if any(band != "ready" for band in intents.values()):
-            bands[f"{short(tbl)}.{column}"] = intents
+            key = f"{short(tbl)}.{column}"
+            bands[key] = intents
+            # Banding drivers per non-ready intent: intent risk is the MAX over
+            # measurements, so only a driver whose own contribution reaches a
+            # non-ready band can have set (or would alone set) the band — those
+            # are the measurements a prevention can be attributed to.
+            drivers[key] = {
+                intent.intent_name: [
+                    {"detector": d.node, "impact": round(d.impact_delta, 4)}
+                    for d in intent.drivers
+                    if loss_config.band(d.impact_delta) != "ready"
+                ]
+                for intent in col.intents
+                if intent.readiness != "ready"
+            }
 
     worst = {
         key: max(intents.values(), key=lambda band: _BAND_RANK[band])
@@ -62,6 +80,7 @@ def _dataset_view(strategy: str) -> dict[str, Any]:
             "columns_blocked": sum(1 for band in worst.values() if band == "blocked"),
             "columns_investigate": sum(1 for band in worst.values() if band == "investigate"),
             "non_ready_intents": bands,
+            "non_ready_drivers": drivers,
         },
     }
 
