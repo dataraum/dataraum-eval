@@ -16,6 +16,7 @@ Two strategies cover all 15 detectors:
 
 from __future__ import annotations
 
+import functools
 from pathlib import Path
 from typing import Any
 
@@ -149,7 +150,75 @@ LLM_NONDETERMINISTIC: dict[tuple[str, str, str], str] = {
         "LLM sometimes identifies business_concept from data values despite garbage name. "
         "ontology_bonus then reduces score below threshold. Non-deterministic."
     ),
+    # Wholesale formula divergence scores through the name-hypothesis identity
+    # conflict (the rows follow formula B perfectly, so the mismatch leg is 0;
+    # the NAMED claim carries the entropy) — and the hypothesis is LLM-emitted
+    # per run and hygiene-gated (min rows + confidence), so it may not fire on a
+    # given head. XPASS when it lands (3/3 fired on the wave-2 cal run; a
+    # 2026-06-11 teach re-run re-rolled advertising_avg_price to no-hypothesis).
+    ("derived_value", "formula_probes", "advertising_avg_price"): (
+        "wholesale recall rides the LLM name-hypothesis; may not fire on a given run"
+    ),
+    ("derived_value", "formula_probes", "handling_net"): (
+        "wholesale recall rides the LLM name-hypothesis; may not fire on a given run"
+    ),
+    ("derived_value", "formula_probes", "storage_value"): (
+        "undiscoverable (scaled) actual formula: the score is the graded LLM "
+        "name-hypothesis mismatch; the hypothesis may not fire on a given run"
+    ),
 }
+
+
+@functools.cache
+def _expected_formula_answers() -> frozenset[tuple[str, str]]:
+    """(raw table, column) pairs answered by a persisted expected_formula teach (DAT-447).
+
+    Direct ``config_overlay`` read, the same surface ``load_declared_formula``
+    consumes — ``superseded_at IS NULL`` filters undone teaches.
+    """
+    from dataraum.core.connections import ConnectionConfig, ConnectionManager
+    from sqlalchemy import text
+
+    from calibration import runner as runner_mod
+
+    runner_mod.bootstrap_engine()
+    mgr = ConnectionManager(ConnectionConfig.for_workspace())
+    mgr.initialize()
+    try:
+        with mgr.session_scope() as s:
+            rows = s.execute(
+                text(
+                    "SELECT payload FROM config_overlay "
+                    "WHERE type = 'validation' AND superseded_at IS NULL"
+                )
+            ).all()
+    finally:
+        mgr.close()
+    answers: set[tuple[str, str]] = set()
+    for r in rows:
+        payload = r.payload or {}
+        if payload.get("check_type") != "expected_formula":
+            continue
+        params = payload.get("parameters") or {}
+        if params.get("table") and params.get("column"):
+            answers.add((str(params["table"]).lower(), str(params["column"]).lower()))
+    return frozenset(answers)
+
+
+def _answered_by_teach(table: str, column: str, detector: str) -> bool:
+    """Has a persisted teach already declared this injection's true answer?
+
+    Only the derived_value expected_formula declaration exists today; the
+    declared table is the source-qualified raw name, so the bare entropy_map
+    table matches by substring.
+    """
+    if detector != "derived_value":
+        return False
+    column_lc = column.lower()
+    return any(
+        table.lower() in declared_table and declared_column == column_lc
+        for declared_table, declared_column in _expected_formula_answers()
+    )
 
 
 def _injection_id(injection: dict[str, Any]) -> str:
@@ -250,6 +319,18 @@ def test_injection_detected(
         pytest.skip(
             "calibration negative — the labelled-CLEAN leg of a generative family "
             "(precision material, not a recall target)"
+        )
+
+    # Teach-ANSWERED injection (DAT-447): a persisted expected_formula teach
+    # declares this column's true formula, so every subsequent head legitimately
+    # scores it CLOSED — the closure contract working (test_teach_cycle proves
+    # the drop; recall was proven banded on the pre-teach head), not a recall
+    # miss. Asserting recall forever would forbid teach-closure on any
+    # calibration session.
+    if _answered_by_teach(table, column, detector):
+        pytest.skip(
+            "injection answered by a persisted expected_formula teach — closed by design "
+            "(DAT-447; see test_teach_cycle.py::test_teach_closure[validation])"
         )
 
     # Always skip unimplemented detectors

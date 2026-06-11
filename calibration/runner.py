@@ -740,6 +740,85 @@ def teach_concept_property_and_rerun(
     return run
 
 
+def teach_validation_and_rerun(
+    run: CalibrationRun,
+    *,
+    table: str,
+    column: str,
+    formula: str,
+    vertical: str = "finance",
+) -> CalibrationRun:
+    """Declare a column's expected formula, then RE-RUN the pipeline for the SAME session.
+
+    The derived_value teach (DAT-447, Option B): the user's "the expected formula for
+    this column IS X" rides the EXISTING ``validation`` overlay type as a spec-shaped
+    row — ``check_type: "expected_formula"``, ``parameters: {table, column, formula}``,
+    identity ``validation_id: "expected_formula:{table}.{column}"`` so a re-declaration
+    replaces (payload contract documented on engine ``core/overlay._apply_validation``).
+    Two consumers read it back on the re-run: the validation phase executes it as a
+    declared check every run (via the vertical overlay), and
+    ``entropy.detectors.loaders.load_declared_formula`` (a direct ``config_overlay``
+    read) pools it as the ``human_declaration`` witness on the matching formula claim —
+    the declared claim becomes the column's identity risk, witnesses agree there, and
+    the head-resolved ``derived_value`` score collapses (the engine-side closure shape
+    pinned by ``test_matching_declaration_closes_the_column_score``).
+
+    ``table`` must be the name the detector context sees (the source-qualified raw
+    table name — take it from the evidence's own ``teach_suggestion``):
+    ``load_declared_formula`` matches it case-insensitively but EXACTLY.
+    ``formula`` is the discovery's binary-arithmetic language (e.g. ``"subtotal + tax"``).
+    """
+    bootstrap_engine()
+
+    from dataraum.core.connections import ConnectionConfig, ConnectionManager
+    from dataraum.server.workspace import get_active_workspace_id
+    from dataraum.storage.overlay_models import ConfigOverlay
+
+    workspace_id = get_active_workspace_id()
+    workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
+    workspace_mgr.initialize()
+    try:
+        with workspace_mgr.session_scope() as s:
+            s.add(
+                ConfigOverlay(
+                    type="validation",
+                    payload={
+                        "vertical": vertical,
+                        "validation_id": f"expected_formula:{table}.{column}",
+                        "name": f"Expected formula for {column}",
+                        "description": (
+                            f"The user declared that {column} is expected to equal "
+                            f"{formula} (DAT-447 expected-formula declaration)."
+                        ),
+                        "category": "data_quality",
+                        "severity": "warning",
+                        "check_type": "expected_formula",
+                        "parameters": {"table": table, "column": column, "formula": formula},
+                    },
+                    session_id=None,  # workspace-scoped, like the other teach helpers
+                )
+            )
+    finally:
+        workspace_mgr.close()
+
+    output_dir = OUTPUT_DIR / run.strategy
+    output_dir.mkdir(parents=True, exist_ok=True)
+    print(
+        f"[eval] teach validation expected_formula {table}.{column} = {formula!r} "
+        f"→ re-run session {run.session_id}"
+    )
+    asyncio.run(
+        _drive_pipeline(
+            workspace_id=workspace_id,
+            source_ids=list(run.source_ids),
+            session_id=run.session_id,
+            vertical=vertical,
+            log_path=output_dir / "worker_teach_validation_rerun.log",
+        )
+    )
+    return run
+
+
 def calibration_run(
     strategy: str,
     *,
