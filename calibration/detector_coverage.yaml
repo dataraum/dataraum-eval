@@ -111,14 +111,13 @@ detectors:
                                     # injected-confirmed C=0.147 vs clean-confirmed
                                     # C=0.013 (+0.134); not yet driven through Temporal
       precision: unverified
-      reliabilities: placeholder    # value_overlap + llm_judgment MEASURED IN
-                                    # CONTRACT 0.923 each (post-fix re-run: selector
-                                    # confirmed 11/11 genuine incl. all suffix-
-                                    # mismatched pairs, rejected 4/4 spurious;
-                                    # value_overlap fired live on all 11 catalog
-                                    # pairs). manual/keeper still need the teach
-                                    # protocol -> measurement stays uncalibrated
-                                    # until they are measured
+      reliabilities: real           # ALL FOUR measured (DAT-447 teach protocol
+                                    # closed the circuit): value_overlap 0.923 +
+                                    # llm_judgment 0.923 in contract; manual 0.875
+                                    # (protocol ceiling, 6/6 verdicts); keeper KEEPS
+                                    # 0.5 deliberately atop its measured 0.857
+                                    # plumbing ceiling (real silence may be
+                                    # inattention). calibrated: true
       teach_closure: none           # the relationship overlay family (add/keep/reject)
                                     # IS the teach surface and re-enters as witnesses;
                                     # closure test pending. Gap: an explicit confirm

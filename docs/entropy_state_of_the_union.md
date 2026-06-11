@@ -75,8 +75,8 @@ spurious?*
 |---|---|---|
 | value_overlap | data — containment/overlap statistics of the pair | **0.923 measured in contract** (post-fix re-run; small n=11) |
 | llm_judgment | LLM — the selector's confirmation confidence | **0.923 measured in contract** (conditional on the catalog, by design) |
-| manual_curation | human — an explicit teach ("this is real") | 0.9 placeholder |
-| keeper_retention | human — silence (kept, not rejected) | 0.5 placeholder (deliberately least trusted) |
+| manual_curation | human — an explicit teach ("this is real") | **0.875 measured** (teach-protocol ceiling: simulated teacher, proves the plumbing; real-user telemetry refines it) |
+| keeper_retention | human — silence (kept, not rejected) | **0.5 kept deliberately** atop a measured 0.857 plumbing ceiling — real silence may be inattention, which no protocol can simulate |
 
 **derived_value** — claim per formula identity on a column: *does the data
 hold this formula?* The column score is the worse of (best graded formula's
@@ -173,9 +173,15 @@ level, on any seed.
    11/11 genuine pairs (all suffix-mismatched ones recovered), rejected 4/4
    designed spurious, and produced the first in-contract measurements
    (value_overlap and llm_judgment at 0.923, n=11 — widen over seeds). The
-   remainder: the human witnesses (manual/keeper) still need a teach-protocol
-   calibration run that does not exist yet, so the measurement stays formally
-   uncalibrated until then.
+   remainder closed same-day: the teach protocol (ground-truth verdicts →
+   same-session re-run → rig over the post-teach claim rows) measured the
+   human witnesses — the full circuit (the system asks for the verdict, the
+   verdict becomes a witness, the witness's reliability gets measured) is
+   proven end to end, and relationship_discovery is the fourth and last
+   pooled measurement to flip calibrated. What remains is real-user
+   telemetry: every protocol number is a deliberate-teacher ceiling, and
+   keeper_retention deliberately keeps its 0.5 stance until real silence
+   (which may be inattention) is measurable.
 2. **Partial formula divergence under ~20% passes formula_discovery's
    grading** (measured: 0% accuracy on the partial stratum). The pooled
    conflict and the scalar still catch it at the column level, but the
