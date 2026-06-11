@@ -47,15 +47,19 @@ def _floor_for(detector: str) -> float:
     return NOISE_FLOOR_BY_DETECTOR.get(detector, NOISE_FLOOR)
 
 
-def _load_bands() -> dict[str, dict[str, dict[str, Any]]]:
+def _load_bands_doc() -> dict[str, Any]:
     if not BANDS_PATH.exists():
         pytest.skip(
             f"No measured bands at {BANDS_PATH} — run a clean seed sweep and "
             "scripts/build_clean_bands.py."
         )
-    data = yaml.safe_load(BANDS_PATH.read_text()) or {}
-    result: dict[str, dict[str, dict[str, Any]]] = data.get("bands", {})
+    result: dict[str, Any] = yaml.safe_load(BANDS_PATH.read_text()) or {}
     return result
+
+
+def _load_bands() -> dict[str, dict[str, dict[str, Any]]]:
+    bands: dict[str, dict[str, dict[str, Any]]] = _load_bands_doc().get("bands", {})
+    return bands
 
 
 def _scored_keys(scores: DetectorScores) -> dict[str, dict[str, tuple[str, float]]]:
@@ -109,6 +113,39 @@ def test_clean_scores_within_measured_bands(
             "Never hand-edit a band."
         )
         raise AssertionError("\n".join(lines))
+
+
+def test_stable_clean_emitters_still_emit(
+    clean_detector_scores: DetectorScores,
+) -> None:
+    """RECALL guard: a key every sweep seed emitted must not go silent.
+
+    The bands test above catches scores going UP; this catches the invisible
+    failure — a detector that stops emitting entirely (wiring break, phase
+    drop, loader regression) looks like a perfectly quiet clean run. False
+    positives are interpretable by a human or an agent; false negatives are
+    invisible — so disappearance of a stable emitter fails loudly (optimize
+    recall first; Philipp, 2026-06-11). Keys emitted only intermittently
+    across the sweep (seen < n_seeds: LLM coverage wobble) are exempt.
+    """
+    doc = _load_bands_doc()
+    n_seeds = len(doc.get("provenance", {}).get("seeds", []))
+    if not n_seeds:
+        pytest.skip("bands artifact carries no seed provenance")
+
+    scored = {grain: set(keys) for grain, keys in _scored_keys(clean_detector_scores).items()}
+    silent: list[str] = []
+    for grain, entries in doc.get("bands", {}).items():
+        for key, band in sorted(entries.items()):
+            if band.get("seen") == n_seeds and key not in scored.get(grain, set()):
+                silent.append(
+                    f"  [{grain}] {key}: emitted on all {n_seeds} sweep seeds "
+                    f"(band [{band['min']:.3f}, {band['max']:.3f}]) — now ABSENT"
+                )
+    assert not silent, (
+        f"{len(silent)} stable clean emitters went silent — a wiring/loader break "
+        "is the false-negative machine:\n" + "\n".join(silent)
+    )
 
 
 def test_clean_average_below_threshold(
