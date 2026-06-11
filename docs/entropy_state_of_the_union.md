@@ -133,7 +133,8 @@ pipeline, and closes the conflict it answers. Current teach types:
 | `rebind` | "this column belongs to concept Y" | applier built; closure test pending |
 | relationship `add` / `keep` / `reject` | "this relationship is real / keep it / wrong" | re-enter as the `manual_curation` / `keeper_retention` witnesses; closure test pending; known gap: an explicit *confirm* never materializes a row |
 | `expected_dependency` | "these columns are dependent by design" | applied (read by `dimensional_entropy`) |
-| `validation` / `cycle` / `metric` | (declared in the overlay schema) | **no appliers yet** — schema placeholders |
+| `concept` / `type_pattern` | bind a concept / declare a parse pattern | appliers registered; closure proof pending |
+| `validation` / `cycle` / `metric` | author a check / a cycle / a metric | appliers registered (corrected at the PR #284 review — an earlier version of this doc wrongly called them schema placeholders); closure proof pending (DAT-447) |
 
 ## State of the union
 
@@ -179,9 +180,10 @@ level, on any seed.
    grading** (measured: 0% accuracy on the partial stratum). The pooled
    conflict and the scalar still catch it at the column level, but the
    witness's per-claim vote is weak exactly where divergence is subtle.
-3. **Teach closure is proven for 3 of 7 teach types.** rebind and the
-   relationship overlays are built but not closure-proven; validation, cycle
-   and metric teaches don't exist beyond the schema.
+3. **Teach closure is proven for 3 of the 9 applier-backed teach types**
+   (null_value, concept_property, unit). The other six appliers exist and are
+   guarded by the suggestion-vocabulary test, but none has a closure proof —
+   that, plus the relationship overlays, is the DAT-447 lane.
 4. **Run-to-run LLM variance vs captured baselines.** Clean scores now have
    measured bands (replacing point captures), but the readiness baseline is
    still a point capture; one column (`payments.amount`) flips its temporal
