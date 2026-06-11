@@ -167,11 +167,24 @@ detectors:
 
   dimension_coverage:
     disposition: scalar               # mean null rate over dimension columns
-    coverage: { recall: unverified, precision: unverified, reliabilities: n/a, teach_closure: none, in_slice: false }
+    coverage: { recall: n/a, precision: unverified, reliabilities: n/a, teach_closure: none, in_slice: true }
+    note: >-
+      B2 (2026-06-11): verified scoring at TABLE grain through the current
+      workflow (clean seed-42: 0.0 on most tables, 0.27 bank_transactions,
+      0.05 invoices — sane). No injection exercises it (intrinsic-complexity
+      scalar) -> recall n/a. Precision unverified because the clean baseline
+      test guards column grain only — the A4 measured bands should add the
+      table/relationship grains.
 
   cross_table_consistency:
     disposition: scalar               # failed-critical categorical 1.0; honest rates below
-    coverage: { recall: unverified, precision: unverified, reliabilities: n/a, teach_closure: none, in_slice: true }
+    coverage: { recall: proven, precision: proven, reliabilities: n/a, teach_closure: none, in_slice: true }
+    proven_by: >-
+      batch-2 (2026-06-10): all four detection-v1 injections green via ordering
+      (break_gl_invoice_match, break_payment_bank_match, break_trial_balance,
+      DAT-444 drift_formula remap); clean leg quiet (table grain 0.0-0.0012, no
+      column fan-out). Prevention attribution (B3) credits it with all 6
+      wrong_prevented metrics on detection-v1 (related: TB↔GL fan-out).
     note: >-
       L7 (2026-06-11): wired — operatingModelWorkflow's terminal
       operating_model_detect scores executed validations; failed checks fan out
@@ -181,11 +194,18 @@ detectors:
       tb_gl_reconciliation spec (critical) is the TB↔GL watcher; DAT-444 remap
       done. Score shape: failed critical = categorical 1.0 (the spec's own
       tolerance decided pass/fail); ERROR = 0.0 + warning (was a clean-leg
-      false-alarm machine at 0.5). Recall/precision land with the next batch.
+      false-alarm machine at 0.5).
 
   dimensional_entropy:
     disposition: scalar               # NMI (grounded stat, DAT-472)
-    coverage: { recall: unverified, precision: unverified, reliabilities: n/a, teach_closure: none, in_slice: false }
+    coverage: { recall: unverified, precision: unverified, reliabilities: n/a, teach_closure: none, in_slice: true }
+    note: >-
+      B2 (2026-06-11): in slice (session_detect; table grain). The batch recall
+      pass is VACUOUS: clean journal_lines NMI is already 1.0 — debit/credit
+      are naturally mutually exclusive in double-entry data — so the
+      create_mutual_exclusivity injection adds nothing the clean data lacks
+      and no separation is possible on this fixture. Recall stays unverified
+      until an injection targets a naturally co-occurring pair.
 
   temporal_entropy:
     disposition: scalar               # binary type/role mismatch
@@ -197,4 +217,11 @@ detectors:
 
   join_path_determinism:
     disposition: scalar               # join-path count; deterministic
-    coverage: { recall: unverified, precision: unverified, reliabilities: n/a, teach_closure: none, in_slice: false }
+    coverage: { recall: n/a, precision: baseline, reliabilities: n/a, teach_closure: none, in_slice: true }
+    note: >-
+      B2 (2026-06-11): in slice (session_detect; relationship grain — a flat
+      0.1 floor on every clean relationship, seed-42). Precision fix verified
+      pre-Temporal (PR #207). No recall fixture exists: genuine join ambiguity
+      needs two semantically DISTINCT FKs to one table (DAT-419 testdata gap);
+      add_duplicate_fk_paths tests redundancy the LLM dedupes. Known issue:
+      the score ignores the existing confidence stat (over-fire risk).

@@ -40,12 +40,10 @@ DETECTION_THRESHOLD = 0.3
 # needs the integration gate to confirm the orphan signal dominates the max — see note.)
 # A true rate that clears 0.3 honestly (null_ratio at 40%) keeps the point threshold.
 #
-# Two more boost-removed detectors are NOT yet in the asserted slice and so are absent
-# below: cross_table_consistency (validation phase not wired — see OUT_OF_SLICE_REASON;
-# its checks now emit the honest violation/discrepancy rate, e.g. 15% amount corruption
-# → ~0.10-0.15) and dimension_coverage (intrinsic-complexity, no injection — honest mean
-# NULL rate now). When validation wires in, add cross_table_consistency HERE so its
-# honest rate is judged by ordering, not the 0.3 point threshold.
+# cross_table_consistency joined the asserted slice with DAT-432/L7 (validation wired
+# through operatingModelWorkflow) and is judged by ordering below — proven in batch-2.
+# dimension_coverage stays unasserted: intrinsic-complexity scalar, no injection
+# exercises it (honest mean NULL rate; verified scoring at table grain, B2).
 ORDERING_DETECTORS = frozenset(
     {
         "benford",

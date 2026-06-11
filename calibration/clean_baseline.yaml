@@ -1,12 +1,13 @@
 description: Clean data baseline scores. Scores above noise floor (0.15) are tracked
   here. Regenerate after detector changes.
 scores:
-  benford:trial_balance.credit_balance: 0.239
-  benford:trial_balance.debit_balance: 0.195
-  null_ratio:bank_transactions.payment_id: 0.53
-  null_ratio:journal_lines.cost_center: 0.519
+  benford:trial_balance.credit_balance: 0.283
+  benford:trial_balance.debit_balance: 0.209
+  null_ratio:bank_transactions.payment_id: 0.52
+  null_ratio:journal_lines.cost_center: 0.52
   temporal_behavior:invoices.amount: 0.616
   temporal_behavior:trial_balance.credit_balance: 0.506
-  temporal_behavior:trial_balance.debit_balance: 0.506
+  temporal_behavior:trial_balance.debit_balance: 0.287
+  unit_entropy:balance_sheet.ending_balance: 1.0
   unit_entropy:trial_balance.credit_balance: 1.0
   unit_entropy:trial_balance.debit_balance: 1.0
