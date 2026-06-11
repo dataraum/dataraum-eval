@@ -14,11 +14,14 @@ Adapters:
   * derived      — detection-derived-cal-v1: formula_discovery / llm_hypothesis
                    on the {holds, fails} claim per canonical formula identity.
   * relationship — detection-relationship-cal-v1: value_overlap / llm_judgment on
-                   the {genuine, spurious} claim per injected pair. Pairs the LLM
-                   rejected never enter the defined catalog (no claim rows!) — the
-                   rig reports the coverage map loudly and synthesizes the
-                   value_overlap vote from the structural ``candidate`` rows using
-                   the engine's own distribution function for the uncovered pairs.
+                   the {genuine, spurious} claim per injected pair, from CLAIM ROWS
+                   ONLY. The defined catalog (post-LLM confirmation) is the only
+                   surface relationship witnesses vote on in production — candidate
+                   rows are a generous structural list, never a measurement or
+                   calibration surface (the DAT-405 boundary; relearned 2026-06-11
+                   when a synthesized-from-candidates r was shipped and withdrawn).
+                   Pairs the LLM rejected leave no claim rows: that is the COVERAGE
+                   map, a finding about the SELECTOR, reported loudly, never voted.
 
 Single-run assumption: calibration strategies run ONE detect pass per session.
 If claim rows from multiple run_ids show up for the same (target, claim_field,
@@ -78,7 +81,6 @@ class RigVote:
     p_positive: float | None  # None / near-uniform = abstained
     label_positive: bool
     strata: tuple[str, ...]
-    source: str = "claim"  # "claim" (claim_witnesses row) | "candidate" (synth)
 
     @property
     def opinionated(self) -> bool:
@@ -441,56 +443,7 @@ def _pair_key(params: dict[str, Any]) -> PairKey:
     )
 
 
-def _candidate_overlap(session: Any, session_id: str) -> dict[PairKey, dict[str, Any]]:
-    """Direction-agnostic value-overlap stats from the structural candidate rows.
-
-    For pairs the LLM rejected (no defined-catalog entry → no claim rows) the
-    candidate row still carries the measured ``join_confidence`` /
-    ``statistical_confidence``; the best-confidence direction represents the pair.
-    """
-    from dataraum.analysis.relationships.db_models import Relationship
-    from sqlalchemy import select
-
-    col_names = _column_names(session)
-    rels = (
-        session.execute(
-            select(Relationship).where(
-                Relationship.session_id == session_id,
-                Relationship.detection_method == "candidate",
-            )
-        )
-        .scalars()
-        .all()
-    )
-    run_counts = Counter(r.run_id for r in rels)
-    if len(run_counts) > 1:
-        head, head_n = run_counts.most_common(1)[0]
-        print(
-            f"NOTE: candidate rows from {len(run_counts)} run_ids; "
-            f"keeping run {head} ({head_n} rows)."
-        )
-        rels = [r for r in rels if r.run_id == head]
-
-    best: dict[PairKey, dict[str, Any]] = {}
-    for rel in rels:
-        from_table, from_column = col_names.get(rel.from_column_id, ("", ""))
-        to_table, to_column = col_names.get(rel.to_column_id, ("", ""))
-        key: PairKey = frozenset({(short(from_table), from_column), (short(to_table), to_column)})
-        evidence = rel.evidence or {}
-        join_confidence = evidence.get("join_confidence")
-        if join_confidence is None:
-            continue
-        current = best.get(key)
-        if current is None or float(join_confidence) > float(current["join_confidence"]):
-            best[key] = {
-                "join_confidence": float(join_confidence),
-                "statistical_confidence": evidence.get("statistical_confidence"),
-            }
-    return best
-
-
 def run_relationship() -> None:
-    from dataraum.entropy.measurements.relationship_discovery import value_overlap_distribution
     from dataraum.entropy.models import parse_relationship_target
 
     run = load_run(_REL_STRATEGY)
@@ -499,7 +452,6 @@ def run_relationship() -> None:
     with workspace_session() as session:
         rows = _load_claim_rows(session, run.session_id, "relationship_discovery", label0="genuine")
         col_names = _column_names(session)
-        candidates = _candidate_overlap(session, run.session_id)
 
     # Claim rows per direction-agnostic pair key.
     claims: dict[PairKey, dict[str, float | None]] = defaultdict(dict)
@@ -516,7 +468,6 @@ def run_relationship() -> None:
     votes: list[RigVote] = []
     covered: dict[str, list[str]] = defaultdict(list)
     uncovered: dict[str, list[str]] = defaultdict(list)
-    no_data: list[str] = []
     for params in pairs:
         key = _pair_key(params)
         label = params["label"] == "genuine"
@@ -528,18 +479,9 @@ def run_relationship() -> None:
             for witness_id in ("value_overlap", "llm_judgment"):
                 votes.append(RigVote(witness_id, claims[key].get(witness_id), label, strata))
         else:
+            # No claim rows: the pair never entered the defined catalog, so no
+            # witness ever voted on it. Coverage only — NEVER a synthesized vote.
             uncovered[stratum].append(name)
-            candidate = candidates.get(key)
-            if candidate is None:
-                no_data.append(name)
-                votes.append(RigVote("value_overlap", None, label, strata, source="candidate"))
-            else:
-                dist = value_overlap_distribution(
-                    candidate["join_confidence"], candidate["statistical_confidence"]
-                )
-                votes.append(
-                    RigVote("value_overlap", dist["genuine"], label, strata, source="candidate")
-                )
 
     reliabilities = _estimate(votes)
     print(
@@ -550,8 +492,9 @@ def run_relationship() -> None:
         n_covered, n_uncovered = len(covered[stratum]), len(uncovered[stratum])
         print(f"      {stratum}: claim rows for {n_covered}/{n_covered + n_uncovered} pairs")
         for name in uncovered[stratum]:
-            via = "NO DATA AT ALL" if name in no_data else "synthesized from candidate row"
-            print(f"          uncovered: {name} ({via})")
+            print(
+                f"          uncovered: {name} (rejected/unconfirmed — selector finding, not voted)"
+            )
     print()
 
     _report_witness(
@@ -559,20 +502,9 @@ def run_relationship() -> None:
         "value_overlap",
         reliabilities,
         _REL_STRATA,
-        note="claim rows + candidate-row synthesis (engine distribution fn)",
+        note="claim rows only — the defined catalog (post-LLM) is the only surface "
+        "this witness votes on in production",
     )
-    synth = [v for v in votes if v.witness_id == "value_overlap" and v.source == "candidate"]
-    synth_opined = [v for v in synth if v.opinionated]
-    if synth:
-        synth_acc = (
-            f"{sum(1 for v in synth_opined if v.correct) / len(synth_opined):.0%}"
-            if synth_opined
-            else "—"
-        )
-        print(
-            f"      of which 'from candidate rows': {len(synth)} pairs, "
-            f"{len(synth_opined)} opinions, accuracy={synth_acc}"
-        )
     _report_witness(
         votes,
         "llm_judgment",

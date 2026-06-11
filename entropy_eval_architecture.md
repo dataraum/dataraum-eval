@@ -80,6 +80,16 @@ Written **before code**, one entry per measurement (see catalog below):
 - **Recorded proof** (Tier 2) — assertion against the SQLite fixture.
 - **Integration case** (Tier 3) — the one end-to-end scenario.
 
+**Measurement surfaces are part of the contract.** A witness's reliability is
+measured ONLY on the population it votes on in production — never on a wider
+artifact that happens to be persisted and labelled. The standing instance:
+**relationship entropy exists only on the defined catalog (post-LLM
+confirmation)**. Candidate rows are a generous structural list — pre-contract
+hypotheses, useless and dangerous as an entropy or calibration surface (the
+DAT-405 lesson; relearned 2026-06-11 when a value_overlap r synthesized from
+candidate rows of LLM-rejected pairs was shipped and withdrawn). Pairs that
+never reach the catalog are a finding about the SELECTOR (coverage), not votes.
+
 ## Measurement catalog
 
 The grounded statistic per measurement, and the honest "earns its place" call. The
