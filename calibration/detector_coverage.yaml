@@ -111,15 +111,14 @@ detectors:
                                     # injected-confirmed C=0.147 vs clean-confirmed
                                     # C=0.013 (+0.134); not yet driven through Temporal
       precision: unverified
-      reliabilities: placeholder    # nothing measurable IN CONTRACT yet (wave-2):
-                                    # relationship witnesses vote on the DEFINED
-                                    # (post-LLM) catalog only — a 0.615 value_overlap
-                                    # synthesized from candidate rows was withdrawn;
-                                    # live witness was silent (one-way pair lookup,
-                                    # fixed) -> re-measure from claim rows next batch.
-                                    # Selector finding: 7/11 genuine pairs rejected on
-                                    # name-suffix mismatches at full overlap (follow-up).
-                                    # manual/keeper need the teach protocol
+      reliabilities: placeholder    # value_overlap + llm_judgment MEASURED IN
+                                    # CONTRACT 0.923 each (post-fix re-run: selector
+                                    # confirmed 11/11 genuine incl. all suffix-
+                                    # mismatched pairs, rejected 4/4 spurious;
+                                    # value_overlap fired live on all 11 catalog
+                                    # pairs). manual/keeper still need the teach
+                                    # protocol -> measurement stays uncalibrated
+                                    # until they are measured
       teach_closure: none           # the relationship overlay family (add/keep/reject)
                                     # IS the teach surface and re-enters as witnesses;
                                     # closure test pending. Gap: an explicit confirm

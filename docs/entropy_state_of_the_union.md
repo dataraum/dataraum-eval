@@ -73,8 +73,8 @@ spurious?*
 
 | Witness | Reads | r |
 |---|---|---|
-| value_overlap | data — containment/overlap statistics of the pair | 0.7 placeholder (live measurement pending — see gaps) |
-| llm_judgment | LLM — the selector's confirmation confidence | 0.7 placeholder |
+| value_overlap | data — containment/overlap statistics of the pair | **0.923 measured in contract** (post-fix re-run; small n=11) |
+| llm_judgment | LLM — the selector's confirmation confidence | **0.923 measured in contract** (conditional on the catalog, by design) |
 | manual_curation | human — an explicit teach ("this is real") | 0.9 placeholder |
 | keeper_retention | human — silence (kept, not rejected) | 0.5 placeholder (deliberately least trusted) |
 
@@ -163,17 +163,18 @@ level, on any seed.
 
 **The real, honest gap — in order of how much I'd worry:**
 
-1. **The relationship chain is the weakest end-to-end path in the system.**
-   This week's calibration corpus showed: the LLM selector rejected 7 of 11
-   genuine FK pairs because their names used normal suffix variation
-   (`facility_ref` → `facility_id`) — even with perfect value containment in
-   front of it; a one-way lookup bug kept the value_overlap witness silent in
-   live adjudication; and the witness reliabilities are all placeholders.
-   Selector criteria and lookup are fixed (proof re-run pending); but until a
-   fresh corpus run shows confirmed coverage and an in-contract value_overlap
-   measurement, **relationship readiness should be treated as unproven**.
-   The human witnesses (manual/keeper) additionally need a teach-protocol
-   calibration run that does not exist yet.
+1. **The relationship chain was the weakest end-to-end path — now fixed and
+   proven on the calibration corpus, with one honest remainder.** The corpus
+   caught the LLM selector rejecting 7 of 11 genuine FK pairs on normal
+   name-suffix variation (`facility_ref` → `facility_id`) despite perfect
+   containment, and a one-way lookup bug keeping the value_overlap witness
+   silent in live adjudication. Both fixed; the post-fix re-run confirmed
+   11/11 genuine pairs (all suffix-mismatched ones recovered), rejected 4/4
+   designed spurious, and produced the first in-contract measurements
+   (value_overlap and llm_judgment at 0.923, n=11 — widen over seeds). The
+   remainder: the human witnesses (manual/keeper) still need a teach-protocol
+   calibration run that does not exist yet, so the measurement stays formally
+   uncalibrated until then.
 2. **Partial formula divergence under ~20% passes formula_discovery's
    grading** (measured: 0% accuracy on the partial stratum). The pooled
    conflict and the scalar still catch it at the column level, but the
