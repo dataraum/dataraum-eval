@@ -130,11 +130,11 @@ pipeline, and closes the conflict it answers. Current teach types:
 | `null_value` | "this token IS a null / IS a value" | **proven** (unit + e2e: C collapses) |
 | `concept_property` | "this concept's temporal behavior is X" | **proven** (e2e: C 0.305 → 0.007) |
 | `unit` | "this column is in kEUR" | **proven** (built + e2e) |
-| `rebind` | "this column belongs to concept Y" | applier built; closure test pending |
-| relationship `add` / `keep` / `reject` | "this relationship is real / keep it / wrong" | re-enter as the `manual_curation` / `keeper_retention` witnesses; closure test pending; known gap: an explicit *confirm* never materializes a row |
+| `validation` (expected_formula) | "this column's expected formula IS X" | **proven** e2e (DAT-447: derived_value `inspection_total` 0.833 → 0.000 post-teach; declared claim anchors the score, naming dispute stays in evidence) |
+| relationship `confirm` / `keep` / `reject` | "this relationship is real / keep it / wrong" | **proven** (DAT-447: `confirm`→manual / `keep`→keeper enter beside the llm row; the human witness materializes and is measured — the confirm-never-materializes gap is closed) |
+| `rebind` | "this column belongs to concept Y" | applier built; **CUT at the kill gate for now** — the corpus has rebind suggestions but no separation margin (pure-measurement ΔU ≈ 0.08, inside LLM noise); needs a corpus with an unbound/ambiguous concept |
 | `expected_dependency` | "these columns are dependent by design" | applied (read by `dimensional_entropy`) |
-| `concept` / `type_pattern` | bind a concept / declare a parse pattern | appliers registered; closure proof pending |
-| `validation` / `cycle` / `metric` | author a check / a cycle / a metric | appliers registered (corrected at the PR #284 review — an earlier version of this doc wrongly called them schema placeholders); closure proof pending (DAT-447) |
+| `concept` / `type_pattern` / `cycle` / `metric` | bind a concept / parse pattern / cycle / metric | appliers registered; **closure unproven** — no honest scenario yet (concept needs a U-drop surface; type_pattern a quarantine-pattern corpus; cycle/metric an entropy/readiness surface that reads the vocabulary back). These are the harness's skip rows — its honest coverage map. |
 
 ## State of the union
 
@@ -186,16 +186,22 @@ level, on any seed.
    grading** (measured: 0% accuracy on the partial stratum). The pooled
    conflict and the scalar still catch it at the column level, but the
    witness's per-claim vote is weak exactly where divergence is subtle.
-3. **Teach closure is proven for 3 of the 9 applier-backed teach types**
-   (null_value, concept_property, unit). The other six appliers exist and are
-   guarded by the suggestion-vocabulary test, but none has a closure proof —
-   that, plus the relationship overlays, is the DAT-447 lane. Related gap
-   (PR #284 review finding): only 2 of the 4 pooled measurements route their
-   conflict into a teach suggestion — `relationship_discovery` and
-   `derived_value` band a column without handing the user an executable
-   action. relationship routing maps cleanly onto the overlay family;
-   derived_value needs a decision (new `expected_formula` family vs the
-   existing `validation` teach).
+3. **Teach closure is proven for 5 of the 9 applier-backed teach types**
+   (null_value, concept_property, unit, validation/expected_formula,
+   relationship), unified into one parametrized harness
+   (`calibration/test_teach_cycle.py`) whose remaining rows are honest skips
+   with precise reasons — the coverage map, not faked closure. `rebind` is
+   kill-gate-CUT for now (no separation margin in the corpus);
+   `concept`/`type_pattern`/`cycle`/`metric` need scenarios that don't exist
+   yet. All four pooled measurements now route their conflict into an
+   executable teach suggestion (the PR #284 routing gap is closed). Two
+   harness design notes for later: (a) the derived/relationship corpora now
+   carry *persisted* teach overlays, with recall coupled via a teach-answered
+   skip — a self-contained teach→assert→teardown design would decouple them
+   at the cost of a full re-run per test; (b) workspace-scoped *concept*
+   teaches leak cross-session (a concept is not column-scoped), so any future
+   concept_property/concept closure run needs a teardown discipline — a
+   latent leftover was caught and removed this session.
 4. **Run-to-run LLM variance vs captured baselines.** Clean scores now have
    measured bands (replacing point captures), but the readiness baseline is
    still a point capture; one column (`payments.amount`) flips its temporal
