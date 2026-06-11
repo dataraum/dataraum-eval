@@ -587,6 +587,94 @@ def teach_unit_and_rerun(
     return run
 
 
+def teach_relationships_and_rerun(
+    run: CalibrationRun,
+    *,
+    verdicts: list[dict[str, str]],
+    vertical: str | None = "finance",
+) -> CalibrationRun:
+    """Write relationship-overlay verdicts, then RE-RUN the pipeline for the SAME session.
+
+    The DAT-447 relationship teach-protocol primitive. Each verdict is
+    ``{action, from_table, from_column, to_table, to_column}`` with NAMES (the
+    entropy_map's vocabulary); the helper resolves them to this session's column
+    ids — the relationship overlay's payload contract
+    (``{action, from_column_id, to_column_id}``, see
+    ``analysis/relationships/utils.relationship_overlay_pairs``) — writes one
+    workspace-scoped ConfigOverlay per verdict, and re-drives the session. On
+    the re-run, ``confirm``/``add`` materialize as the ``manual`` witness and
+    ``keep`` as ``keeper`` BESIDE the llm rows (the per-(pair, method) dedup),
+    so the human witnesses finally vote and the rig can measure them.
+    """
+    bootstrap_engine()
+
+    from dataraum.core.connections import ConnectionConfig, ConnectionManager
+    from dataraum.server.workspace import get_active_workspace_id
+    from dataraum.storage.overlay_models import ConfigOverlay
+    from sqlalchemy import select
+
+    workspace_id = get_active_workspace_id()
+    workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
+    workspace_mgr.initialize()
+    try:
+        with workspace_mgr.session_scope() as s:
+            from dataraum.investigation.db_models import SessionTable
+            from dataraum.storage import Column, Table
+
+            table_ids = {
+                st.table_id
+                for st in s.execute(
+                    select(SessionTable).where(SessionTable.session_id == run.session_id)
+                ).scalars()
+            }
+            tables = {
+                t.table_id: t.table_name
+                for t in s.execute(select(Table).where(Table.table_id.in_(table_ids))).scalars()
+            }
+            # (logical table name, column name) -> column_id, prefix-stripped.
+            from calibration.tools._runs import short
+
+            col_ids: dict[tuple[str, str], str] = {}
+            for c in s.execute(select(Column).where(Column.table_id.in_(table_ids))).scalars():
+                col_ids[(short(tables[c.table_id]), c.column_name)] = c.column_id
+
+            for v in verdicts:
+                from_id = col_ids.get((v["from_table"], v["from_column"]))
+                to_id = col_ids.get((v["to_table"], v["to_column"]))
+                if from_id is None or to_id is None:
+                    raise SystemExit(
+                        f"verdict names an unknown column: {v} (resolved {from_id}, {to_id})"
+                    )
+                s.add(
+                    ConfigOverlay(
+                        type="relationship",
+                        payload={
+                            "action": v["action"],
+                            "from_column_id": from_id,
+                            "to_column_id": to_id,
+                        },
+                        session_id=None,  # workspace-scoped, like the other teach helpers
+                    )
+                )
+    finally:
+        workspace_mgr.close()
+
+    output_dir = OUTPUT_DIR / run.strategy
+    output_dir.mkdir(parents=True, exist_ok=True)
+    actions = ", ".join(f"{v['action']}:{v['from_column']}→{v['to_column']}" for v in verdicts)
+    print(f"[eval] teach relationships [{actions}] → re-run session {run.session_id}")
+    asyncio.run(
+        _drive_pipeline(
+            workspace_id=workspace_id,
+            source_ids=list(run.source_ids),
+            session_id=run.session_id,
+            vertical=vertical,
+            log_path=output_dir / "worker_teach_relationship_rerun.log",
+        )
+    )
+    return run
+
+
 def teach_concept_property_and_rerun(
     run: CalibrationRun,
     *,
