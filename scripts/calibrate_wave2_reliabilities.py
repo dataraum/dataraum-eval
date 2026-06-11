@@ -476,7 +476,12 @@ def run_relationship() -> None:
         name = f"{params['child_table']}.{params['child_column']}→{params['parent_column']}"
         if key in claims:
             covered[stratum].append(name)
-            for witness_id in ("value_overlap", "llm_judgment"):
+            for witness_id in (
+                "value_overlap",
+                "llm_judgment",
+                "manual_curation",
+                "keeper_retention",
+            ):
                 votes.append(RigVote(witness_id, claims[key].get(witness_id), label, strata))
         else:
             # No claim rows: the pair never entered the defined catalog, so no
@@ -513,14 +518,30 @@ def run_relationship() -> None:
         note="claim rows only — conditional on the LLM having ACCEPTED the pair; "
         "rejections never reach the catalog, so false-rejects are invisible here",
     )
-    print(
-        "  manual_curation: UNMEASURABLE on this corpus — no teach actions in a "
-        "calibration run; needs the teach protocol."
-    )
-    print(
-        "  keeper_retention: UNMEASURABLE on this corpus — no keep overlays in a "
-        "calibration run; needs the teach protocol."
-    )
+    # The human witnesses vote only after the teach protocol
+    # (scripts/calibrate_teach_protocol.py) wrote verdicts and re-ran the
+    # session. Their measured accuracy is a PLUMBING CEILING — the simulated
+    # teacher follows ground truth — disclosed in provenance; Laplace keeps
+    # r < 1 (a certain witness would be an override). Data-driven reporting:
+    # zero opinions = the protocol has not run.
+    for witness_id, ceiling_note in (
+        ("manual_curation", "explicit confirm/add verdicts"),
+        ("keeper_retention", "silent-accept keeps"),
+    ):
+        if any(v.witness_id == witness_id and v.opinionated for v in votes):
+            _report_witness(
+                votes,
+                witness_id,
+                reliabilities,
+                _REL_STRATA,
+                note=f"teach-protocol {ceiling_note} — ground-truth-driven teacher: "
+                "a plumbing CEILING, not a human-error estimate",
+            )
+        else:
+            print(
+                f"  {witness_id}: UNMEASURABLE — no teach-protocol verdicts in this "
+                "session (run scripts/calibrate_teach_protocol.py first)."
+            )
 
 
 # ---------------------------------------------------------------------------
