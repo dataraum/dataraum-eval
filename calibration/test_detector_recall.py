@@ -241,6 +241,17 @@ def test_injection_detected(
     column = injection["target_column"]
     detector = injection["detector_id"]
 
+    # Calibration NEGATIVES: generative families record their labelled-clean
+    # legs in the entropy_map too (the rig's true-negative class — agree-stratum
+    # formulas, clean genuine FKs). They are precision material by construction,
+    # never recall targets; asserting detection on them inverts their meaning.
+    params = injection.get("parameters", {})
+    if params.get("divergence_mode") == "agree" or params.get("stratum") == "genuine_clean":
+        pytest.skip(
+            "calibration negative — the labelled-CLEAN leg of a generative family "
+            "(precision material, not a recall target)"
+        )
+
     # Always skip unimplemented detectors
     if detector in NOT_IMPLEMENTED:
         pytest.skip(f"{detector} not implemented yet")
