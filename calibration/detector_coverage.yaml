@@ -173,20 +173,32 @@ detectors:
 
   slice_conditional_null:
     disposition: scalar               # bias-corrected Cramér's V of is-null × slice (Bergsma + Cochran)
-    coverage: { recall: unverified, precision: unverified, reliabilities: n/a, teach_closure: wired, in_slice: true }
+    coverage: { recall: proven, precision: unverified, reliabilities: n/a, teach_closure: wired, in_slice: true }
+    proven_by: >-
+      DAT-473 (2026-06-15): Tier-3 e2e on detection-slice-null-v1 (clean-pg slate)
+      — slice_conditional_null:journal_lines.{debit,credit} both detected above the
+      clean baseline by the ordering margin (recall is separation from clean, not a
+      point threshold). The detector ran clean across every pipeline (54 records,
+      no errors) and behaves identically to its add_source peers in the read surface.
     note: >-
-      DAT-473 (2026-06-15): nulls CONCENTRATED in 1-2 slices of a categorical
-      dimension — the flat null_ratio reads mild while one cost center is 60%
-      null. Grounded by the kill gate (calibration/unit/test_slice_null_gate.py);
-      the pure stats.cramers_v is pinned in both repos. Declared under the
-      statistics phase (runs at add_source detect). Recall driven by the new
-      detection-slice-null-v1 strategy (ordering grammar, injected > clean +
-      margin); teach_closure WIRED via an expected_dependency overlay on the
-      (column, slice) pair — the document_business_rule archetype
-      dimensional_entropy already honors — pinned in test_teach_cycle.py
-      (test_teach_closure[slice_conditional_null]). recall/precision UNVERIFIED
-      until the Tier-3 e2e runs; bump to proven + add a clean band on the
-      post-merge resweep.
+      Nulls CONCENTRATED in 1-2 slices of a categorical dimension — the flat
+      null_ratio reads mild while one cost center is 60% null. Grounded by the kill
+      gate (calibration/unit/test_slice_null_gate.py); the pure stats.cramers_v is
+      pinned in both repos. Declared under the statistics phase (add_source detect).
+      teach_closure WIRED: the mechanism (expected_dependency overlay on the
+      (column, slice) pair → the pair is excluded → score drops) is proven
+      DETERMINISTICALLY at the unit tier
+      (engine test_slice_conditional_null_detector::test_document_business_rule_teach_closes_the_score)
+      and the live teach re-run is crash-free (the begin_session slicing-FK crash
+      that blocked it was root-caused + fixed: slicing agent now grounds every
+      recommendation, engine 0f3a37bc). The e2e closure LEG
+      (test_teach_cycle.py::test_teach_closure[slice_conditional_null]) skipped on
+      the contaminated re-run because a prior teach's expected_dependency overlay
+      had already pre-closed debit (cross-session teach-leak; clean-pg between
+      teach runs is the harness discipline, not engine code). precision UNVERIFIED:
+      pending the head-mechanism fix (ADR-0008 — add_source heads under-promoted to
+      the read view; hits ALL add_source detectors equally) + a clean band on a
+      resweep.
 
   type_fidelity:
     disposition: scalar               # max(1-parse_success, quarantine) — honest, no boost

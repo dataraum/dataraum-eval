@@ -33,7 +33,7 @@ declares detectors is covered by exactly one of these):
 
 | Point | When it runs | What it measures |
 |---|---|---|
-| **add_source detect** | per uploaded table, after typing → statistics → temporal → per-column annotation | the column in isolation: `type_fidelity`, `null_ratio`, `null_semantics`, `business_meaning`, `unit_entropy`, `temporal_entropy`, `benford` |
+| **add_source detect** | per uploaded table, after typing → statistics → temporal → per-column annotation | the column in isolation: `type_fidelity`, `null_ratio`, `slice_conditional_null`, `null_semantics`, `business_meaning`, `unit_entropy`, `temporal_entropy`, `benford` |
 | **session detect** | after a session composes its tables: relationship discovery, per-table semantics, lineage, enriched views, slicing, correlations | everything that needs more than one column or table: `relationship_entropy`, `relationship_discovery`, `join_path_determinism`, `dimension_coverage`, `dimensional_entropy`, `temporal_behavior`, `derived_value` |
 | **operating_model detect** | after the validation phase of the operating-model workflow | `cross_table_consistency` — executed validation checks, scored; failed critical checks fan out to the exact columns the check read |
 
@@ -90,7 +90,9 @@ cleanliness.
 | llm_hypothesis | LLM — what formula the column NAME advertises | **0.357 measured** (the name-reader fails exactly where names lie — that is its job description, and why pooling weights exist) |
 
 **Scalars** (one grounded statistic, no pool): `type_fidelity` (quarantine
-rate), `null_ratio`, `relationship_entropy` (orphan rate),
+rate), `null_ratio`, `slice_conditional_null` (bias-corrected Cramér's V of
+is-null × slice — nulls concentrated in a slice that the flat null_ratio hides),
+`relationship_entropy` (orphan rate),
 `cross_table_consistency` (violation rates; failed critical = 1.0),
 `dimensional_entropy` (normalized mutual information), `dimension_coverage`
 (mean null rate over dimension columns), `temporal_entropy` (broken time
@@ -133,7 +135,7 @@ pipeline, and closes the conflict it answers. Current teach types:
 | `validation` (expected_formula) | "this column's expected formula IS X" | **proven** e2e (DAT-447: derived_value `inspection_total` 0.833 → 0.000 post-teach; declared claim anchors the score, naming dispute stays in evidence) |
 | relationship `confirm` / `keep` / `reject` | "this relationship is real / keep it / wrong" | **proven** (DAT-447: `confirm`→manual / `keep`→keeper enter beside the llm row; the human witness materializes and is measured — the confirm-never-materializes gap is closed) |
 | `rebind` | "this column belongs to concept Y" | applier built; **CUT at the kill gate for now** — the corpus has rebind suggestions but no separation margin (pure-measurement ΔU ≈ 0.08, inside LLM noise); needs a corpus with an unbound/ambiguous concept |
-| `expected_dependency` | "these columns are dependent by design" | applied (read by `dimensional_entropy`) |
+| `expected_dependency` | "these columns are dependent by design" | applied (read by `dimensional_entropy` + `slice_conditional_null` — the latter closes a documented conditional-missingness pair) |
 | `concept` / `type_pattern` / `cycle` / `metric` | bind a concept / parse pattern / cycle / metric | appliers registered; **closure unproven** — no honest scenario yet (concept needs a U-drop surface; type_pattern a quarantine-pattern corpus; cycle/metric an entropy/readiness surface that reads the vocabulary back). These are the harness's skip rows — its honest coverage map. |
 
 ## State of the union
