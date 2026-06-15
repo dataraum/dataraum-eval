@@ -171,6 +171,23 @@ detectors:
     disposition: scalar               # completeness rate
     coverage: { recall: baseline, precision: baseline, reliabilities: n/a, teach_closure: none, in_slice: true }
 
+  slice_conditional_null:
+    disposition: scalar               # bias-corrected Cramér's V of is-null × slice (Bergsma + Cochran)
+    coverage: { recall: unverified, precision: unverified, reliabilities: n/a, teach_closure: wired, in_slice: true }
+    note: >-
+      DAT-473 (2026-06-15): nulls CONCENTRATED in 1-2 slices of a categorical
+      dimension — the flat null_ratio reads mild while one cost center is 60%
+      null. Grounded by the kill gate (calibration/unit/test_slice_null_gate.py);
+      the pure stats.cramers_v is pinned in both repos. Declared under the
+      statistics phase (runs at add_source detect). Recall driven by the new
+      detection-slice-null-v1 strategy (ordering grammar, injected > clean +
+      margin); teach_closure WIRED via an expected_dependency overlay on the
+      (column, slice) pair — the document_business_rule archetype
+      dimensional_entropy already honors — pinned in test_teach_cycle.py
+      (test_teach_closure[slice_conditional_null]). recall/precision UNVERIFIED
+      until the Tier-3 e2e runs; bump to proven + add a clean band on the
+      post-merge resweep.
+
   type_fidelity:
     disposition: scalar               # max(1-parse_success, quarantine) — honest, no boost
     coverage: { recall: baseline, precision: baseline, reliabilities: n/a, teach_closure: none, in_slice: true }

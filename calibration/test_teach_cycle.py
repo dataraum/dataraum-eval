@@ -61,6 +61,9 @@ _REL_STRATEGY = "detection-relationship-cal-v1"
 _DERIVED_STRATEGY = "detection-derived-cal-v1"
 _DERIVED_TABLE, _DERIVED_COLUMN = "formula_probes", "inspection_total"
 
+_SLICE_STRATEGY = "detection-slice-null-v1"
+_SLICE_TABLE, _SLICE_COLUMN, _SLICE_DIM = "journal_lines", "debit", "cost_center"
+
 
 # ---------------------------------------------------------------------------
 # Head-resolved read helpers (the conftest Step-0 surface)
@@ -672,6 +675,69 @@ def _prove_validation_expected_formula() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Row: slice_conditional_null / expected_dependency (class 2 — one re-run, DAT-473)
+# ---------------------------------------------------------------------------
+
+
+def _slice_conditional_null_score(session_id: str, table_substr: str, column: str) -> float | None:
+    """Head-resolved slice_conditional_null score (max bias-corrected V) for a column."""
+    rows = _column_rows(
+        _head_resolved_rows(session_id, "slice_conditional_null"), table_substr, column
+    )
+    return max((float(r.score) for r in rows), default=None)
+
+
+def _prove_slice_conditional_null_closure() -> None:
+    """A document_business_rule teach closes a slice-conditional-null concentration (DAT-473).
+
+    Runs detection-slice-null-v1 (nulls in journal_lines.debit concentrated in 1-2 cost
+    centers), reads the head-resolved slice_conditional_null score, documents the
+    (debit, cost_center) conditional-missingness rule via an ``expected_dependency`` overlay,
+    RE-RUNS the same session, and asserts the score drops below the band: a documented
+    dependency is expected structure, not entropy. Signed-delta grammar (ADR-0009).
+    """
+    if not (DATA_DIR / _SLICE_STRATEGY).exists():
+        pytest.skip(
+            f"no data for {_SLICE_STRATEGY}; run `python -m calibration.runner "
+            f"{_SLICE_STRATEGY}` first"
+        )
+
+    run = _load_run_or_pipeline(_SLICE_STRATEGY)
+
+    before = _slice_conditional_null_score(run.session_id, _SLICE_TABLE, _SLICE_COLUMN)
+    if before is None:
+        pytest.skip(
+            f"slice_conditional_null did not fire on {_SLICE_TABLE}.{_SLICE_COLUMN} "
+            "in the baseline run"
+        )
+    if before < DETECTION_THRESHOLD:
+        pytest.skip(
+            f"no banded concentration on {_SLICE_TABLE}.{_SLICE_COLUMN} (score {before:.3f}) "
+            "— the injection did not concentrate enough this run; nothing to close"
+        )
+
+    runner_mod.teach_slice_dependency_and_rerun(
+        run,
+        table=_SLICE_TABLE,
+        column=_SLICE_COLUMN,
+        slice_column=_SLICE_DIM,
+        rule=f"{_SLICE_COLUMN} is intentionally blank for some {_SLICE_DIM} values (accrual-only)",
+    )
+
+    after = _slice_conditional_null_score(run.session_id, _SLICE_TABLE, _SLICE_COLUMN)
+    assert after is not None, "slice_conditional_null object vanished after the teach re-run"
+    # Teach-closure: the documented (column, slice) pair is excluded, so the concentration
+    # is no longer entropy. The band is the recall surface's DETECTION_THRESHOLD.
+    assert after < DETECTION_THRESHOLD, (
+        f"teach did not close the column score: {after:.3f} >= band {DETECTION_THRESHOLD}"
+    )
+    assert after < before - _DROP_MARGIN, (
+        f"teach did not drop the score: {before:.3f} -> {after:.3f} "
+        f"(delta {after - before:+.3f}, expected drop > {_DROP_MARGIN})"
+    )
+
+
+# ---------------------------------------------------------------------------
 # The harness — one row per teach type
 # ---------------------------------------------------------------------------
 
@@ -728,6 +794,9 @@ _ROWS = [
     pytest.param(_prove_concept_property_closure, id="concept_property", marks=pytest.mark.llm),
     pytest.param(_prove_unit_declaration_landing, id="unit", marks=pytest.mark.llm),
     pytest.param(_prove_validation_expected_formula, id="validation", marks=pytest.mark.llm),
+    pytest.param(
+        _prove_slice_conditional_null_closure, id="slice_conditional_null", marks=pytest.mark.llm
+    ),
     pytest.param(_prove_relationship_confirm_keep, id="relationship"),
 ] + [
     pytest.param(None, id=teach_type, marks=pytest.mark.skip(reason=reason))

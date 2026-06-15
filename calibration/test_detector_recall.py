@@ -52,6 +52,11 @@ ORDERING_DETECTORS = frozenset(
         "derived_value",
         "relationship_entropy",
         "cross_table_consistency",
+        # slice_conditional_null (DAT-473): a bias-corrected Cramér's V — the absolute
+        # association on a concentrated injection is honestly modest, and clean data
+        # carries some natural cost-center null variation, so separation from clean is
+        # the contract, not a point threshold.
+        "slice_conditional_null",
     }
 )
 ORDERING_MARGIN = 0.05
@@ -108,6 +113,7 @@ CURRENT_SLICE_DETECTORS = frozenset(
     {
         "type_fidelity",
         "null_ratio",
+        "slice_conditional_null",
         "business_meaning",
         "unit_entropy",
         "temporal_entropy",

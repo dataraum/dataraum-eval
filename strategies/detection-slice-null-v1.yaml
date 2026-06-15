@@ -1,0 +1,40 @@
+name: detection-slice-null-v1
+level: high
+description: >
+  Slice-conditional null calibration (DAT-473). Injects the generative
+  slice_conditional_null FAMILY into a measure column: a recorded seed samples the
+  missingness SHAPE (1-2 affected slices, conditional null rate 0.2-0.6 vs a low
+  base rate <= 0.05), and the injector concentrates the nulls in 1-2 values of a
+  categorical slice dimension (cost_center) while keeping the OVERALL null rate
+  mild. The flat null_ratio therefore reads ordinary; only the slice_conditional_null
+  detector — bias-corrected Cramér's V of (value IS NULL) x slice under the Cochran
+  validity rule — reads the concentration.
+
+  Generative, not memorized: different seeds vary the affected slices + rates, the
+  recorded seed reproduces exactly. Graded by ORDERING (injected > clean baseline by
+  a margin), never a point threshold (ADR-0009 eval grammar). The teach that closes
+  it is a document_business_rule overlay on the (column, cost_center) pair — the
+  conditional-missingness rule is documented, expected structure, not entropy.
+
+# Detector tested: slice_conditional_null (concentration; ordering/delta grammar)
+# Teach closure: expected_dependency overlay on (target_column, cost_center)
+#   — see calibration/test_teach_cycle.py.
+
+injections:
+  - injector: inject_slice_conditional_null
+    table: journal_lines
+    detector_id: slice_conditional_null
+    params:
+      col: debit
+      slice_col: cost_center
+      seed: 20260615
+      severity: high
+
+  - injector: inject_slice_conditional_null
+    table: journal_lines
+    detector_id: slice_conditional_null
+    params:
+      col: credit
+      slice_col: cost_center
+      seed: 20260616
+      severity: high

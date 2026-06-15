@@ -675,6 +675,91 @@ def teach_relationships_and_rerun(
     return run
 
 
+def teach_slice_dependency_and_rerun(
+    run: CalibrationRun,
+    *,
+    table: str,
+    column: str,
+    slice_column: str,
+    rule: str,
+    vertical: str | None = "finance",
+) -> CalibrationRun:
+    """Document a column's conditional missingness, then RE-RUN the SAME session (DAT-473).
+
+    The slice_conditional_null teach-closure primitive — the ``document_business_rule``
+    archetype. Resolves ``(table, column)`` and ``(table, slice_column)`` to this session's
+    column ids and writes ONE ``expected_dependency`` ConfigOverlay
+    ``{column_ids: [target, slice], rule}`` (the same overlay ``load_documented_dependencies``
+    reads and ``dimensional_entropy`` already honors), then re-drives addSource+beginSession.
+    On the re-run, ``slice_conditional_null`` excludes the documented ``(target, slice)`` pair,
+    so the concentration it scored is now expected structure — the score drops.
+    """
+    bootstrap_engine()
+
+    from dataraum.core.connections import ConnectionConfig, ConnectionManager
+    from dataraum.server.workspace import get_active_workspace_id
+    from dataraum.storage.overlay_models import ConfigOverlay
+    from sqlalchemy import select
+
+    workspace_id = get_active_workspace_id()
+    workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
+    workspace_mgr.initialize()
+    try:
+        with workspace_mgr.session_scope() as s:
+            from dataraum.investigation.db_models import SessionTable
+            from dataraum.storage import Column, Table
+
+            from calibration.tools._runs import short
+
+            table_ids = {
+                st.table_id
+                for st in s.execute(
+                    select(SessionTable).where(SessionTable.session_id == run.session_id)
+                ).scalars()
+            }
+            tables = {
+                t.table_id: t.table_name
+                for t in s.execute(select(Table).where(Table.table_id.in_(table_ids))).scalars()
+            }
+            col_ids: dict[tuple[str, str], str] = {}
+            for c in s.execute(select(Column).where(Column.table_id.in_(table_ids))).scalars():
+                col_ids[(short(tables[c.table_id]), c.column_name)] = c.column_id
+
+            target_id = col_ids.get((table, column))
+            slice_id = col_ids.get((table, slice_column))
+            if target_id is None or slice_id is None:
+                raise SystemExit(
+                    f"teach names an unknown column: {table}.{column} / {table}.{slice_column} "
+                    f"(resolved {target_id}, {slice_id})"
+                )
+            s.add(
+                ConfigOverlay(
+                    type="expected_dependency",
+                    payload={"column_ids": [target_id, slice_id], "rule": rule},
+                    session_id=None,  # workspace-scoped; the pair is keyed by session column ids
+                )
+            )
+    finally:
+        workspace_mgr.close()
+
+    output_dir = OUTPUT_DIR / run.strategy
+    output_dir.mkdir(parents=True, exist_ok=True)
+    print(
+        f"[eval] teach expected_dependency {table}.{column}~{slice_column} "
+        f"→ re-run session {run.session_id}"
+    )
+    asyncio.run(
+        _drive_pipeline(
+            workspace_id=workspace_id,
+            source_ids=list(run.source_ids),
+            session_id=run.session_id,
+            vertical=vertical,
+            log_path=output_dir / "worker_teach_slice_rerun.log",
+        )
+    )
+    return run
+
+
 def teach_concept_property_and_rerun(
     run: CalibrationRun,
     *,
