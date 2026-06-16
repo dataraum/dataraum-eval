@@ -42,8 +42,14 @@ def _true_behaviours() -> dict[str, str]:
     }
 
 
-def _probe_state(session_id: str) -> dict[str, tuple[str | None, float | None]]:
-    """Per measure_probes column: (bound business_concept, head-resolved conflict C)."""
+def _probe_state() -> dict[str, tuple[str | None, float | None]]:
+    """Per measure_probes column: (bound business_concept, head-resolved conflict C).
+
+    Both reads are head-resolved (no session axis post-DAT-506): semantic
+    annotations via ``current_semantic_annotations`` (column-grain generation
+    head), the conflict via ``current_entropy_objects`` — so a teach re-run's
+    fresh head replaces the prior run's rows.
+    """
     runner_mod.bootstrap_engine()
     mgr = ConnectionManager(ConnectionConfig.for_workspace())
     mgr.initialize()
@@ -55,21 +61,19 @@ def _probe_state(session_id: str) -> dict[str, tuple[str | None, float | None]]:
             concepts = s.execute(
                 text(
                     "SELECT c.column_name AS col, sa.business_concept AS concept "
-                    "FROM semantic_annotations sa "
+                    f'FROM "{read_schema}".current_semantic_annotations sa '
                     "JOIN columns c ON c.column_id = sa.column_id "
                     "JOIN tables t ON t.table_id = c.table_id "
-                    "WHERE sa.session_id = :sid AND t.table_name LIKE '%measure_probes' "
+                    "WHERE t.table_name LIKE '%measure_probes' "
                     "ORDER BY sa.annotated_at DESC"
                 ),
-                {"sid": session_id},
             ).all()
             objs = s.execute(
                 text(
                     f'SELECT target, score FROM "{read_schema}".current_entropy_objects '
-                    "WHERE session_id = :sid AND detector_id = 'temporal_behavior' "
+                    "WHERE detector_id = 'temporal_behavior' "
                     "AND target LIKE '%measure_probes.%'"
                 ),
-                {"sid": session_id},
             ).all()
     finally:
         mgr.close()
@@ -100,7 +104,7 @@ def test_stockflow_mislabel_recall_and_concept_teach_closure() -> None:
     )
 
     truth = _true_behaviours()
-    base = _probe_state(run.session_id)
+    base = _probe_state()
     # A target: a probe column the LLM bound to a concept, quiet in the baseline (prior
     # agrees with the claim), with a known true behaviour to mislabel against.
     target = next(
@@ -124,13 +128,13 @@ def test_stockflow_mislabel_recall_and_concept_teach_closure() -> None:
 
     # Mislabel the concept → the ontology_prior flips, the LLM still reads the true name.
     runner_mod.teach_concept_property_and_rerun(run, concept=concept, value=_MISLABEL[true_b])
-    during = _probe_state(run.session_id).get(target, (None, None))[1]
+    during = _probe_state().get(target, (None, None))[1]
     assert during is not None, "temporal_behavior object vanished after the mislabel re-run"
     print(f"[stockflow] after mislabel {concept}→{_MISLABEL[true_b]}: C={during:.3f}")
 
     # Correct the concept → the prior agrees again, the conflict collapses.
     runner_mod.teach_concept_property_and_rerun(run, concept=concept, value=_TRUE_VALUE[true_b])
-    after = _probe_state(run.session_id).get(target, (None, None))[1]
+    after = _probe_state().get(target, (None, None))[1]
     assert after is not None, "temporal_behavior object vanished after the correcting re-run"
     print(f"[stockflow] after correct {concept}→{_TRUE_VALUE[true_b]}: C={after:.3f}")
 

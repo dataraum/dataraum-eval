@@ -18,6 +18,7 @@ from __future__ import annotations
 import pytest
 import yaml
 from dataraum.core.connections import ConnectionConfig, ConnectionManager
+from dataraum.storage.read_views import read_schema_name_for
 from sqlalchemy import text
 
 from calibration import runner as runner_mod
@@ -37,23 +38,30 @@ def _true_behaviours() -> dict[str, str]:
     }
 
 
-def _llm_claims(session_id: str) -> dict[str, str | None]:
-    """The LLM's ``temporal_behavior_claim`` per measure_probes column for this run."""
+def _llm_claims() -> dict[str, str | None]:
+    """The LLM's ``temporal_behavior_claim`` per current measure_probes column.
+
+    Head-resolved via ``current_semantic_annotations`` (semantic_annotations is
+    column-grain, sealed under the per-table generation head): no session axis
+    post-DAT-506 — the view returns the current annotation per column.
+    """
     runner_mod.bootstrap_engine()
     mgr = ConnectionManager(ConnectionConfig.for_workspace())
     mgr.initialize()
     try:
         with mgr.session_scope() as s:
+            read_schema = read_schema_name_for(
+                str(s.execute(text("SELECT current_schema()")).scalar())
+            )
             rows = s.execute(
                 text(
                     "SELECT c.column_name AS col, sa.temporal_behavior_claim AS claim "
-                    "FROM semantic_annotations sa "
+                    f'FROM "{read_schema}".current_semantic_annotations sa '
                     "JOIN columns c ON c.column_id = sa.column_id "
                     "JOIN tables t ON t.table_id = c.table_id "
-                    "WHERE sa.session_id = :sid AND t.table_name LIKE '%measure_probes' "
+                    "WHERE t.table_name LIKE '%measure_probes' "
                     "ORDER BY sa.annotated_at DESC"
                 ),
-                {"sid": session_id},
             ).all()
     finally:
         mgr.close()
@@ -72,14 +80,11 @@ def test_llm_reads_clear_named_stock_flow_accurately() -> None:
         )
 
     sidecar = runner_mod.sidecar_path(_STRATEGY)
-    run = (
-        runner_mod.CalibrationRun.from_json(sidecar.read_text())
-        if sidecar.exists()
-        else runner_mod.run_pipeline(_STRATEGY)
-    )
+    if not sidecar.exists():
+        runner_mod.run_pipeline(_STRATEGY)  # produce the run + its sidecar
 
     truth = _true_behaviours()
-    claims = _llm_claims(run.session_id)
+    claims = _llm_claims()
     assert truth, "no temporal_behavior probe labels in entropy_map"
     assert claims, "no temporal_behavior_claim annotations for measure_probes columns"
 

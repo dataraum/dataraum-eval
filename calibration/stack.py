@@ -59,7 +59,11 @@ DATARAUM_WORKSPACE_ID = "00000000-0000-0000-0000-000000000001"
 TEMPORAL_PORT = 7234  # isolated host port (→ container 7233)
 TEMPORAL_HOST = f"{POSTGRES_HOST}:{TEMPORAL_PORT}"
 TEMPORAL_NAMESPACE = "default"
-TEMPORAL_TASK_QUEUE = "dataraum-pipeline"
+# One queue per workspace — ``engine-<workspace_id>`` (DAT-505). The engine's
+# bootstrap asserts TEMPORAL_TASK_QUEUE matches its workspace, so the worker
+# registration + the eval client triggers must derive the name the same way the
+# engine does (``task_queue_for``).
+TEMPORAL_TASK_QUEUE = f"engine-{DATARAUM_WORKSPACE_ID}"
 
 # Pinned image versions, mirrored from vendor packages/infra/.env.example.
 TEMPORAL_VERSION = "1.31.0"

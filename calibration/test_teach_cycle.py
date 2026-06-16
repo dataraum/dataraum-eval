@@ -70,8 +70,13 @@ _SLICE_TABLE, _SLICE_COLUMN, _SLICE_DIM = "journal_lines", "debit", "cost_center
 # ---------------------------------------------------------------------------
 
 
-def _head_resolved_rows(session_id: str, detector_id: str) -> list[Any]:
-    """Promoted-run (target, score, evidence) rows for one detector in a session."""
+def _head_resolved_rows(detector_id: str) -> list[Any]:
+    """The workspace's current (target, score, evidence) rows for one detector.
+
+    Head-resolved via the ``current_entropy_objects`` view (no session axis post
+    DAT-506): the view returns only rows under a currently-promoted head, so a
+    teach re-run's drop is visible and stale pre-teach rows are excluded.
+    """
     runner_mod.bootstrap_engine()  # PG/Temporal env + workspace schema (idempotent)
     mgr = ConnectionManager(ConnectionConfig.for_workspace())
     mgr.initialize()
@@ -83,9 +88,9 @@ def _head_resolved_rows(session_id: str, detector_id: str) -> list[Any]:
             rows = s.execute(
                 text(
                     f'SELECT target, score, evidence FROM "{read_schema}".current_entropy_objects '
-                    "WHERE session_id = :sid AND detector_id = :det"
+                    "WHERE detector_id = :det"
                 ),
-                {"sid": session_id, "det": detector_id},
+                {"det": detector_id},
             ).all()
     finally:
         mgr.close()
@@ -111,9 +116,9 @@ def _load_run_or_pipeline(strategy: str) -> runner_mod.CalibrationRun:
 # ---------------------------------------------------------------------------
 
 
-def _null_semantics_conflict(session_id: str, table_substr: str, column: str) -> float | None:
+def _null_semantics_conflict(table_substr: str, column: str) -> float | None:
     """Head-resolved pooled conflict C for a column's null_semantics object."""
-    rows = _column_rows(_head_resolved_rows(session_id, "null_semantics"), table_substr, column)
+    rows = _column_rows(_head_resolved_rows("null_semantics"), table_substr, column)
     return float(rows[0].score) if rows else None
 
 
@@ -134,7 +139,7 @@ def _prove_null_value_closure() -> None:
 
     run = _load_run_or_pipeline(_NULL_STRATEGY)
 
-    before = _null_semantics_conflict(run.session_id, _NULL_TABLE, _NULL_COLUMN)
+    before = _null_semantics_conflict(_NULL_TABLE, _NULL_COLUMN)
     if before is None:
         pytest.skip(
             f"null_semantics did not fire on {_NULL_TABLE}.{_NULL_COLUMN} in the baseline run"
@@ -149,7 +154,7 @@ def _prove_null_value_closure() -> None:
 
     runner_mod.teach_null_value_and_rerun(run, values=markers)
 
-    after = _null_semantics_conflict(run.session_id, _NULL_TABLE, _NULL_COLUMN)
+    after = _null_semantics_conflict(_NULL_TABLE, _NULL_COLUMN)
     assert after is not None, "null_semantics object vanished after the teach re-run"
     # Teach-closure: the taught vocabulary makes the vocabulary witness agree, so the
     # pooled conflict drops. Signed-delta grammar (ADR-0009), never a point threshold.
@@ -164,12 +169,12 @@ def _prove_null_value_closure() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _temporal_behavior_conflict(session_id: str, table_substr: str, column: str) -> float | None:
+def _temporal_behavior_conflict(table_substr: str, column: str) -> float | None:
     """Head-resolved pooled conflict C for a column's temporal_behavior object.
 
     Max over the dual-grain rows — any remaining high-C row counts against closure.
     """
-    rows = _column_rows(_head_resolved_rows(session_id, "temporal_behavior"), table_substr, column)
+    rows = _column_rows(_head_resolved_rows("temporal_behavior"), table_substr, column)
     return max((float(r.score) for r in rows), default=None)
 
 
@@ -180,7 +185,7 @@ _ONTOLOGY_VALUE_OF_CLAIM = {"stock": "point_in_time", "flow": "additive"}
 
 
 def _temporal_behavior_mislabel(
-    session_id: str, table_substr: str, column: str
+    table_substr: str, column: str
 ) -> tuple[float, str, str] | None:
     """The column's prior≠claim mislabel state: (conflict C, concept, correcting value).
 
@@ -194,7 +199,7 @@ def _temporal_behavior_mislabel(
     debit_balance to an INDUCED prior≠claim C=0.771). The concept comes from the
     object's own ``teach_suggestion`` (suggestion-consistency).
     """
-    rows = _column_rows(_head_resolved_rows(session_id, "temporal_behavior"), table_substr, column)
+    rows = _column_rows(_head_resolved_rows("temporal_behavior"), table_substr, column)
     best: tuple[float, str, str] | None = None
     for r in rows:
         ev = r.evidence[0] if isinstance(r.evidence, list) and r.evidence else {}
@@ -237,7 +242,7 @@ def _prove_concept_property_closure() -> None:
 
     run = _load_run_or_pipeline(_TB_STRATEGY)
 
-    mislabel = _temporal_behavior_mislabel(run.session_id, _TB_TABLE, _TB_COLUMN)
+    mislabel = _temporal_behavior_mislabel(_TB_TABLE, _TB_COLUMN)
     if mislabel is None or mislabel[0] <= _DROP_MARGIN:
         pytest.skip(
             f"no prior≠claim mislabel conflict on {_TB_TABLE}.{_TB_COLUMN} (both witnesses "
@@ -248,7 +253,7 @@ def _prove_concept_property_closure() -> None:
 
     runner_mod.teach_concept_property_and_rerun(run, concept=concept, value=value)
 
-    after = _temporal_behavior_conflict(run.session_id, _TB_TABLE, _TB_COLUMN)
+    after = _temporal_behavior_conflict(_TB_TABLE, _TB_COLUMN)
     assert after is not None, "temporal_behavior object vanished after the teach re-run"
     # Teach-closure: the taught concept behaviour makes the ontology_prior agree with the
     # LLM claim, so the pooled conflict drops. Signed-delta grammar, never a point threshold.
@@ -264,10 +269,10 @@ def _prove_concept_property_closure() -> None:
 
 
 def _unit_entropy_detected_unit(
-    session_id: str, table_substr: str, column: str
+    table_substr: str, column: str
 ) -> tuple[float, str | None] | None:
     """Head-resolved (score, evidence.detected_unit) for a column's unit_entropy object."""
-    rows = _column_rows(_head_resolved_rows(session_id, "unit_entropy"), table_substr, column)
+    rows = _column_rows(_head_resolved_rows("unit_entropy"), table_substr, column)
     for r in rows:
         ev = r.evidence[0] if isinstance(r.evidence, list) and r.evidence else {}
         return float(r.score), ev.get("detected_unit")
@@ -291,7 +296,7 @@ def _prove_unit_declaration_landing() -> None:
 
     run = _load_run_or_pipeline(_UNIT_STRATEGY)
 
-    before = _unit_entropy_detected_unit(run.session_id, _UNIT_TABLE, _UNIT_COLUMN)
+    before = _unit_entropy_detected_unit(_UNIT_TABLE, _UNIT_COLUMN)
     if before is None:
         pytest.skip(f"unit_entropy did not fire on {_UNIT_TABLE}.{_UNIT_COLUMN} (not a measure?)")
     _, before_unit = before
@@ -302,7 +307,7 @@ def _prove_unit_declaration_landing() -> None:
 
     runner_mod.teach_unit_and_rerun(run, table=_UNIT_TABLE, column=_UNIT_COLUMN, unit=_TAUGHT_UNIT)
 
-    after = _unit_entropy_detected_unit(run.session_id, _UNIT_TABLE, _UNIT_COLUMN)
+    after = _unit_entropy_detected_unit(_UNIT_TABLE, _UNIT_COLUMN)
     assert after is not None, "unit_entropy object vanished after the teach re-run"
     _, after_unit = after
     # The taught unit lands on the already-typed numeric column — the dead link
@@ -347,9 +352,7 @@ def _taught_pair_plan() -> dict[_PairKey, str]:
     }
 
 
-def _relationship_pools_by_run(
-    session_id: str,
-) -> tuple[list[str], dict[str, dict[_PairKey, tuple[float, float, frozenset[str]]]]]:
+def _relationship_pools_by_run() -> tuple[list[str], dict[str, dict[_PairKey, tuple[float, float, frozenset[str]]]]]:
     """Per run (ordered by first write): pair → (pooled C, p_genuine, witness ids).
 
     Claim-row read (the ``calibrate_wave2_reliabilities`` surface): the persisted
@@ -377,10 +380,13 @@ def _relationship_pools_by_run(
                 )
                 for c in s.execute(select(Column)).scalars()
             }
+            # ALL runs' relationship witnesses (pre- AND post-teach), grouped by
+            # run below — so NO current-head filter and no session axis (gone in
+            # DAT-506): one eval workspace runs one strategy, so every relationship
+            # witness row in it belongs to this strategy's pre/post-teach runs.
             records = (
                 s.execute(
                     select(ClaimWitnessRecord).where(
-                        ClaimWitnessRecord.session_id == session_id,
                         ClaimWitnessRecord.detector_id == "relationship_discovery",
                     )
                 )
@@ -456,12 +462,11 @@ def _prove_relationship_confirm_keep() -> None:
     sidecar = runner_mod.sidecar_path(_REL_STRATEGY)
     if not sidecar.exists():
         pytest.skip(f"no completed run for {_REL_STRATEGY} (missing {sidecar})")
-    run = runner_mod.CalibrationRun.from_json(sidecar.read_text())
 
     taught = _taught_pair_plan()
     assert taught, f"{_REL_STRATEGY} entropy_map lists no genuine relationship pairs"
 
-    run_order, pooled = _relationship_pools_by_run(run.session_id)
+    run_order, pooled = _relationship_pools_by_run()
     if len(run_order) < 2:
         pytest.skip(
             "teach protocol has not run for this session (single relationship_discovery "
@@ -513,10 +518,10 @@ def _prove_relationship_confirm_keep() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _derived_value_state(session_id: str) -> tuple[float, str, list[dict[str, Any]]] | None:
+def _derived_value_state() -> tuple[float, str, list[dict[str, Any]]] | None:
     """Head-resolved (max score, raw table name, evidence entries) for the target column."""
     rows = _column_rows(
-        _head_resolved_rows(session_id, "derived_value"), _DERIVED_TABLE, _DERIVED_COLUMN
+        _head_resolved_rows("derived_value"), _DERIVED_TABLE, _DERIVED_COLUMN
     )
     if not rows:
         return None
@@ -621,7 +626,7 @@ def _prove_validation_expected_formula() -> None:
 
     before: float | None = None
     if not already_taught:
-        state = _derived_value_state(run.session_id)
+        state = _derived_value_state()
         if state is None:
             pytest.skip(
                 f"derived_value did not fire on {_DERIVED_TABLE}.{_DERIVED_COLUMN} "
@@ -641,7 +646,7 @@ def _prove_validation_expected_formula() -> None:
             formula=_actual_formula_binary(),
         )
 
-    state = _derived_value_state(run.session_id)
+    state = _derived_value_state()
     assert state is not None, "derived_value object vanished after the teach re-run"
     after, _, entries = state
     declared_entries = [e for e in entries if e.get("declared")]
@@ -679,10 +684,10 @@ def _prove_validation_expected_formula() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _slice_conditional_null_score(session_id: str, table_substr: str, column: str) -> float | None:
+def _slice_conditional_null_score(table_substr: str, column: str) -> float | None:
     """Head-resolved slice_conditional_null score (max bias-corrected V) for a column."""
     rows = _column_rows(
-        _head_resolved_rows(session_id, "slice_conditional_null"), table_substr, column
+        _head_resolved_rows("slice_conditional_null"), table_substr, column
     )
     return max((float(r.score) for r in rows), default=None)
 
@@ -704,7 +709,7 @@ def _prove_slice_conditional_null_closure() -> None:
 
     run = _load_run_or_pipeline(_SLICE_STRATEGY)
 
-    before = _slice_conditional_null_score(run.session_id, _SLICE_TABLE, _SLICE_COLUMN)
+    before = _slice_conditional_null_score(_SLICE_TABLE, _SLICE_COLUMN)
     if before is None:
         pytest.skip(
             f"slice_conditional_null did not fire on {_SLICE_TABLE}.{_SLICE_COLUMN} "
@@ -724,7 +729,7 @@ def _prove_slice_conditional_null_closure() -> None:
         rule=f"{_SLICE_COLUMN} is intentionally blank for some {_SLICE_DIM} values (accrual-only)",
     )
 
-    after = _slice_conditional_null_score(run.session_id, _SLICE_TABLE, _SLICE_COLUMN)
+    after = _slice_conditional_null_score(_SLICE_TABLE, _SLICE_COLUMN)
     assert after is not None, "slice_conditional_null object vanished after the teach re-run"
     # Teach-closure: the documented (column, slice) pair is excluded, so the concentration
     # is no longer entropy. The band is the recall surface's DETECTION_THRESHOLD.

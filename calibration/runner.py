@@ -60,18 +60,27 @@ class CalibrationRun:
 
     ``source_ids`` is the run's per-file content-source set (DAT-422): one
     ``src_<digest>`` source per data file, in upload order.
+
+    Post-DAT-506/508 there is no ``session_id``: the engine no longer models
+    investigation sessions, so the run carries no session identity. The read
+    surface is the workspace **catalog head** (one row per entity), resolved at
+    read time — readers never key off a stored run id. ``run_id`` is the engine-
+    minted id of the initial ``beginSessionWorkflow`` run, kept for provenance /
+    logging only. The Temporal workflow ids the teach re-runs reuse are derived
+    from ``strategy`` (see :func:`_workflow_id`), so a teach-and-rerun lands on
+    the same workflow id (ALLOW_DUPLICATE) and promotes a fresh catalog head.
     """
 
     strategy: str
     source_ids: tuple[str, ...]
-    session_id: str
+    run_id: str
 
     def to_json(self) -> str:
         return json.dumps(
             {
                 "strategy": self.strategy,
                 "source_ids": list(self.source_ids),
-                "session_id": self.session_id,
+                "run_id": self.run_id,
             },
             indent=2,
         )
@@ -82,7 +91,7 @@ class CalibrationRun:
         return cls(
             strategy=data["strategy"],
             source_ids=tuple(data["source_ids"]),
-            session_id=data["session_id"],
+            run_id=data["run_id"],
         )
 
 
@@ -245,14 +254,8 @@ def generate(
     return data_dir
 
 
-def _seed_run_sources(
-    objects: list[SourceObject],
-    *,
-    contract: str | None,
-    vertical: str | None,
-    intent: str,
-) -> tuple[str, list[str]]:
-    """Upsert one content-keyed Source per object + open an InvestigationSession.
+def _seed_run_sources(objects: list[SourceObject]) -> list[str]:
+    """Upsert one content-keyed Source per object and return their ids.
 
     The run's source set (DAT-422): each uploaded file is its own
     ``src_<digest>`` source carrying exactly one ``file_uris`` entry. Identical
@@ -260,13 +263,15 @@ def _seed_run_sources(
     refreshed on reuse — the dev SeaweedFS volume is ephemeral, so the bucket is
     recreated and re-uploaded on every run.
 
-    The InvestigationSession row MUST exist before ``addSourceWorkflow`` starts:
-    ``typing`` writes ``session_tables`` rows with a NOT-NULL FK to it.
+    No ``InvestigationSession`` is opened (DAT-506/508): the engine no longer
+    models sessions — ``addSourceWorkflow`` mints its own ``run_id`` and anchors
+    the typed tables in ``run_tables``. The driver only has to make the Source
+    rows exist so the workflow's per-source ``import`` activities resolve their
+    ``file_uris``.
 
-    Returns ``(session_id, source_ids)`` with source_ids in upload order.
+    Returns ``source_ids`` in upload order — the ``sources[]`` of AddSourceInput.
     """
     from dataraum.core.connections import ConnectionConfig, ConnectionManager
-    from dataraum.investigation.db_models import InvestigationSession
     from dataraum.storage import Source
     from sqlalchemy import select
 
@@ -293,52 +298,78 @@ def _seed_run_sources(
                     src.connection_config = {"file_uris": [obj.uri]}
                     s.flush()
                 source_ids.append(src.source_id)
-
-            # Source-free since DAT-401: a session composes typed tables (possibly
-            # spanning sources), so InvestigationSession carries no source binding.
-            # The run's sources ride in AddSourceInput.source_ids instead.
-            inv = InvestigationSession(
-                session_id=str(uuid4()),
-                intent=intent,
-                contract=contract,
-                vertical=vertical,
-                status="active",
-            )
-            s.add(inv)
-            s.flush()
-            session_id = inv.session_id
-        return session_id, source_ids
+        return source_ids
     finally:
         workspace_mgr.close()
+
+
+def _workflow_id(kind: str, workspace_id: str, strategy: str) -> str:
+    """The driver-owned parent workflow id for one strategy run (DAT-506/508).
+
+    Parent ids are the Temporal client's to own now (the engine derives only
+    CHILD ids from ``workflow.info().workflow_id``). The strategy name is the
+    stable, unique segment per eval run, so a teach-and-rerun re-targets the SAME
+    workflow id under Temporal's default ALLOW_DUPLICATE — a fresh ``run_id`` over
+    the same workflow id, exactly the re-run semantics the teach closures need.
+    Mirrors the cockpit's ``<kind>-<workspace_id>-<id>`` convention
+    (workflow-id.ts), with the strategy standing in for the cockpit session id.
+    """
+    return f"{kind}-{workspace_id}-{strategy}"
+
+
+def _catalog_head_table_ids(s: Any) -> set[str]:
+    """The typed table ids anchored on the workspace catalog head (DAT-506/508).
+
+    Replaces the deleted ``session_tables`` lookup the teach helpers used to scope
+    column resolution: begin_session anchors its run's typed tables in
+    ``run_tables`` and promotes the ``(catalog, "catalog")`` head, so the current
+    selection is ``run_tables`` for the catalog head's run. The teach helpers run
+    after an initial pipeline, so the catalog head always exists — a missing one
+    means the pipeline never ran, surfaced loud.
+    """
+    from dataraum.investigation.queries import tables_for_run
+    from dataraum.storage.snapshot_head import catalog_head_target, head_run_id
+
+    run_id = head_run_id(s, catalog_head_target(), "catalog")
+    if run_id is None:
+        raise SystemExit(
+            "no promoted catalog head — run the pipeline (begin_session) before teaching"
+        )
+    return set(tables_for_run(s, run_id))
 
 
 async def _drive_pipeline(
     *,
     workspace_id: str,
+    strategy: str,
     source_ids: list[str],
-    session_id: str,
     vertical: str | None,
     log_path: Path,
 ) -> tuple[Any, Any]:
     """Trigger ``addSourceWorkflow`` then ``beginSessionWorkflow`` under one worker.
 
     ``add_source`` ingests the run's source SET (DAT-422): one ``import`` per id
-    in ``source_ids``, then types the union and runs the table-local +
-    session-level detectors. The identity is source-free — the workflow scopes
-    each per-source import itself, so ``source_id`` stays unset here.
-    ``begin_session`` then composes the freshly-typed tables into the **same**
-    investigation session and runs the cross-table phases (``relationships`` →
-    ``semantic_per_table``) plus the terminal relationship ``session_detect`` —
-    the only path that scores ``relationship_entropy`` /
-    ``join_path_determinism`` (DAT-408). Both run under the same ``session_id``
-    so every ``EntropyObjectRecord`` reads back together. The worker is torn
-    down when both workflows complete.
+    in ``source_ids``, then types the union and runs the table-local + run-level
+    detectors. The flat manifest input is ``(workspace_id, sources, verticals)``
+    (DAT-506/508) — there is no identity envelope; the workflow mints its own
+    ``run_id`` and anchors the typed tables in ``run_tables``.
+    ``begin_session`` then composes the freshly-typed tables (the
+    ``AddSourceResult.tables`` mapping) and runs the cross-table phases
+    (``relationships`` → ``semantic_per_table``) plus the terminal relationship
+    ``detect`` — the only path that scores ``relationship_entropy`` /
+    ``join_path_determinism`` (DAT-408) — and promotes the workspace **catalog
+    head** every reader resolves against. The worker is torn down when both
+    workflows complete.
 
-    ``operating_model`` then runs the lifecycle spine over the same session —
-    resolve → validation (LLM SQL per declared check) → the terminal
-    ``operating_model_detect`` (cross_table_consistency: table + column bands,
-    DAT-432/L7) → business_cycles → metrics (graph-agent SQL — the product's
-    own answer path) → promote.
+    ``operating_model`` then runs the lifecycle spine over the workspace catalog —
+    resolve (reads the catalog head's ``run_tables``) → validation (LLM SQL per
+    declared check) → the terminal ``operating_model_detect``
+    (cross_table_consistency: table + column bands, DAT-432/L7) → business_cycles
+    → metrics (graph-agent SQL — the product's own answer path) → promote.
+
+    The workspace ``verticals`` ride on each input by name (e.g. ``["finance"]``):
+    the engine resolves the frame ontology engine-side and guards ``len > 1`` /
+    empty (``_adhoc`` fails loud — "run frame first").
 
     Returns ``(AddSourceResult, BeginSessionResult)``.
     """
@@ -349,23 +380,16 @@ async def _drive_pipeline(
         BeginSessionResult,
         OperatingModelInput,
         OperatingModelResult,
-        SessionIdentity,
-        SourceIdentity,
-        add_source_workflow_id,
-        begin_session_workflow_id,
     )
 
+    verticals = [vertical] if vertical else []
+
     client = await worker.connect_client()
-    source_identity = SourceIdentity(
-        workspace_id=workspace_id,
-        session_id=session_id,
-        vertical=vertical,
-    )
     async with worker.worker_running(client, log_path):
         add_result = await client.execute_workflow(
             "addSourceWorkflow",
-            AddSourceInput(identity=source_identity, source_ids=source_ids),
-            id=add_source_workflow_id(workspace_id, session_id),
+            AddSourceInput(workspace_id=workspace_id, sources=source_ids, verticals=verticals),
+            id=_workflow_id("addsource", workspace_id, strategy),
             task_queue=stack.TEMPORAL_TASK_QUEUE,
             result_type=AddSourceResult,
             execution_timeout=timedelta(minutes=30),
@@ -374,38 +398,33 @@ async def _drive_pipeline(
         typed_table_ids = [t.typed_table_id for t in add_result.tables]
         print(
             f"[eval] beginSessionWorkflow: composing {len(typed_table_ids)} typed "
-            f"table(s) into session {session_id}"
+            f"table(s) (add_source run {add_result.run_id})"
         )
         begin_result = await client.execute_workflow(
             "beginSessionWorkflow",
             BeginSessionInput(
-                identity=SessionIdentity(workspace_id=workspace_id, session_id=session_id),
-                tables=typed_table_ids,
+                workspace_id=workspace_id, tables=typed_table_ids, verticals=verticals
             ),
-            id=begin_session_workflow_id(workspace_id, session_id),
+            id=_workflow_id("beginsession", workspace_id, strategy),
             task_queue=stack.TEMPORAL_TASK_QUEUE,
             result_type=BeginSessionResult,
             execution_timeout=timedelta(minutes=30),
         )
 
         print(
-            f"[eval] operatingModelWorkflow: lifecycle spine for session {session_id} "
-            f"(validation + detect + cycles + metrics)"
+            f"[eval] operatingModelWorkflow: lifecycle spine over the catalog head "
+            f"(begin_session run {begin_result.run_id}) — validation + detect + cycles + metrics"
         )
-        # Workflow id mirrors the cockpit's convention (workflow-id.ts) — no
-        # Python helper exists in contracts.py for this one. An OM failure is a
-        # FINDING, not an abort (review wave-1): the expensive add_source +
-        # begin_session results above must survive into the sidecar so the
-        # detection axes stay readable. 60min timeout: the OM spine is the
+        # An OM failure is a FINDING, not an abort (review wave-1): the expensive
+        # add_source + begin_session results above must survive into the sidecar
+        # so the detection axes stay readable. 60min timeout: the OM spine is the
         # longest chain (~22 LLM calls) and the activity retry budget must fit
         # inside the workflow's execution window.
         try:
             await client.execute_workflow(
                 "operatingModelWorkflow",
-                OperatingModelInput(
-                    identity=SessionIdentity(workspace_id=workspace_id, session_id=session_id)
-                ),
-                id=f"operatingmodel-{workspace_id}-{session_id}",
+                OperatingModelInput(workspace_id=workspace_id, verticals=verticals),
+                id=_workflow_id("operatingmodel", workspace_id, strategy),
                 task_queue=stack.TEMPORAL_TASK_QUEUE,
                 result_type=OperatingModelResult,
                 execution_timeout=timedelta(minutes=60),
@@ -436,41 +455,37 @@ def run_pipeline(
     workspace_id = get_active_workspace_id()
 
     objects = _upload_sources_to_lake(data_dir, workspace_id)
-    session_id, source_ids = _seed_run_sources(
-        objects,
-        contract=contract,
-        vertical=vertical,
-        intent=f"calibration:{strategy}",
-    )
+    source_ids = _seed_run_sources(objects)
 
     output_dir = OUTPUT_DIR / strategy
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print(
         f"[eval] Driving addSourceWorkflow + beginSessionWorkflow: "
-        f"strategy={strategy} session={session_id} sources={len(source_ids)}"
+        f"strategy={strategy} sources={len(source_ids)}"
     )
     add_result, begin_result = asyncio.run(
         _drive_pipeline(
             workspace_id=workspace_id,
+            strategy=strategy,
             source_ids=source_ids,
-            session_id=session_id,
             vertical=vertical,
             log_path=output_dir / "worker.log",
         )
     )
     print(
         f"[eval] addSourceWorkflow complete: {len(add_result.tables)} table(s) processed "
-        f"(raw_table_ids={add_result.raw_table_ids})"
+        f"(run {add_result.run_id}, raw_table_ids={add_result.raw_table_ids})"
     )
     print(
-        f"[eval] beginSessionWorkflow complete: {len(begin_result.table_ids)} table(s) in session"
+        f"[eval] beginSessionWorkflow complete: {len(begin_result.table_ids)} table(s) "
+        f"on the catalog head (run {begin_result.run_id})"
     )
 
     run = CalibrationRun(
         strategy=strategy,
         source_ids=tuple(source_ids),
-        session_id=session_id,
+        run_id=begin_result.run_id,
     )
     sidecar_path(strategy).write_text(run.to_json())
     return run
@@ -483,7 +498,7 @@ def teach_null_value_and_rerun(
     category: str = "missing_indicators",
     vertical: str | None = "finance",
 ) -> CalibrationRun:
-    """Teach ``values`` as null markers, then RE-RUN the pipeline for the SAME session.
+    """Teach ``values`` as null markers, then RE-RUN the pipeline, re-promoting the catalog head.
 
     The DAT-447 teach-closure primitive. Writes one workspace-scoped ``null_value``
     ConfigOverlay row per value, then re-drives addSource+beginSession under the same
@@ -509,7 +524,6 @@ def teach_null_value_and_rerun(
                     ConfigOverlay(
                         type="null_value",
                         payload={"category": category, "value": value},
-                        session_id=None,  # null_value is workspace-scoped
                     )
                 )
     finally:
@@ -518,13 +532,13 @@ def teach_null_value_and_rerun(
     output_dir = OUTPUT_DIR / run.strategy
     output_dir.mkdir(parents=True, exist_ok=True)
     print(
-        f"[eval] teach null_value {values} (category={category}) → re-run session {run.session_id}"
+        f"[eval] teach null_value {values} (category={category}) → re-run {run.strategy}"
     )
     asyncio.run(
         _drive_pipeline(
             workspace_id=workspace_id,
             source_ids=list(run.source_ids),
-            session_id=run.session_id,
+            strategy=run.strategy,
             vertical=vertical,
             log_path=output_dir / "worker_teach_rerun.log",
         )
@@ -540,11 +554,11 @@ def teach_unit_and_rerun(
     unit: str,
     vertical: str | None = "finance",
 ) -> CalibrationRun:
-    """Teach a column's unit, then RE-RUN the pipeline for the SAME session.
+    """Teach a column's unit, then RE-RUN the pipeline, re-promoting the catalog head.
 
     The column-scoped unit teach (DAT-428): writes one workspace-scoped ``unit``
     ConfigOverlay row ``{table, column, unit}``, then re-drives the pipeline under the
-    same ``session_id``. On the re-run ``apply_overlay`` merges the row into
+    same workflow id (DAT-508), promoting a fresh catalog head. On the re-run ``apply_overlay`` merges the row into
     ``phases/typing.yaml`` ``overrides.units`` and ``typing_phase._apply_unit_overrides``
     patches the column's best TypeCandidate (``detected_unit`` = the taught unit,
     ``unit_confidence`` = 1.0) — the unit now LANDS on an already-typed numeric column
@@ -566,7 +580,6 @@ def teach_unit_and_rerun(
                 ConfigOverlay(
                     type="unit",
                     payload={"table": table, "column": column, "unit": unit},
-                    session_id=None,  # unit teach is workspace-scoped
                 )
             )
     finally:
@@ -574,12 +587,12 @@ def teach_unit_and_rerun(
 
     output_dir = OUTPUT_DIR / run.strategy
     output_dir.mkdir(parents=True, exist_ok=True)
-    print(f"[eval] teach unit {table}.{column}={unit} → re-run session {run.session_id}")
+    print(f"[eval] teach unit {table}.{column}={unit} → re-run {run.strategy}")
     asyncio.run(
         _drive_pipeline(
             workspace_id=workspace_id,
             source_ids=list(run.source_ids),
-            session_id=run.session_id,
+            strategy=run.strategy,
             vertical=vertical,
             log_path=output_dir / "worker_teach_unit_rerun.log",
         )
@@ -593,7 +606,7 @@ def teach_relationships_and_rerun(
     verdicts: list[dict[str, str]],
     vertical: str | None = "finance",
 ) -> CalibrationRun:
-    """Write relationship-overlay verdicts, then RE-RUN the pipeline for the SAME session.
+    """Write relationship-overlay verdicts, then RE-RUN the pipeline, re-promoting the catalog head.
 
     The DAT-447 relationship teach-protocol primitive. Each verdict is
     ``{action, from_table, from_column, to_table, to_column}`` with NAMES (the
@@ -618,15 +631,9 @@ def teach_relationships_and_rerun(
     workspace_mgr.initialize()
     try:
         with workspace_mgr.session_scope() as s:
-            from dataraum.investigation.db_models import SessionTable
             from dataraum.storage import Column, Table
 
-            table_ids = {
-                st.table_id
-                for st in s.execute(
-                    select(SessionTable).where(SessionTable.session_id == run.session_id)
-                ).scalars()
-            }
+            table_ids = _catalog_head_table_ids(s)
             tables = {
                 t.table_id: t.table_name
                 for t in s.execute(select(Table).where(Table.table_id.in_(table_ids))).scalars()
@@ -653,7 +660,6 @@ def teach_relationships_and_rerun(
                             "from_column_id": from_id,
                             "to_column_id": to_id,
                         },
-                        session_id=None,  # workspace-scoped, like the other teach helpers
                     )
                 )
     finally:
@@ -662,12 +668,12 @@ def teach_relationships_and_rerun(
     output_dir = OUTPUT_DIR / run.strategy
     output_dir.mkdir(parents=True, exist_ok=True)
     actions = ", ".join(f"{v['action']}:{v['from_column']}→{v['to_column']}" for v in verdicts)
-    print(f"[eval] teach relationships [{actions}] → re-run session {run.session_id}")
+    print(f"[eval] teach relationships [{actions}] → re-run {run.strategy}")
     asyncio.run(
         _drive_pipeline(
             workspace_id=workspace_id,
             source_ids=list(run.source_ids),
-            session_id=run.session_id,
+            strategy=run.strategy,
             vertical=vertical,
             log_path=output_dir / "worker_teach_relationship_rerun.log",
         )
@@ -684,7 +690,7 @@ def teach_slice_dependency_and_rerun(
     rule: str,
     vertical: str | None = "finance",
 ) -> CalibrationRun:
-    """Document a column's conditional missingness, then RE-RUN the SAME session (DAT-473).
+    """Document a column's conditional missingness, then RE-RUN the pipeline, re-promoting the catalog head (DAT-473).
 
     The slice_conditional_null teach-closure primitive — the ``document_business_rule``
     archetype. Resolves ``(table, column)`` and ``(table, slice_column)`` to this session's
@@ -706,17 +712,11 @@ def teach_slice_dependency_and_rerun(
     workspace_mgr.initialize()
     try:
         with workspace_mgr.session_scope() as s:
-            from dataraum.investigation.db_models import SessionTable
             from dataraum.storage import Column, Table
 
             from calibration.tools._runs import short
 
-            table_ids = {
-                st.table_id
-                for st in s.execute(
-                    select(SessionTable).where(SessionTable.session_id == run.session_id)
-                ).scalars()
-            }
+            table_ids = _catalog_head_table_ids(s)
             tables = {
                 t.table_id: t.table_name
                 for t in s.execute(select(Table).where(Table.table_id.in_(table_ids))).scalars()
@@ -736,7 +736,6 @@ def teach_slice_dependency_and_rerun(
                 ConfigOverlay(
                     type="expected_dependency",
                     payload={"column_ids": [target_id, slice_id], "rule": rule},
-                    session_id=None,  # workspace-scoped; the pair is keyed by session column ids
                 )
             )
     finally:
@@ -746,13 +745,13 @@ def teach_slice_dependency_and_rerun(
     output_dir.mkdir(parents=True, exist_ok=True)
     print(
         f"[eval] teach expected_dependency {table}.{column}~{slice_column} "
-        f"→ re-run session {run.session_id}"
+        f"→ re-run {run.strategy}"
     )
     asyncio.run(
         _drive_pipeline(
             workspace_id=workspace_id,
             source_ids=list(run.source_ids),
-            session_id=run.session_id,
+            strategy=run.strategy,
             vertical=vertical,
             log_path=output_dir / "worker_teach_slice_rerun.log",
         )
@@ -768,12 +767,12 @@ def teach_concept_property_and_rerun(
     prop: str = "temporal_behavior",
     vertical: str = "finance",
 ) -> CalibrationRun:
-    """Teach a concept-property override, then RE-RUN the pipeline for the SAME session.
+    """Teach a concept-property override, then RE-RUN the pipeline, re-promoting the catalog head.
 
     The ontology-property teach (DAT-445 teach-closure for temporal_behavior). Writes
     one workspace-scoped ``concept_property`` ConfigOverlay row
     ``{vertical, concept, property, value}``, then re-drives addSource+beginSession
-    under the same ``session_id``. On the re-run ``_apply_concept_property`` patches the
+    under the same workflow id (DAT-508), promoting a fresh catalog head. On the re-run ``_apply_concept_property`` patches the
     named concept's ``property`` in ``verticals/<vertical>/ontology.yaml`` and
     ``OntologyLoader`` folds it in, so the ``ontology_prior`` witness now leans the
     taught way: when the taught value matches the LLM's independent stock/flow claim,
@@ -801,7 +800,6 @@ def teach_concept_property_and_rerun(
                         "property": prop,
                         "value": value,
                     },
-                    session_id=None,  # concept_property patches the vertical ontology
                 )
             )
     finally:
@@ -811,13 +809,13 @@ def teach_concept_property_and_rerun(
     output_dir.mkdir(parents=True, exist_ok=True)
     print(
         f"[eval] teach concept_property {vertical}.{concept}.{prop}={value} "
-        f"→ re-run session {run.session_id}"
+        f"→ re-run {run.strategy}"
     )
     asyncio.run(
         _drive_pipeline(
             workspace_id=workspace_id,
             source_ids=list(run.source_ids),
-            session_id=run.session_id,
+            strategy=run.strategy,
             vertical=vertical,
             log_path=output_dir / "worker_teach_concept_property_rerun.log",
         )
@@ -833,7 +831,7 @@ def teach_validation_and_rerun(
     formula: str,
     vertical: str = "finance",
 ) -> CalibrationRun:
-    """Declare a column's expected formula, then RE-RUN the pipeline for the SAME session.
+    """Declare a column's expected formula, then RE-RUN the pipeline, re-promoting the catalog head.
 
     The derived_value teach (DAT-447, Option B): the user's "the expected formula for
     this column IS X" rides the EXISTING ``validation`` overlay type as a spec-shaped
@@ -880,7 +878,6 @@ def teach_validation_and_rerun(
                         "check_type": "expected_formula",
                         "parameters": {"table": table, "column": column, "formula": formula},
                     },
-                    session_id=None,  # workspace-scoped, like the other teach helpers
                 )
             )
     finally:
@@ -890,13 +887,13 @@ def teach_validation_and_rerun(
     output_dir.mkdir(parents=True, exist_ok=True)
     print(
         f"[eval] teach validation expected_formula {table}.{column} = {formula!r} "
-        f"→ re-run session {run.session_id}"
+        f"→ re-run {run.strategy}"
     )
     asyncio.run(
         _drive_pipeline(
             workspace_id=workspace_id,
             source_ids=list(run.source_ids),
-            session_id=run.session_id,
+            strategy=run.strategy,
             vertical=vertical,
             log_path=output_dir / "worker_teach_validation_rerun.log",
         )

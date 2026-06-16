@@ -90,7 +90,7 @@ def _target_view(strategy: str, target: str) -> dict[str, Any]:
 
     from calibration.conftest import _assemble_readiness, _head_resolved_entropy_rows
 
-    run = load_run(strategy)
+    load_run(strategy)  # guard: the strategy's pipeline must have run (sidecar present)
     table_name, _, column_name = target.partition(".")
     if not column_name:
         raise SystemExit("--target must be <table.column>")
@@ -99,8 +99,9 @@ def _target_view(strategy: str, target: str) -> dict[str, Any]:
     witnesses: list[dict[str, Any]] = []
     with workspace_session() as session:
         from dataraum.entropy.db_models import ClaimWitnessRecord
+        from dataraum.storage.snapshot_head import MetadataSnapshotHead
 
-        for row in _head_resolved_entropy_rows(session, run.session_id):
+        for row in _head_resolved_entropy_rows(session):
             if not row.target.startswith("column:"):
                 continue
             ref = row.target.removeprefix("column:")
@@ -118,8 +119,12 @@ def _target_view(strategy: str, target: str) -> dict[str, Any]:
                     "run_id": row.run_id,
                 }
             )
+        # Current witnesses = rows under any currently-promoted head (no session
+        # axis post-DAT-506); mirrors the current_claim_witnesses view's filter.
         for rec in session.execute(
-            select(ClaimWitnessRecord).where(ClaimWitnessRecord.session_id == run.session_id)
+            select(ClaimWitnessRecord).where(
+                ClaimWitnessRecord.run_id.in_(select(MetadataSnapshotHead.run_id))
+            )
         ).scalars():
             ref = rec.target.removeprefix("column:")
             if "." not in ref:

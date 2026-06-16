@@ -135,7 +135,7 @@ def main() -> None:
         if args.table:
             payload: dict[str, Any] = _table_detail(session, args.table)
         else:
-            payload = {"session_id": run.session_id, "tables": _tables_overview(session)}
+            payload = {"run_id": run.run_id, "tables": _tables_overview(session)}
     print(yaml.safe_dump(payload, sort_keys=False, allow_unicode=True))
 
 

@@ -82,24 +82,26 @@ def _ensure_pipeline_run(strategy: str) -> runner_mod.CalibrationRun:
     return runner_mod.run_pipeline(strategy)
 
 
-def _head_resolved_entropy_rows(session: Any, session_id: str) -> list[Any]:
-    """Promoted-run ``entropy_objects`` for a session — head-resolved (DAT-447 Step 0).
+def _head_resolved_entropy_rows(session: Any) -> list[Any]:
+    """The workspace's current ``entropy_objects`` — head-resolved (DAT-447/506/508).
 
-    Rows from multiple runs coexist in one session: add_source seals a table-head,
-    begin_session a session-head, and a teach RE-RUN promotes a fresh head while the
-    prior run's rows remain in the table. Reading raw ``entropy_objects`` by
-    ``session_id`` and taking ``max()`` would surface a stale pre-teach score and HIDE
-    a post-teach DROP. The ``current_entropy_objects`` view returns only rows whose run
-    is the promoted head, so a re-run's score replaces — does not max-with — the prior
-    run's. (No-op while there is one promoted run; load-bearing once teach re-runs land.)
+    Rows from multiple runs coexist in the table: add_source seals a per-table
+    generation head, begin_session the ``(catalog, "catalog")`` head, and a teach
+    RE-RUN promotes a fresh head while the prior run's rows remain. Reading the raw
+    table and taking ``max()`` would surface a stale pre-teach score and HIDE a
+    post-teach DROP. The ``current_entropy_objects`` view returns ONLY rows whose
+    run is a currently-promoted head (table / catalog / operating_model), so a
+    re-run's score replaces — does not max-with — the prior run's, and a teach drop
+    is visible. No session filter exists anymore (DAT-506): the view IS the
+    workspace's single current state — one eval workspace runs one strategy at a
+    time, so its current rows ARE that strategy's.
     """
     from dataraum.storage.read_views import read_schema_name_for
     from sqlalchemy import text
 
     read_schema = read_schema_name_for(session.execute(text("SELECT current_schema()")).scalar())
     rows: list[Any] = session.execute(
-        text(f'SELECT * FROM "{read_schema}".current_entropy_objects WHERE session_id = :sid'),
-        {"sid": session_id},
+        text(f'SELECT * FROM "{read_schema}".current_entropy_objects')
     ).all()
     return rows
 
@@ -113,7 +115,7 @@ def _load_scores_for_strategy(strategy: str) -> DetectorScores:
     prefix (``column:`` / ``table:`` / ``view:`` / ``relationship:``). For each
     (target, detector) the max score is kept.
     """
-    run = _ensure_pipeline_run(strategy)
+    _ensure_pipeline_run(strategy)  # ensure the pipeline has run (writes the sidecar)
 
     runner_mod.bootstrap_engine()
 
@@ -126,7 +128,7 @@ def _load_scores_for_strategy(strategy: str) -> DetectorScores:
     workspace_mgr.initialize()
     try:
         with workspace_mgr.session_scope() as session:
-            records = _head_resolved_entropy_rows(session, run.session_id)
+            records = _head_resolved_entropy_rows(session)
             # column_id → (table_name, column_name): relationship rows carry no
             # table_id/column_id — identity is the two column ids inside ``target``.
             table_names = {t.table_id: t.table_name for t in session.execute(select(Table)).scalars()}
@@ -265,7 +267,7 @@ def _assemble_readiness(
     ``column_id → (table_name, column_name)`` for resolving relationship
     endpoints.
     """
-    run = _ensure_pipeline_run(strategy)
+    _ensure_pipeline_run(strategy)  # ensure the pipeline has run (writes the sidecar)
     runner_mod.bootstrap_engine()
 
     from dataraum.core.connections import ConnectionConfig, ConnectionManager
@@ -278,7 +280,7 @@ def _assemble_readiness(
     workspace_mgr.initialize()
     try:
         with workspace_mgr.session_scope() as session:
-            records = _head_resolved_entropy_rows(session, run.session_id)
+            records = _head_resolved_entropy_rows(session)
             # Reconstruct domain objects for the rollup (DAT-399: read-path swap from
             # the retired measurement module to the readiness-context assembler).
             # Head-resolved (DAT-447 Step 0) so a teach re-run's drop is visible.
