@@ -242,15 +242,21 @@ detectors:
       false-alarm machine at 0.5).
 
   dimensional_entropy:
-    disposition: scalar               # NMI (grounded stat, DAT-472)
-    coverage: { recall: unverified, precision: unverified, reliabilities: n/a, teach_closure: none, in_slice: true }
+    disposition: informative          # NMI; DEMOTED off the loss path 2026-06-16 (benford lane)
+    coverage: { recall: n/a, precision: n/a, reliabilities: n/a, teach_closure: none, in_slice: true }
     note: >-
-      B2 (2026-06-11): in slice (session_detect; table grain). The batch recall
-      pass is VACUOUS: clean journal_lines NMI is already 1.0 — debit/credit
-      are naturally mutually exclusive in double-entry data — so the
-      create_mutual_exclusivity injection adds nothing the clean data lacks
-      and no separation is possible on this fixture. Recall stays unverified
-      until an injection targets a naturally co-occurring pair.
+      DEMOTED 2026-06-16 (loss.yaml row removed; engine branch
+      refactor/dimensional-entropy-demote-loss, PR pending). A Tier-1 eval
+      falsification (scripts/probes/dimensional-entropy) showed NMI is
+      ANTI-PREDICTIVE on the loss path: the band is highest on CLEAN intrinsic
+      structure (mutex/alias/FD, no wrong answer) and BLIND to the dependency
+      VIOLATION that causes a bad join/rollup (a 5%-broken FD barely moves NMI,
+      0.862→0.799; the violation rate is owned by derived_value /
+      relationship_entropy). Earlier B2 (2026-06-11): the batch recall pass was
+      already VACUOUS — clean journal_lines NMI is 1.0 (debit/credit naturally
+      mutex), so no separation was possible. NMI score + expected_dependency
+      teach stay as a DirectSignal (context); recall/precision n/a — no longer a
+      band-driving, recall-graded detector.
 
   temporal_entropy:
     disposition: scalar               # binary type/role mismatch
