@@ -1,0 +1,29 @@
+name: detection-stockflow-events-ambiguous-v1
+level: high
+description: >
+  The 2x2 factorial the structural_reconciliation ablation needs: event-backing
+  CROSSED with ambiguous names. detection-stockflow-events-v1 has backing but
+  clear names (ontology+llm already correct → structural redundant, untestable);
+  detection-stockflow-cal-v1 has ambiguous names but no backing (name-pair fails,
+  but structural is silent). NEITHER populates the decisive cell. This corpus
+  turns BOTH knobs on at once: backed_fraction so structural can fire, AND
+  ambiguity so a sampled fraction of those backed stocks carry conflicting-cue
+  names where ontology_prior + llm_claim disagree or are jointly wrong. On the
+  backed-AND-ambiguous columns the data-grounded witness is the only one that can
+  dissent — arm A (struct=0.889) should resolve them correctly where arm B
+  (struct=0.0) loses them. The injector already composes the axes (they are
+  orthogonal: backing changes the events table, ambiguity changes the name);
+  no injector code — only this strategy. Same E2E dependency as events-v1 (lane
+  F1): the slicing agent must pick series_id on BOTH probe tables.
+
+injections:
+  - injector: inject_stock_flow_probes
+    table: measure_probes
+    detector_id: temporal_behavior
+    params:
+      seed: 20260616
+      n_columns: [30, 30]
+      stock_fraction: [0.55, 0.55]
+      ambiguity: [0.75, 0.75]
+      backed_fraction: [0.9, 0.9]
+      broken_fraction: [0.25, 0.25]
