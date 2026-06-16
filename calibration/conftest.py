@@ -68,9 +68,15 @@ def _ensure_pipeline_run(strategy: str) -> runner_mod.CalibrationRun:
     present; otherwise runs the pipeline and writes a fresh one. The
     sidecar lets pytest sessions reuse a previously-completed run when
     the underlying Postgres state is still intact.
+
+    Always leaves ``strategy``'s OWN workspace active (DAT-508), so any read that
+    follows resolves the right ``ws_<id>`` schema even when several strategies'
+    scores are read in one pytest process (each strategy is its own workspace now
+    that sessions are gone — there is no shared workspace to disambiguate).
     """
     sidecar = runner_mod.sidecar_path(strategy)
     if sidecar.exists():
+        runner_mod.activate_workspace(strategy)
         return runner_mod.CalibrationRun.from_json(sidecar.read_text())
 
     data_dir = DATA_DIR / strategy
@@ -79,7 +85,7 @@ def _ensure_pipeline_run(strategy: str) -> runner_mod.CalibrationRun:
             f"No test data at {data_dir}. Run: "
             f"uv run python -m calibration.runner {strategy} --generate-only"
         )
-    return runner_mod.run_pipeline(strategy)
+    return runner_mod.run_pipeline(strategy)  # activates the workspace itself
 
 
 def _head_resolved_entropy_rows(session: Any) -> list[Any]:

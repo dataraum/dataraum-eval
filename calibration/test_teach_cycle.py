@@ -102,13 +102,17 @@ def _column_rows(rows: list[Any], table_substr: str, column: str) -> list[Any]:
 
 
 def _load_run_or_pipeline(strategy: str) -> runner_mod.CalibrationRun:
-    """The strategy's completed run — sidecar if present, else a fresh pipeline run."""
+    """The strategy's completed run — sidecar if present, else a fresh pipeline run.
+
+    Activates the strategy's OWN workspace (DAT-508) so the head-resolved reads
+    that follow resolve the right ``ws_<id>`` schema. The teach helpers re-activate
+    the same workspace on each rerun, so the whole test stays in one workspace.
+    """
     sidecar = runner_mod.sidecar_path(strategy)
-    return (
-        runner_mod.CalibrationRun.from_json(sidecar.read_text())
-        if sidecar.exists()
-        else runner_mod.run_pipeline(strategy)
-    )
+    if sidecar.exists():
+        runner_mod.activate_workspace(strategy)
+        return runner_mod.CalibrationRun.from_json(sidecar.read_text())
+    return runner_mod.run_pipeline(strategy)  # activates the workspace itself
 
 
 # ---------------------------------------------------------------------------
@@ -462,6 +466,7 @@ def _prove_relationship_confirm_keep() -> None:
     sidecar = runner_mod.sidecar_path(_REL_STRATEGY)
     if not sidecar.exists():
         pytest.skip(f"no completed run for {_REL_STRATEGY} (missing {sidecar})")
+    runner_mod.activate_workspace(_REL_STRATEGY)  # read this strategy's workspace (DAT-508)
 
     taught = _taught_pair_plan()
     assert taught, f"{_REL_STRATEGY} entropy_map lists no genuine relationship pairs"

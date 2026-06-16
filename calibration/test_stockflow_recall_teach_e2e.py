@@ -97,11 +97,11 @@ def test_stockflow_mislabel_recall_and_concept_teach_closure() -> None:
         )
 
     sidecar = runner_mod.sidecar_path(_STRATEGY)
-    run = (
-        runner_mod.CalibrationRun.from_json(sidecar.read_text())
-        if sidecar.exists()
-        else runner_mod.run_pipeline(_STRATEGY)
-    )
+    if sidecar.exists():
+        runner_mod.activate_workspace(_STRATEGY)  # read this strategy's workspace (DAT-508)
+        run = runner_mod.CalibrationRun.from_json(sidecar.read_text())
+    else:
+        run = runner_mod.run_pipeline(_STRATEGY)  # activates the workspace itself
 
     truth = _true_behaviours()
     base = _probe_state()

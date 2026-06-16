@@ -16,13 +16,19 @@ from calibration.runner import CalibrationRun
 
 
 def load_run(strategy: str) -> CalibrationRun:
-    """Return the completed run's identifiers; exit loudly when there is none."""
+    """Return the completed run's identifiers; exit loudly when there is none.
+
+    Activates ``strategy``'s OWN workspace (DAT-508) so the ``workspace_session``
+    that follows resolves the right ``ws_<id>`` schema — each strategy is its own
+    workspace now that sessions are gone.
+    """
     sidecar = runner_mod.sidecar_path(strategy)
     if not sidecar.exists():
         raise SystemExit(
             f"no completed run for {strategy!r} (missing {sidecar}) — run the pipeline first: "
             f"uv run python -m calibration.runner {strategy}"
         )
+    runner_mod.activate_workspace(strategy)
     return CalibrationRun.from_json(sidecar.read_text())
 
 

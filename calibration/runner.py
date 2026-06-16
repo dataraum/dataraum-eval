@@ -27,13 +27,14 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from dotenv import load_dotenv
 
@@ -226,6 +227,56 @@ def bootstrap_engine() -> None:
     _engine_bootstrapped = True
 
 
+def workspace_id_for(strategy: str) -> str:
+    """The deterministic workspace UUID a strategy owns (DAT-508).
+
+    A strategy is a self-contained dataset, so it gets its OWN workspace — own
+    ``ws_<id>`` Postgres schema, own catalog head, own ``engine-<id>`` task queue.
+    This is the engine's native isolation boundary now that sessions are gone
+    (DAT-506): two strategies sharing one workspace would collide on the single
+    workspace catalog head (the second run's promotion hides the first's), which
+    is exactly what ``session_id`` used to paper over. uuid5 keeps the mapping
+    stable across runs, so a strategy's schema + sidecar are reproducible.
+    """
+    return str(uuid5(NAMESPACE_URL, f"dataraum-eval/workspace/{strategy}"))
+
+
+def activate_workspace(strategy: str) -> str:
+    """Point the engine (and the worker it will spawn) at ``strategy``'s workspace.
+
+    Sets the workspace + queue env the engine reads, the ``stack`` module mirrors
+    the worker subprocess / Temporal client consult, and re-activates the engine's
+    cached settings + active-workspace pointer — then materializes the ``ws_<id>``
+    schema. Idempotent and cheap (no docker work past the first call); safe to call
+    before driving OR reading any strategy, including switching strategies
+    in-process (each ``ConnectionManager`` binds its schema from the active pointer
+    at init, so a fresh manager after this call targets the right schema). Returns
+    the workspace id.
+    """
+    bootstrap_engine()  # docker + base env, once
+
+    workspace_id = workspace_id_for(strategy)
+    task_queue = f"engine-{workspace_id}"
+    os.environ["DATARAUM_WORKSPACE_ID"] = workspace_id
+    os.environ["TEMPORAL_TASK_QUEUE"] = task_queue
+    # The worker's polling check + the client's task_queue read these module
+    # mirrors, not the env, so keep them in lockstep with the env above.
+    stack.DATARAUM_WORKSPACE_ID = workspace_id
+    stack.TEMPORAL_TASK_QUEUE = task_queue
+
+    from dataraum.core.connections import ConnectionConfig, ConnectionManager
+    from dataraum.core.settings import reset_settings
+    from dataraum.server.workspace import bootstrap_workspace
+
+    reset_settings()  # @cache'd get_settings() must re-read the env we just changed
+    bootstrap_workspace()  # re-activates the pointer + asserts queue == engine-<id>
+
+    workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
+    workspace_mgr.initialize()  # CREATE SCHEMA IF NOT EXISTS ws_<id> + create_all
+    workspace_mgr.close()
+    return workspace_id
+
+
 def generate(
     strategy: str,
     *,
@@ -383,6 +434,7 @@ async def _drive_pipeline(
     )
 
     verticals = [vertical] if vertical else []
+    task_queue = f"engine-{workspace_id}"  # this workspace's own queue (DAT-505/508)
 
     client = await worker.connect_client()
     async with worker.worker_running(client, log_path):
@@ -390,7 +442,7 @@ async def _drive_pipeline(
             "addSourceWorkflow",
             AddSourceInput(workspace_id=workspace_id, sources=source_ids, verticals=verticals),
             id=_workflow_id("addsource", workspace_id, strategy),
-            task_queue=stack.TEMPORAL_TASK_QUEUE,
+            task_queue=task_queue,
             result_type=AddSourceResult,
             execution_timeout=timedelta(minutes=30),
         )
@@ -406,7 +458,7 @@ async def _drive_pipeline(
                 workspace_id=workspace_id, tables=typed_table_ids, verticals=verticals
             ),
             id=_workflow_id("beginsession", workspace_id, strategy),
-            task_queue=stack.TEMPORAL_TASK_QUEUE,
+            task_queue=task_queue,
             result_type=BeginSessionResult,
             execution_timeout=timedelta(minutes=30),
         )
@@ -425,7 +477,7 @@ async def _drive_pipeline(
                 "operatingModelWorkflow",
                 OperatingModelInput(workspace_id=workspace_id, verticals=verticals),
                 id=_workflow_id("operatingmodel", workspace_id, strategy),
-                task_queue=stack.TEMPORAL_TASK_QUEUE,
+                task_queue=task_queue,
                 result_type=OperatingModelResult,
                 execution_timeout=timedelta(minutes=60),
             )
@@ -448,11 +500,7 @@ def run_pipeline(
     if not data_dir.exists():
         raise FileNotFoundError(f"No test data at {data_dir}. Run generate({strategy!r}) first.")
 
-    bootstrap_engine()
-
-    from dataraum.server.workspace import get_active_workspace_id
-
-    workspace_id = get_active_workspace_id()
+    workspace_id = activate_workspace(strategy)  # this strategy's OWN workspace (DAT-508)
 
     objects = _upload_sources_to_lake(data_dir, workspace_id)
     source_ids = _seed_run_sources(objects)
@@ -508,13 +556,10 @@ def teach_null_value_and_rerun(
     dropped score. (Temporal's default ALLOW_DUPLICATE permits re-running a completed
     workflow id with a fresh run_id.)
     """
-    bootstrap_engine()
-
     from dataraum.core.connections import ConnectionConfig, ConnectionManager
-    from dataraum.server.workspace import get_active_workspace_id
     from dataraum.storage.overlay_models import ConfigOverlay
 
-    workspace_id = get_active_workspace_id()
+    workspace_id = activate_workspace(run.strategy)  # this strategy's OWN workspace (DAT-508)
     workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
     workspace_mgr.initialize()
     try:
@@ -565,13 +610,10 @@ def teach_unit_and_rerun(
     without having to win a type pattern. ``table`` is the bare name; the reader matches
     it against the source-qualified raw table too.
     """
-    bootstrap_engine()
-
     from dataraum.core.connections import ConnectionConfig, ConnectionManager
-    from dataraum.server.workspace import get_active_workspace_id
     from dataraum.storage.overlay_models import ConfigOverlay
 
-    workspace_id = get_active_workspace_id()
+    workspace_id = activate_workspace(run.strategy)  # this strategy's OWN workspace (DAT-508)
     workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
     workspace_mgr.initialize()
     try:
@@ -619,14 +661,11 @@ def teach_relationships_and_rerun(
     ``keep`` as ``keeper`` BESIDE the llm rows (the per-(pair, method) dedup),
     so the human witnesses finally vote and the rig can measure them.
     """
-    bootstrap_engine()
-
     from dataraum.core.connections import ConnectionConfig, ConnectionManager
-    from dataraum.server.workspace import get_active_workspace_id
     from dataraum.storage.overlay_models import ConfigOverlay
     from sqlalchemy import select
 
-    workspace_id = get_active_workspace_id()
+    workspace_id = activate_workspace(run.strategy)  # this strategy's OWN workspace (DAT-508)
     workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
     workspace_mgr.initialize()
     try:
@@ -700,14 +739,11 @@ def teach_slice_dependency_and_rerun(
     On the re-run, ``slice_conditional_null`` excludes the documented ``(target, slice)`` pair,
     so the concentration it scored is now expected structure — the score drops.
     """
-    bootstrap_engine()
-
     from dataraum.core.connections import ConnectionConfig, ConnectionManager
-    from dataraum.server.workspace import get_active_workspace_id
     from dataraum.storage.overlay_models import ConfigOverlay
     from sqlalchemy import select
 
-    workspace_id = get_active_workspace_id()
+    workspace_id = activate_workspace(run.strategy)  # this strategy's OWN workspace (DAT-508)
     workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
     workspace_mgr.initialize()
     try:
@@ -780,13 +816,10 @@ def teach_concept_property_and_rerun(
     head returns the dropped score. ``value`` is the ontology vocabulary
     (``point_in_time`` / ``additive``), NOT the claim vocabulary.
     """
-    bootstrap_engine()
-
     from dataraum.core.connections import ConnectionConfig, ConnectionManager
-    from dataraum.server.workspace import get_active_workspace_id
     from dataraum.storage.overlay_models import ConfigOverlay
 
-    workspace_id = get_active_workspace_id()
+    workspace_id = activate_workspace(run.strategy)  # this strategy's OWN workspace (DAT-508)
     workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
     workspace_mgr.initialize()
     try:
@@ -851,13 +884,10 @@ def teach_validation_and_rerun(
     ``load_declared_formula`` matches it case-insensitively but EXACTLY.
     ``formula`` is the discovery's binary-arithmetic language (e.g. ``"subtotal + tax"``).
     """
-    bootstrap_engine()
-
     from dataraum.core.connections import ConnectionConfig, ConnectionManager
-    from dataraum.server.workspace import get_active_workspace_id
     from dataraum.storage.overlay_models import ConfigOverlay
 
-    workspace_id = get_active_workspace_id()
+    workspace_id = activate_workspace(run.strategy)  # this strategy's OWN workspace (DAT-508)
     workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
     workspace_mgr.initialize()
     try:
