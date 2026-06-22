@@ -107,19 +107,26 @@ the engine worker as a host subprocess (live working-tree code, host `data/` →
 host `lake_data/`), and `calibration.runner.run_pipeline` triggers
 `addSourceWorkflow` as a Temporal client and awaits the result.
 
+**One runner** — `calibration.run` brings the stack up ONCE (idempotent, **never**
+`down -v` in a run), runs each selected strategy in its own workspace, kills any leaked
+worker, then asserts. It is the single front door; the old generate/pipeline/run/test
+make matrix is gone.
+
 ```bash
-make calibrate                         # detection-v1: generate + pipeline + suite
-make calibrate STRATEGY=<name>         # any strategy (make list-strategies)
-make calibrate-typing                  # detection-typing-v1 (type-breaking only)
+uv run python -m calibration.run -s detection-v1,clean   # run these, build, assert
+uv run python -m calibration.run --all                   # every strategy
+uv run python -m calibration.run -s detection-v1 --no-assert
+uv run python -m calibration.run --list                  # strategies
+uv run python -m calibration.run --reset                 # the ONLY `down -v`; then exit
 
-# stepwise (pattern targets wrap calibration.runner)
-uv run python -m calibration.runner detection-v1 --generate-only --seed 42
-uv run python -m calibration.runner detection-v1 --pipeline-only
-uv run pytest calibration/ --strategy detection-v1 -v
-
+make calibrate [STRATEGY=<name>]       # thin wrapper → run clean + STRATEGY, assert
 make clean                             # local dirs (data/ output/ lake_data/ workspace/)
-make clean-pg                          # eval project's PG/Temporal state only
+make reset                             # eval project's PG/Temporal state (the down -v)
 ```
+
+Library functions (`calibration.runner.generate` / `.run_pipeline`) still exist — the
+runner and conftest compose them; the multi-seed clean-bands sweep stays in
+`scripts/sweep_clean_seeds.py`.
 
 - Strategy YAML in `strategies/` defines injections (injector, table,
   `detector_id`, params); testdata writes `entropy_map.yaml` listing exactly what
@@ -129,9 +136,9 @@ make clean-pg                          # eval project's PG/Temporal state only
 - Detectors whose phase isn't wired into the current workflow slice are skipped
   via `OUT_OF_SLICE_REASON` in `test_detector_recall.py`; move ids into
   `CURRENT_SLICE_DETECTORS` as phases land.
-- `make clean-pg` wipes only the isolated eval project's Postgres + Temporal
-  volume; the shared cockpit stack is a separate docker project and is
-  untouched — safe to run anytime.
+- `make reset` (≡ `calibration.run --reset`) wipes only the isolated eval project's
+  Postgres + Temporal volume; the shared cockpit stack is a separate docker project and
+  is untouched — safe to run anytime. It is the ONLY `down -v`; never inside a run.
 - Long pipeline runs go to the background — line up other work while they run;
   don't idle.
 

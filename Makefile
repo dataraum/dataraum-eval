@@ -1,56 +1,33 @@
-# Calibration convenience targets
+# Calibration — ONE runner. Full help: uv run python -m calibration.run --help
 #
-# Usage:
-#   make calibrate                         # Full: clean + detection-v1 + test
-#   make calibrate-typing                  # Full: clean + detection-typing-v1 + test
-#   make test                              # Run tests (default strategy)
-#   make test STRATEGY=detection-typing-v1 # Run tests with specific strategy
+#   uv run python -m calibration.run -s detection-v1,clean   # run these + assert
+#   uv run python -m calibration.run --all                   # every strategy
+#   uv run python -m calibration.run -s detection-v1 --no-assert
+#
+# It brings the stack up ONCE (never `down -v`), runs each strategy in its own
+# workspace, kills any leaked worker, then asserts. These make targets are thin
+# conveniences over that one command.
 
 STRATEGY ?= detection-v1
-SEED ?= 42
 
-# Generate test data for a strategy
-generate-%:
-	uv run python -m calibration.runner $* --generate-only --seed $(SEED)
+# Run `clean` + STRATEGY (override: make calibrate STRATEGY=detection-typing-v1), then assert.
+calibrate:
+	uv run python -m calibration.run -s clean,$(STRATEGY)
 
-# Run pipeline on generated data
-pipeline-%:
-	uv run python -m calibration.runner $* --pipeline-only
+# Run every strategy in strategies/.
+calibrate-all:
+	uv run python -m calibration.run --all
 
-# Generate + pipeline
-run-%: generate-% pipeline-%
-	@echo "Run complete for $*"
+list:
+	uv run python -m calibration.run --list
 
-# Run calibration tests (recall + precision)
-test:
-	uv run pytest calibration/ --strategy $(STRATEGY) -v
-
-# Full loop: generate + pipeline + test
-calibrate: run-clean run-$(STRATEGY)
-	uv run pytest calibration/ --strategy $(STRATEGY) -v
-
-# Type-breaking calibration
-calibrate-typing: run-clean run-detection-typing-v1
-	uv run pytest calibration/ --strategy detection-typing-v1 -v
-
-# List available strategies
-list-strategies:
-	@ls strategies/*.yaml 2>/dev/null | xargs -I{} basename {} .yaml
-
-VENDOR_COMPOSE := vendor/dataraum-context/packages/infra/docker-compose.yml
-# The eval stack runs as an ISOLATED docker project (own ports/volume) so it never
-# touches the shared cockpit `infra` stack — clean-pg only wipes the eval project.
-EVAL_PROJECT := dataraum-eval
-EVAL_PORTS := calibration/compose.eval-ports.yml
-
-# Wipe generated data, pipeline output, the local DuckLake parquet store,
-# and the workspace overlay. Run `make clean-pg` separately for PG state.
+# Wipe local generated dirs (data/ output/ lake_data/ workspace/). PG/Temporal untouched.
 clean:
 	rm -rf data output lake_data workspace
 
-# Drop the eval project's Postgres container + volume (wipes engine metadata for the
-# ISOLATED eval stack only — never the shared cockpit `infra` stack).
-clean-pg:
-	docker compose -p $(EVAL_PROJECT) -f $(VENDOR_COMPOSE) -f $(EVAL_PORTS) --env-file .docker.env down -v
+# Tear down the ISOLATED eval stack + volume (the ONLY `down -v`; never the shared cockpit
+# `infra` stack). Use when the stack state is wedged — not part of a normal run.
+reset:
+	uv run python -m calibration.run --reset
 
-.PHONY: test list-strategies calibrate calibrate-typing clean clean-pg
+.PHONY: calibrate calibrate-all list clean reset
