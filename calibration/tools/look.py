@@ -3,7 +3,7 @@
     uv run python -m calibration.tools.look <strategy>            # all typed tables
     uv run python -m calibration.tools.look <strategy> <table>    # one table's columns
 
-Per table: row count, the identified time axis (``TableEntity.time_column``),
+Per table: row count, the identified time axis/axes (``TableEntity.time_columns``),
 and the enriched view. Per column (single-table mode): resolved type, semantic
 role/business name, null ratio, distinct count, top values, temporal bounds.
 Read-only PG metadata; never touches the lake or an LLM.
@@ -29,10 +29,12 @@ def _tables_overview(session: Any) -> list[dict[str, Any]]:
     col_count: dict[str, int] = {}
     for col in session.execute(select(Column)).scalars():
         col_count[col.table_id] = col_count.get(col.table_id, 0) + 1
+    # TableEntity.time_columns is a list of {"column", "aspect", "note"} (DAT-565
+    # multi-role time axes) — surface the column name(s) for the overview.
     time_col = {
-        e.table_id: e.time_column
+        e.table_id: [c["column"] for c in e.time_columns]
         for e in session.execute(select(TableEntity)).scalars()
-        if e.time_column
+        if e.time_columns
     }
     enriched = {
         ev.fact_table_id: ev.view_name for ev in session.execute(select(EnrichedView)).scalars()
@@ -42,7 +44,7 @@ def _tables_overview(session: Any) -> list[dict[str, Any]]:
             "table": short(t.table_name),
             "rows": t.row_count,
             "columns": col_count.get(t.table_id, 0),
-            "time_column": time_col.get(t.table_id),
+            "time_columns": time_col.get(t.table_id),
             "enriched_view": enriched.get(t.table_id),
         }
         for t in sorted(tables, key=lambda t: t.table_name)
@@ -119,7 +121,11 @@ def _table_detail(session: Any, table_name: str) -> dict[str, Any]:
         "table": short(table.table_name),
         "rows": table.row_count,
         "entity_type": entity.detected_entity_type if entity else None,
-        "time_column": entity.time_column if entity else None,
+        "time_columns": (
+            [c["column"] for c in entity.time_columns]
+            if entity and entity.time_columns
+            else None
+        ),
         "columns": col_entries,
     }
 
