@@ -22,9 +22,10 @@ corpora exercise the same exchangeability mechanism in milliseconds.
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 
 drivers = pytest.importorskip("dataraum.analysis.drivers.processor")
@@ -58,7 +59,7 @@ def _surfaced(ranking: DriverRanking) -> set[str]:
 
 
 def _route(
-    frame: pd.DataFrame, dims: list[str], measure: Measure, cluster_keys: list[str], *, seed: int
+    frame: pl.DataFrame, dims: list[str], measure: Measure, cluster_keys: list[str], *, seed: int
 ) -> DriverRanking:
     return _routed_ranking(
         frame, dims, measure, cluster_keys, seed=seed, max_depth=DEFAULT_MAX_DEPTH,
@@ -68,7 +69,7 @@ def _route(
     )
 
 
-def _row_wise(frame: pd.DataFrame, dims: list[str], measure: Measure, *, seed: int) -> DriverRanking:
+def _row_wise(frame: pl.DataFrame, dims: list[str], measure: Measure, *, seed: int) -> DriverRanking:
     return _row_wise_ranking(
         frame, dims, measure, seed=seed, max_depth=DEFAULT_MAX_DEPTH, alpha=ALPHA,
         min_support=DEFAULT_MIN_SUPPORT, missingness_gate=DEFAULT_MISSINGNESS_GATE,
@@ -77,44 +78,47 @@ def _row_wise(frame: pd.DataFrame, dims: list[str], measure: Measure, *, seed: i
 
 
 # ── synthetic corpora (per-entity random effect = the within-entity correlation) ──
-def _clustered(rng: np.random.Generator, *, n_ent: int = 120, per: int = 70) -> pd.DataFrame:
+def _clustered(rng: np.random.Generator, *, n_ent: int = 120, per: int = 70) -> pl.DataFrame:
     """One entity-level driver + two entity-level nulls + a row-level null; high ICC."""
     ent = np.repeat(np.arange(n_ent), per)
     drv = rng.integers(0, 4, n_ent)
     eff = np.array([-0.6, -0.2, 0.2, 0.6])[drv] + rng.normal(0, 0.7, n_ent)
     y = np.exp(6.0 + eff[ent] + rng.normal(0, 0.5, n_ent * per))
-    df = pd.DataFrame({"entity": ent, "measure": y})
-    df["D_ent"] = [f"d{g}" for g in drv[ent]]
-    df["N_ent_K6"] = [f"a{g}" for g in rng.integers(0, 6, n_ent)[ent]]
-    df["N_ent_K30"] = [f"b{g}" for g in rng.integers(0, 30, n_ent)[ent]]
-    df["N_row_K6"] = [f"r{g}" for g in rng.integers(0, 6, n_ent * per)]
-    return df
+    return pl.DataFrame({
+        "entity": ent,
+        "measure": y,
+        "D_ent": [f"d{g}" for g in drv[ent]],
+        "N_ent_K6": [f"a{g}" for g in rng.integers(0, 6, n_ent)[ent]],
+        "N_ent_K30": [f"b{g}" for g in rng.integers(0, 30, n_ent)[ent]],
+        "N_row_K6": [f"r{g}" for g in rng.integers(0, 6, n_ent * per)],
+    })
 
 
 _CLUSTER_DIMS = ["D_ent", "N_ent_K6", "N_ent_K30", "N_row_K6"]
 _ENT_NULLS = ["N_ent_K6", "N_ent_K30"]
 
 
-def _measure_corpus(rng: np.random.Generator, kind: str, *, n: int = 8000) -> tuple[pd.DataFrame, Measure]:
+def _measure_corpus(rng: np.random.Generator, kind: str, *, n: int = 8000) -> tuple[pl.DataFrame, Measure]:
     dv = rng.integers(0, 4, n)
-    df = pd.DataFrame()
-    df["D_e25"] = [f"v{x}" for x in dv]
-    df["N_lowcard"] = [f"l{v}" for v in rng.integers(0, 6, n)]
-    df["N_midcard"] = [f"d{v}" for v in rng.integers(0, 60, n)]
+    cols: dict[str, Any] = {
+        "D_e25": [f"v{x}" for x in dv],
+        "N_lowcard": [f"l{v}" for v in rng.integers(0, 6, n)],
+        "N_midcard": [f"d{v}" for v in rng.integers(0, 60, n)],
+    }
     eff = 0.25 * (dv - 1.5) / 1.5
     if kind == "flow":
-        df["measure"] = rng.lognormal(6.0, 1.1, n) * (1.0 + eff)
-        return df, Measure(target_type="flow", column="measure")
+        cols["measure"] = rng.lognormal(6.0, 1.1, n) * (1.0 + eff)
+        return pl.DataFrame(cols), Measure(target_type="flow", column="measure")
     if kind == "stock":
-        df["measure"] = 100_000.0 * (1.0 + eff) * (1.0 + rng.normal(0, 0.08, n))
-        return df, Measure(target_type="stock", column="measure")
+        cols["measure"] = 100_000.0 * (1.0 + eff) * (1.0 + rng.normal(0, 0.08, n))
+        return pl.DataFrame(cols), Measure(target_type="stock", column="measure")
     rev = rng.lognormal(6.0, 1.4, n)
-    df["profit"] = rev * (0.30 + 0.10 * (dv - 1.5) / 1.5) + rng.normal(0, 0.05, n) * rev
-    df["revenue"] = rev
-    return df, Measure(target_type="ratio", numerator="profit", denominator="revenue")
+    cols["profit"] = rev * (0.30 + 0.10 * (dv - 1.5) / 1.5) + rng.normal(0, 0.05, n) * rev
+    cols["revenue"] = rev
+    return pl.DataFrame(cols), Measure(target_type="ratio", numerator="profit", denominator="revenue")
 
 
-def _crossed(rng: np.random.Generator, *, n_cust: int = 120, n_prod: int = 100, n: int = 18_000) -> pd.DataFrame:
+def _crossed(rng: np.random.Generator, *, n_cust: int = 120, n_prod: int = 100, n: int = 18_000) -> pl.DataFrame:
     """Crossed customer x product, both clustering; each entity has a driver + a null."""
     cust = rng.integers(0, n_cust, n)
     prod = rng.integers(0, n_prod, n)
@@ -123,13 +127,16 @@ def _crossed(rng: np.random.Generator, *, n_cust: int = 120, n_prod: int = 100, 
     ce = np.array([-0.6, -0.2, 0.2, 0.6])[cg] + rng.normal(0, 0.7, n_cust)
     pe = np.array([-0.6, -0.2, 0.2, 0.6])[pg] + rng.normal(0, 0.7, n_prod)
     y = np.exp(6.0 + ce[cust] + pe[prod] + rng.normal(0, 0.4, n))
-    df = pd.DataFrame({"customer": cust, "product": prod, "measure": y})
-    df["D_cust"] = [f"dc{g}" for g in cg[cust]]
-    df["D_prod"] = [f"dp{g}" for g in pg[prod]]
-    df["N_cust_K30"] = [f"nc{g}" for g in rng.integers(0, 30, n_cust)[cust]]
-    df["N_prod_K6"] = [f"np{g}" for g in rng.integers(0, 6, n_prod)[prod]]
-    df["N_row_K6"] = [f"r{g}" for g in rng.integers(0, 6, n)]
-    return df
+    return pl.DataFrame({
+        "customer": cust,
+        "product": prod,
+        "measure": y,
+        "D_cust": [f"dc{g}" for g in cg[cust]],
+        "D_prod": [f"dp{g}" for g in pg[prod]],
+        "N_cust_K30": [f"nc{g}" for g in rng.integers(0, 30, n_cust)[cust]],
+        "N_prod_K6": [f"np{g}" for g in rng.integers(0, 6, n_prod)[prod]],
+        "N_row_K6": [f"r{g}" for g in rng.integers(0, 6, n)],
+    })
 
 
 def test_rowwise_null_inflates_entity_null_fdr_on_clustered_data() -> None:
