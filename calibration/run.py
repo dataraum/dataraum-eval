@@ -1,8 +1,7 @@
 """The one calibration runner — run selected strategies in ONE stack lifecycle, build, assert.
 
 Replaces the make generate/pipeline/run/calibrate matrix and the per-strategy churn. The
-design (and what the cassette layer plugs into next) lives in session notes; the rules this
-runner enforces, learned the expensive way:
+rules this runner enforces, learned the expensive way:
 
 - **One stack lifecycle.** The docker stack comes up ONCE (idempotent) and stays up for the
   whole run. This runner NEVER does `down -v` — that wipes Temporal's Postgres-backed
