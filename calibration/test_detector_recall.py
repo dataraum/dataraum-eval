@@ -52,11 +52,8 @@ ORDERING_DETECTORS = frozenset(
         "derived_value",
         "relationship_entropy",
         "cross_table_consistency",
-        # slice_conditional_null (DAT-473): a bias-corrected Cramér's V — the absolute
-        # association on a concentrated injection is honestly modest, and clean data
-        # carries some natural cost-center null variation, so separation from clean is
-        # the contract, not a point threshold.
-        "slice_conditional_null",
+        # slice_conditional_null was here (DAT-473) but DEMOTED 2026-06-22 (DAT-540) —
+        # see DEMOTED_DETECTORS below; it is no longer a recall-graded band detector.
     }
 )
 ORDERING_MARGIN = 0.05
@@ -87,6 +84,27 @@ CUT_DETECTORS: dict[str, str] = {
     "outlier_rate": (
         "CUT (DAT-442): absolute single-column IQR/z-score can't separate an injected "
         "burst from clean financial heavy tails; see calibration/unit/test_outlier_rate_recorded.py"
+    ),
+}
+
+# Detectors DEMOTED off the loss path → informative DirectSignal (benford lane). The
+# detector still RUNS and emits its score (so an injection may remain in the strategy as
+# documented test data), but it no longer drives readiness bands and is no longer a
+# recall-graded band detector — its band-impact verdict lives in the eval catalog, not a
+# recall ordering assertion. Skip with the honest DEMOTE reason (NOT "not yet wired", NOT
+# CUT — the statistic still computes as context).
+DEMOTED_DETECTORS: dict[str, str] = {
+    "dimensional_entropy": (
+        "DEMOTED (2026-06-16): NMI is anti-predictive on the loss path (highest on clean "
+        "intrinsic structure, blind to the dependency violation); informative DirectSignal "
+        "now — recall n/a. See entropy_eval_architecture.md + detector_coverage.yaml."
+    ),
+    "slice_conditional_null": (
+        "DEMOTED (2026-06-22, DAT-540): its only observable band move is a false positive "
+        "on a benign optional FK (payment_id V=0.97→blocked), and on its injected columns "
+        "the band is already set by cross_table_consistency (confounded); informative "
+        "DirectSignal now — recall n/a. See entropy_eval_architecture.md + "
+        "scripts/calibrate_band_impact_ablation.py."
     ),
 }
 
@@ -346,6 +364,11 @@ def test_injection_detected(
     # Skip detectors cut in the DAT-442 reset (honest reason, not "not yet wired").
     if detector in CUT_DETECTORS:
         pytest.skip(CUT_DETECTORS[detector])
+
+    # Skip detectors DEMOTED off the loss path → informative DirectSignal. The detector
+    # still runs, but it is no longer a recall-graded band detector (verdict in the catalog).
+    if detector in DEMOTED_DETECTORS:
+        pytest.skip(DEMOTED_DETECTORS[detector])
 
     # Skip detectors whose phase/detect-step the current workflow slice doesn't
     # run yet (DAT-370 add_source slice). Not a regression — the detector simply
