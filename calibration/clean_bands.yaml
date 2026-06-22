@@ -4,7 +4,7 @@ provenance:
   - 46
   - 47
   - 48
-  date: '2026-06-11'
+  date: '2026-06-22'
   notes: "Observed [min, max] per key across seeds; 'seen' < len(seeds) means the\
     \ key was not emitted on every run (LLM annotation coverage varies \u2014 normal,\
     \ not a regression). Wide bands document real run-to-run variance at sweep time;\
@@ -21,27 +21,39 @@ bands:
       max: 0.15
       seen: 3
     bank_transactions.date:business_meaning:
-      min: 0.1
+      min: 0.15
+      max: 0.15
+      seen: 3
+    bank_transactions.payment_id:business_meaning:
+      min: 0.05
       max: 0.15
       seen: 3
     bank_transactions.payment_id:null_ratio:
       min: 0.5104
       max: 0.5166
       seen: 3
+    bank_transactions.payment_id:slice_conditional_null:
+      min: 0.9642
+      max: 0.9712
+      seen: 3
     bank_transactions.reference:business_meaning:
-      min: 0.15
+      min: 0.1
       max: 0.15
       seen: 3
-    fx_rates.date:business_meaning:
+    chart_of_accounts.name:business_meaning:
       min: 0.1
+      max: 0.2
+      seen: 3
+    fx_rates.date:business_meaning:
+      min: 0.15
       max: 0.15
       seen: 3
     fx_rates.from_ccy:business_meaning:
-      min: 0.15
+      min: 0.1
       max: 0.15
       seen: 3
     fx_rates.rate:business_meaning:
-      min: 0.1
+      min: 0.15
       max: 0.15
       seen: 3
     fx_rates.source:business_meaning:
@@ -49,7 +61,7 @@ bands:
       max: 0.15
       seen: 3
     fx_rates.to_ccy:business_meaning:
-      min: 0.15
+      min: 0.1
       max: 0.15
       seen: 3
     invoices.amount:business_meaning:
@@ -61,11 +73,11 @@ bands:
       max: 0.6155
       seen: 3
     invoices.date:business_meaning:
-      min: 0.1
+      min: 0.15
       max: 0.15
       seen: 3
     journal_entries.date:business_meaning:
-      min: 0.1
+      min: 0.15
       max: 0.15
       seen: 3
     journal_lines.cost_center:null_ratio:
@@ -76,8 +88,12 @@ bands:
       min: 0.15
       max: 0.15
       seen: 3
+    payments.amount:temporal_behavior:
+      min: 0.0019
+      max: 0.6649
+      seen: 3
     payments.date:business_meaning:
-      min: 0.1
+      min: 0.15
       max: 0.15
       seen: 3
     trial_balance.credit_balance:benford:
@@ -85,7 +101,7 @@ bands:
       max: 0.2573
       seen: 3
     trial_balance.credit_balance:temporal_behavior:
-      min: 0.3081
+      min: 0.5127
       max: 0.5127
       seen: 3
     trial_balance.credit_balance:unit_entropy:
@@ -97,7 +113,7 @@ bands:
       max: 0.3005
       seen: 3
     trial_balance.debit_balance:temporal_behavior:
-      min: 0.2434
+      min: 0.5127
       max: 0.5127
       seen: 3
     trial_balance.debit_balance:unit_entropy:
@@ -106,27 +122,7 @@ bands:
       seen: 3
   table:
     bank_transactions:dimension_coverage:
-      min: 0.2552
+      min: 0.2042
       max: 0.2583
-      seen: 3
-    bank_transactions:dimensional_entropy:
-      min: 0.2274
-      max: 0.2329
-      seen: 3
-    fx_rates:dimensional_entropy:
-      min: 0.5
-      max: 0.5
-      seen: 3
-    invoices:dimensional_entropy:
-      min: 0.8102
-      max: 0.8124
-      seen: 3
-    journal_lines:dimensional_entropy:
-      min: 1.0
-      max: 1.0
-      seen: 3
-    trial_balance:dimensional_entropy:
-      min: 0.3768
-      max: 0.3768
       seen: 3
   relationship: {}
