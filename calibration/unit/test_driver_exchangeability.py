@@ -64,7 +64,7 @@ def _route(
     return _routed_ranking(
         frame, dims, measure, cluster_keys, seed=seed, max_depth=DEFAULT_MAX_DEPTH,
         alpha=ALPHA, min_support=DEFAULT_MIN_SUPPORT, missingness_gate=DEFAULT_MISSINGNESS_GATE,
-        n_perm=N_PERM, top_k_slices=5, icc_threshold=DEFAULT_ICC_THRESHOLD,
+        n_perm=N_PERM, icc_threshold=DEFAULT_ICC_THRESHOLD,
         min_entities=DEFAULT_MIN_ENTITIES,
     )
 
@@ -73,7 +73,7 @@ def _row_wise(frame: pl.DataFrame, dims: list[str], measure: Measure, *, seed: i
     return _row_wise_ranking(
         frame, dims, measure, seed=seed, max_depth=DEFAULT_MAX_DEPTH, alpha=ALPHA,
         min_support=DEFAULT_MIN_SUPPORT, missingness_gate=DEFAULT_MISSINGNESS_GATE,
-        n_perm=N_PERM, top_k_slices=5,
+        n_perm=N_PERM,
     )
 
 
