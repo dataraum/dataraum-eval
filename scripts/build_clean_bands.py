@@ -44,6 +44,16 @@ _GRAINS = ("column", "table", "relationship")
 _DISCRETE_BY_DESIGN = frozenset(
     {
         "unit_source",  # binary 0/1 catalogue fact (unit resolvable or not)
+        # LLM step-map over SEED-INVARIANT inputs: the score quantizes annotation
+        # facts (has_description, confidence buckets) about the column NAME —
+        # names and schema don't vary across seeds, so constancy is expected.
+        "business_meaning",
+        # Pooled conflict C over witness distributions that SATURATE on clean
+        # pairs (containment ceiling 1.0, quantized LLM confidence) → C is a pure
+        # function of identical inputs across seeds. Seed variation enters only
+        # under violation, where the recall ordering leg guards it (FK-0008
+        # scores 0.2 on the 20% orphan injection while clean pairs sit constant).
+        "relationship_discovery",
     }
 )
 

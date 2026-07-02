@@ -6,6 +6,22 @@
 > `entropy_eval_architecture.md`; current epic state lives in Jira (DAT-442)
 > and session memory. Nothing here constrains new work.
 
+## Sonnet 5 swap gate — GO (2026-07-02, DAT-602)
+
+Engine bumped to post-#432 main (`63629f05`: claude-sonnet-5, effort: low,
+strict validation_sql). Lean gate (clean + detection-v1 + 3-seed resweep, ~15%
+of `--all` spend): **no regression attributable to the model** — every moved
+score traced to a named engine fix (temporal_behavior rewiring, DAT-647 unit
+split, relationship context coverage), LLM legs green under pooled treatment,
+financial leg grounded on account-classification joins (67% predicted naive
+error → 9.2% actual, all deviations flagged blocked). Full report + engine
+findings (same-workspace re-run broken post-#432 — the teach path; LLM
+catalog-membership variance; loss-weight evidence):
+[`calibration/reports/sonnet5-swap-gate-2026-07-02.md`](../calibration/reports/sonnet5-swap-gate-2026-07-02.md)
+— the standing baseline for future model swaps. Preflight rule learned: engine
+bump touching `db_models` ⇒ `make reset` first. Haiku right-sizing (DAT-602
+phase 2) unblocked; wants the provider-seam LLM record/replay first.
+
 ## Current slice (DAT-370, 2026-05-27) — what actually ran
 
 The `addSourceWorkflow` slice runs phases **up to `semantic_per_column`** plus two
