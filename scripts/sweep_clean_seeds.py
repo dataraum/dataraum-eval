@@ -17,8 +17,9 @@ workspace (`workspace_id_for(strategy)`, 596d40c), so seeds never share a worksp
 their content-keyed file sources can't accumulate/mix. This is the same isolation the
 add_source calibration queue relies on — the stack stays UP the whole sweep (no `down -v`,
 which would wipe Temporal's own Postgres-backed persistence and destabilise it mid-run).
-Seed 0 uses the real `clean` strategy so a live `clean` run remains for the precision test
-to read; the rest use throwaway `clean.yaml` copies that are removed at the end.
+EVERY seed uses a throwaway `clean.yaml` copy (removed at the end) — the live `clean`
+workspace is never re-entered (same-workspace re-runs collide on child workflow ids
+post-#432; see `_strategy_for`). The precision test reads the gate's own clean run.
 
     uv run python scripts/sweep_clean_seeds.py                 # seeds 46 47 48
     uv run python scripts/sweep_clean_seeds.py --seeds 46 47   # custom seeds
@@ -76,11 +77,18 @@ def _scored_keys_for_dump(strategy: str) -> dict[str, dict[str, float]]:
     }
 
 
-def _strategy_for(index: int, seed: int) -> tuple[str, Path | None]:
-    """Seed 0 → the real `clean` strategy (so a live clean run survives for the precision
-    test); later seeds → a throwaway `clean.yaml` copy. Returns (name, temp_path|None)."""
-    if index == 0:
-        return BASE_STRATEGY, None
+def _strategy_for(seed: int) -> tuple[str, Path]:
+    """Every seed → a throwaway `clean.yaml` copy in its OWN fresh workspace.
+
+    Seed 0 used to reuse the real `clean` strategy so a live run survived for
+    the precision test — but a same-workspace pipeline RE-RUN dies post-#432:
+    the reused parent workflow id + upserted raw_table_ids repeat the completed
+    prior run's child ids, Temporal reports the children "already completed",
+    and their typing activities are cancelled mid-SQL (DAT-602 gate finding;
+    engine-side follow-up — this is the teach-and-rerun path). The live `clean`
+    run comes from the calibration gate itself; bands are cross-seed by design,
+    so the sweep never needs to touch that workspace.
+    """
     name = f"clean-sweep-{seed}"
     path = STRATEGIES_DIR / f"{name}.yaml"
     path.write_text((STRATEGIES_DIR / f"{BASE_STRATEGY}.yaml").read_text())
@@ -111,10 +119,9 @@ def main() -> None:
     _ensure_stack_ready()
     temp_files: list[Path] = []
     try:
-        for i, seed in enumerate(args.seeds):
-            strategy, temp = _strategy_for(i, seed)
-            if temp is not None:
-                temp_files.append(temp)
+        for seed in args.seeds:
+            strategy, temp = _strategy_for(seed)
+            temp_files.append(temp)
             sweep_seed(strategy, seed)
     finally:
         for p in temp_files:
