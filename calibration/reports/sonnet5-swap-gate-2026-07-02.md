@@ -49,14 +49,21 @@ Every moved score traced to a named engine fix, none to the model:
 
 ## Findings (engine/contract, in priority order)
 
-1. **Same-workspace pipeline re-run broken post-#432** (the teach-and-rerun
-   path). Reused parent workflow id (`ALLOW_DUPLICATE`, by design) + upserted
-   `raw_table_id`s repeat the completed run's child workflow ids; Temporal
-   reports children "already completed", typing activities are cancelled
-   mid-SQL, phase fails. Reproduced by the sweep's old seed-0-in-place design;
-   worked pre-delta (past sweeps). Would bite teach closures and production
-   re-adds. Eval unblocked by isolating sweep seeds; **engine fix required
-   before any teach-closure work.**
+1. ~~Same-workspace pipeline re-run broken post-#432~~ — **RETRACTED
+   (2026-07-03; DAT-665 closed as misdiagnosis).** Engine-side reproduction of
+   the exact scenario (identical- and changed-content re-add, same
+   deterministic parent/child ids as a completed prior run) completes cleanly
+   both ways — `ALLOW_DUPLICATE` restarts completed ids as the DAT-506 design
+   intends; the "completed child-id collision" mechanism does not exist. The
+   eval failure was leftover-state interaction in the shared workspace:
+   deterministic ids are single-flight, so a still-RUNNING workflow from an
+   interrupted attempt rejects a restart, and cancelled-mid-SQL typing is
+   normal durable-execution cancellation, not a bug. Teach-closure work is NOT
+   blocked. Sweep seed isolation stays, on stronger grounds than the
+   misdiagnosis: DAT-639's changed-content witness skip means a same-workspace
+   resweep would silently measure the OLD seed's data even on success. Eval
+   runner now surfaces `WorkflowAlreadyStartedError` with a terminate-or-wait
+   hint.
 2. **Degeneracy lint added** (`build_clean_bands.py` + Tier-1 tests): a
    zero-width band across seeds on a continuous statistic now fails the build —
    both historical wiring bugs (temporal_behavior 0.5127×3, unit_entropy 1.0×3)

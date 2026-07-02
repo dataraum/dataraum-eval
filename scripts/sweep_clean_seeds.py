@@ -18,8 +18,8 @@ their content-keyed file sources can't accumulate/mix. This is the same isolatio
 add_source calibration queue relies on — the stack stays UP the whole sweep (no `down -v`,
 which would wipe Temporal's own Postgres-backed persistence and destabilise it mid-run).
 EVERY seed uses a throwaway `clean.yaml` copy (removed at the end) — the live `clean`
-workspace is never re-entered (same-workspace re-runs collide on child workflow ids
-post-#432; see `_strategy_for`). The precision test reads the gate's own clean run.
+workspace is never re-entered (single-flight workflow ids + the DAT-639 changed-content
+witness skip; see `_strategy_for`). The precision test reads the gate's own clean run.
 
     uv run python scripts/sweep_clean_seeds.py                 # seeds 46 47 48
     uv run python scripts/sweep_clean_seeds.py --seeds 46 47   # custom seeds
@@ -81,13 +81,15 @@ def _strategy_for(seed: int) -> tuple[str, Path]:
     """Every seed → a throwaway `clean.yaml` copy in its OWN fresh workspace.
 
     Seed 0 used to reuse the real `clean` strategy so a live run survived for
-    the precision test — but a same-workspace pipeline RE-RUN dies post-#432:
-    the reused parent workflow id + upserted raw_table_ids repeat the completed
-    prior run's child ids, Temporal reports the children "already completed",
-    and their typing activities are cancelled mid-SQL (DAT-602 gate finding;
-    engine-side follow-up — this is the teach-and-rerun path). The live `clean`
-    run comes from the calibration gate itself; bands are cross-seed by design,
-    so the sweep never needs to touch that workspace.
+    the precision test. Isolation is correct for two reasons (DAT-665 resolved
+    the original "child-id collision" read as a misdiagnosis — completed-id
+    re-runs work as designed): (1) deterministic workflow ids are single-flight,
+    so a leftover still-RUNNING workflow from an interrupted attempt rejects the
+    restart; (2) DAT-639's source-level witness skip means re-adding CHANGED
+    bytes at the same URIs silently keeps the previously-ingested data — a
+    same-workspace resweep would measure the OLD seed even when it "succeeds".
+    The live `clean` run comes from the calibration gate itself; bands are
+    cross-seed by design, so the sweep never needs to touch that workspace.
     """
     name = f"clean-sweep-{seed}"
     path = STRATEGIES_DIR / f"{name}.yaml"

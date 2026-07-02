@@ -14,9 +14,11 @@ of `--all` spend): **no regression attributable to the model** — every moved
 score traced to a named engine fix (temporal_behavior rewiring, DAT-647 unit
 split, relationship context coverage), LLM legs green under pooled treatment,
 financial leg grounded on account-classification joins (67% predicted naive
-error → 9.2% actual, all deviations flagged blocked). Full report + engine
-findings (same-workspace re-run broken post-#432 — the teach path; LLM
-catalog-membership variance; loss-weight evidence):
+error → 9.2% actual, all deviations flagged blocked). Full report + findings
+(LLM catalog-membership variance → DAT-667; loss-weight evidence → DAT-668;
+tool grain + dimension_coverage outlier → DAT-669; the "same-workspace re-run
+broken" finding was RETRACTED 2026-07-03 — DAT-665 closed as misdiagnosis,
+completed-id re-runs work as designed):
 [`calibration/reports/sonnet5-swap-gate-2026-07-02.md`](../calibration/reports/sonnet5-swap-gate-2026-07-02.md)
 — the standing baseline for future model swaps. Preflight rule learned: engine
 bump touching `db_models` ⇒ `make reset` first. Haiku right-sizing (DAT-602

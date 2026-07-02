@@ -424,6 +424,38 @@ async def _drive_pipeline(
 
     Returns ``(AddSourceResult, BeginSessionResult)``.
     """
+    from temporalio.exceptions import WorkflowAlreadyStartedError
+
+    verticals = [vertical] if vertical else []
+    task_queue = f"engine-{workspace_id}"  # this workspace's own queue (DAT-505/508)
+
+    client = await worker.connect_client()
+    try:
+        return await _drive_workflows(
+            client, log_path, workspace_id, strategy, source_ids, verticals, task_queue
+        )
+    except WorkflowAlreadyStartedError as err:
+        # Deterministic workflow ids are single-flight (DAT-506): a still-RUNNING
+        # run — usually a leftover from an interrupted driver whose worker went
+        # away — rejects the restart. ALLOW_DUPLICATE only restarts COMPLETED ids
+        # (DAT-665: this is conflict semantics, not an id-collision bug).
+        raise SystemExit(
+            f"[eval] a prior run of this workflow id is still RUNNING ({err}). "
+            f"Terminate it (temporal workflow terminate, eval stack) or wait for "
+            f"the 30-minute execution timeout to reap it, then re-run."
+        ) from err
+
+
+async def _drive_workflows(
+    client: Any,
+    log_path: Path,
+    workspace_id: str,
+    strategy: str,
+    source_ids: list[str],
+    verticals: list[str],
+    task_queue: str,
+) -> tuple[Any, Any]:
+    """Drive addSource → beginSession → operatingModel on a running worker."""
     from dataraum.worker.contracts import (
         AddSourceInput,
         AddSourceResult,
@@ -433,10 +465,6 @@ async def _drive_pipeline(
         OperatingModelResult,
     )
 
-    verticals = [vertical] if vertical else []
-    task_queue = f"engine-{workspace_id}"  # this workspace's own queue (DAT-505/508)
-
-    client = await worker.connect_client()
     async with worker.worker_running(client, log_path):
         add_result = await client.execute_workflow(
             "addSourceWorkflow",
