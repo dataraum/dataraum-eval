@@ -85,6 +85,24 @@ detectors:
       is grounded independently — e.g. an LLM unit hypothesis checked by a reconciliation
       that the declared unit aggregates correctly (DAT-491-class). Must not echo confidence.
 
+  unit_source:
+    disposition: candidate
+    coverage:
+      recall: unverified           # no catalogue-grain injection family yet (strip the
+                                   # sibling unit dimension / concept binding) — /evolve-testdata gap
+      precision: unverified        # clean bands predate the DAT-647 split; next resweep measures it
+      reliabilities: n/a
+      teach_closure: wired         # semantic teach (unit_from_concept / rebind) is the resolution path
+      in_slice: true               # session detect, declared on semantic_per_table
+    entry_criterion: >-
+      The catalogue-grain semantic half of the DAT-647 unit split: binary 0/1 on whether a
+      measure's unit is determinable from the catalogue (sibling dimension column or
+      dimensionless), input authored by semantic_per_table. Single witness today. Its only
+      natural 2nd witness is the VALUE-grain unit fact (unit_entropy's detected_unit) — an
+      independent grounding, but at a different native grain (add_source vs session);
+      pool only if the two claims can be adjudicated at a shared grain without re-conflating
+      what DAT-647 deliberately split.
+
   relationship_entropy:
     disposition: scalar              # honest orphan RATE; the pooled discovery claim
                                      # lives in relationship_discovery (lane L2)
