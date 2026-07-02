@@ -35,15 +35,29 @@ _FLOOR = 0.1
 
 _GRAINS = ("column", "table", "relationship")
 
+# Degeneracy lint: a CONTINUOUS statistic must vary across reseeded clean data —
+# min == max over >= 2 seeds means the detector is not reading the data (constant
+# fallback / wiring bug). Both DAT-602 round-1 bugs sat in this file as exactly
+# that signature while green: temporal_behavior 0.5127 x3 (mis-wired) and
+# unit_entropy 1.0 x3 (the DAT-647 false-block). Detectors whose clean score is
+# discrete by design are exempt — extend ONLY with the reason stated inline.
+_DISCRETE_BY_DESIGN = frozenset(
+    {
+        "unit_source",  # binary 0/1 catalogue fact (unit resolvable or not)
+    }
+)
 
-def build() -> dict[str, Any]:
-    sweeps = sorted(SWEEP_DIR.glob("seed_*.yaml"))
-    if len(sweeps) < 2:
-        raise SystemExit(f"need >= 2 sweep dumps under {SWEEP_DIR}; found {len(sweeps)}")
-    docs = [yaml.safe_load(p.read_text()) for p in sweeps]
+
+def build_from_docs(docs: list[dict[str, Any]]) -> tuple[dict[str, Any], list[str]]:
+    """Build the bands document from sweep dumps; also return degenerate keys.
+
+    Degenerate = zero-width on raw (unrounded) values across >= 2 seeds for a
+    detector not in ``_DISCRETE_BY_DESIGN``.
+    """
     seeds = [d["seed"] for d in docs]
 
     bands: dict[str, dict[str, dict[str, Any]]] = {g: {} for g in _GRAINS}
+    degenerate: list[str] = []
     for grain in _GRAINS:
         keys = sorted({k for d in docs for k in d.get(grain, {})})
         for key in keys:
@@ -55,8 +69,17 @@ def build() -> dict[str, Any]:
                 "max": round(max(values), 4),
                 "seen": len(values),
             }
+            detector = key.rsplit(":", 1)[-1]
+            if (
+                len(values) >= 2
+                and min(values) == max(values)
+                and detector not in _DISCRETE_BY_DESIGN
+            ):
+                degenerate.append(
+                    f"[{grain}] {key}: constant {values[0]} across {len(values)} seeds"
+                )
 
-    return {
+    doc = {
         "provenance": {
             "source": "A4 clean seed sweep (scripts/probes/a4-seed-sweep driver)",
             "seeds": seeds,
@@ -71,6 +94,15 @@ def build() -> dict[str, Any]:
         },
         "bands": bands,
     }
+    return doc, degenerate
+
+
+def build() -> tuple[dict[str, Any], list[str]]:
+    sweeps = sorted(SWEEP_DIR.glob("seed_*.yaml"))
+    if len(sweeps) < 2:
+        raise SystemExit(f"need >= 2 sweep dumps under {SWEEP_DIR}; found {len(sweeps)}")
+    docs = [yaml.safe_load(p.read_text()) for p in sweeps]
+    return build_from_docs(docs)
 
 
 def main() -> None:
@@ -78,11 +110,21 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    doc = build()
+    doc, degenerate = build()
     n = {g: len(doc["bands"][g]) for g in _GRAINS}
     print(f"bands above {_FLOOR}: {n} from seeds {doc['provenance']['seeds']}")
     if args.dry_run:
         print(yaml.safe_dump(doc, sort_keys=False))
+    if degenerate:
+        print("DEGENERATE bands — constant across seeds; the detector is not")
+        print("reading data variation (the temporal_behavior/unit_entropy bug signature):")
+        for line in degenerate:
+            print(f"  {line}")
+        raise SystemExit(
+            "refusing to bless degenerate bands: fix the detector, or if the score is "
+            "discrete by design, add it to _DISCRETE_BY_DESIGN with the reason inline"
+        )
+    if args.dry_run:
         return
     ARTIFACT.write_text(yaml.safe_dump(doc, sort_keys=False))
     print(f"wrote {ARTIFACT}")
