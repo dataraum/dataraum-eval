@@ -67,6 +67,14 @@ clean_readiness:
   trial_balance.debit_balance:
     aggregation_intent: blocked
     reporting_intent: investigate
+  # Rebaselined 2026-07-02 (DAT-602 post-#432 gate): the FIXED temporal_behavior
+  # (previously mis-wired — it never claimed this column, hence "ready") now pools
+  # a single uncorroborated llm_claim "stock" on fx_rates.rate — conflict 0,
+  # ignorance 0.811 → aggregation 0.4 × 0.811 ≈ 0.324 → investigate. ACCURATE:
+  # an FX rate is a point-in-time ratio; naive aggregation is meaningless.
+  # Closable by the concept_property/rebind teach once corroborated.
+  fx_rates.rate:
+    aggregation_intent: investigate
 
 detection-v1:
   expectations:
