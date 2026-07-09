@@ -191,7 +191,23 @@ reconciles_structurally:
   - trial_balance.credit_balance
 
 # --- P1 sibling stubs (unpopulated; owning task noted) -----------------------
-relationships: []     # DAT-684 — FK topology recall/precision vs current_relationships
+# DAT-684 — the generator's TRUE FK topology (finance-9), from the testdata models'
+# FK docstrings (not from what the LLM accepted — that would be circular). Graded
+# for recall (every true FK is judge-confirmed) and precision (no spurious FKs).
+# bank_transactions.payment_id is materialized as a DAT-277 surrogate composite
+# (`_sk__date__payment_id`), so recall matches surrogate-aware (the true column name
+# is a component of the surrogate column). invoices.entry_id and
+# bank_transactions.payment_id are nullable FKs.
+relationships:
+  - {from: journal_lines.entry_id, to: journal_entries.entry_id}
+  - {from: journal_lines.account_id, to: chart_of_accounts.account_id}
+  - {from: invoices.entry_id, to: journal_entries.entry_id}
+  - {from: payments.invoice_id, to: invoices.invoice_id}
+  - {from: bank_transactions.account_id, to: chart_of_accounts.account_id}
+  - {from: bank_transactions.payment_id, to: payments.payment_id}
+  - {from: trial_balance.account_id, to: chart_of_accounts.account_id}
+  - {from: balance_sheet.account_id, to: chart_of_accounts.account_id}
+  - {from: chart_of_accounts.parent_id, to: chart_of_accounts.account_id}
 table_roles: {}       # DAT-685 — fact/dimension role vs current table_entities
 semantic_roles: {}    # DAT-685 — semantic_role / business_concept vs current_semantic_annotations
 cycles: []            # DAT-686 — business cycles vs current_business_cycles

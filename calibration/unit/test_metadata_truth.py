@@ -63,6 +63,18 @@ def test_reconciles_structurally_is_a_stock_flow_subset() -> None:
         assert col in stock_flow, f"{col!r} not a declared stock_flow column"
 
 
+def test_relationships_are_well_formed() -> None:
+    """Every relationships ground-truth edge is 'table.column' on both sides (DAT-684)."""
+    rels = load_truth().get("relationships") or []
+    assert rels, "relationships ground truth is empty"
+    for rel in rels:
+        assert {"from", "to"} <= set(rel), f"relationship {rel} needs from/to"
+        for side in ("from", "to"):
+            assert str(rel[side]).count(".") == 1, (
+                f"relationship {side}={rel[side]!r} must be 'table.column'"
+            )
+
+
 @pytest.mark.parametrize("target", sorted(expected_additivity(load_truth())))
 def test_each_verdict_is_consistent(target: tuple[str, str]) -> None:
     spec = expected_additivity(load_truth())[target]

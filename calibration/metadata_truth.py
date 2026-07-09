@@ -160,3 +160,41 @@ def read_structural_patterns(session: Any) -> dict[str, str]:
         )
     ).all()
     return {f"{short(r.table_name)}.{r.column_name}": r.pattern for r in rows}
+
+
+def read_defined_relationships(session: Any) -> set[tuple[str, str, str, str]]:
+    """Every DEFINED relationship (``detection_method != 'candidate'``) as a directed
+    edge ``(from_table, from_col, to_table, to_col)`` with narrow table names.
+
+    The judge-confirmed FK catalog DAT-684 grades — recall (every true FK present)
+    and precision (no spurious FKs). Reads the run's ``relationships`` table directly
+    (relationships have no ``current_*`` read view), so it reflects exactly what the
+    downstream consumers (lineage, cycles, enriched_views, …) treat as "the FKs".
+    """
+    from sqlalchemy import text
+
+    from calibration.tools._runs import short
+
+    rows = session.execute(
+        text(
+            "SELECT ft.table_name AS ft, fc.column_name AS fc, "
+            "tt.table_name AS tt, tc.column_name AS tc "
+            "FROM relationships r "
+            "JOIN columns fc ON fc.column_id = r.from_column_id "
+            "JOIN tables ft ON ft.table_id = fc.table_id "
+            "JOIN columns tc ON tc.column_id = r.to_column_id "
+            "JOIN tables tt ON tt.table_id = tc.table_id "
+            "WHERE r.detection_method != 'candidate'"
+        )
+    ).all()
+    return {(short(r.ft), r.fc, short(r.tt), r.tc) for r in rows}
+
+
+def expected_relationships(truth: dict[str, Any]) -> set[tuple[str, str, str, str]]:
+    """Flatten the ``relationships`` truth to ``(from_table, from_col, to_table, to_col)``."""
+    out: set[tuple[str, str, str, str]] = set()
+    for rel in truth.get("relationships") or []:
+        ft, fc = str(rel["from"]).split(".", 1)
+        tt, tc = str(rel["to"]).split(".", 1)
+        out.add((ft, fc, tt, tc))
+    return out
