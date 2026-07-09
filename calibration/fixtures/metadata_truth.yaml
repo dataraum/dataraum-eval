@@ -224,8 +224,71 @@ relationships:
   - {from: trial_balance.account_id, to: chart_of_accounts.account_id}
   - {from: balance_sheet.account_id, to: chart_of_accounts.account_id}
   - {from: chart_of_accounts.parent_id, to: chart_of_accounts.account_id}
-table_roles: {}       # DAT-685 — fact/dimension role vs current table_entities
-semantic_roles: {}    # DAT-685 — semantic_role / business_concept vs current_semantic_annotations
+# DAT-685 — table + column roles, graded vs current_table_entities /
+# current_semantic_annotations / current_column_concepts. Authored from the
+# generator STRUCTURE (measure-bearing = fact; a date column = timestamp; a numeric
+# amount = measure), not from detector output. Determinism split: HARD only where
+# the classification is structurally UNAMBIGUOUS; the convention-dependent calls are
+# reported, never asserted (single-seed, and dimension-vs-attribute is a judgment).
+#
+# ONTOLOGY-SUFFICIENCY NOTE (audited 2026-07-09): the vertical ontology has NO
+# table-entity taxonomy and NO fact/dimension declaration — `detected_entity_type`
+# is unconstrained free text and is_fact_table is LLM-inferred. So entity_type is
+# report-only (nothing to grade against) and is_fact_table is graded only where
+# structure decides it. Grading entity_type against a vocabulary needs an ontology
+# `entities:` section that does not exist yet (the ambition follow-up; see epic).
+table_roles:
+  # is_fact_table HARD: measure-bearing transaction/snapshot tables are facts; a
+  # pure reference table is a dimension. journal_entries (event header, no measure)
+  # and fx_rates (a rate lookup that also carries a measure) are genuinely modelable
+  # either way → reported, NOT asserted.
+  facts: [journal_lines, invoices, payments, bank_transactions, trial_balance, balance_sheet]
+  dimensions: [chart_of_accounts]
+  ambiguous: [journal_entries, fx_rates]   # reported only — structurally debatable
+
+semantic_roles:
+  # HARD, load-bearing (drivers_phase filters semantic_role='measure'; slicing reads
+  # timestamps). measure is graded for BOTH recall (every true measure is a measure)
+  # and precision (nothing else is) — a mislabel silently drops/pollutes the driver
+  # + additivity input. Every genuine date column must be a timestamp.
+  measure:
+    - journal_lines.debit
+    - journal_lines.credit
+    - journal_lines.net_amount
+    - invoices.amount
+    - payments.amount
+    - bank_transactions.amount
+    - trial_balance.debit_balance
+    - trial_balance.credit_balance
+    - balance_sheet.ending_balance
+    - fx_rates.rate
+  timestamp:
+    - journal_entries.date
+    - invoices.date
+    - invoices.due_date
+    - payments.date
+    - bank_transactions.date
+    - fx_rates.date
+    - trial_balance.period
+    - balance_sheet.period
+  # key / dimension / attribute: convention-dependent + single-seed → reported by the
+  # oracle for review, not asserted (no truth patch, no over-fit to one run).
+
+business_concepts:
+  # HARD — the measure→ontology-concept bindings metric grounding depends on (a
+  # missing one means the metric cannot ground). Graded for recall vs
+  # current_column_concepts.business_concept. Dimension-concept bindings
+  # (account/currency/fiscal_period/entity) are LLM-selective discriminators →
+  # reported, not required.
+  required:
+    journal_lines.debit: debit
+    journal_lines.credit: credit
+    trial_balance.debit_balance: account_balance
+    trial_balance.credit_balance: account_balance
+    balance_sheet.ending_balance: account_balance
+    invoices.amount: transaction_amount
+    payments.amount: transaction_amount
+    bank_transactions.amount: transaction_amount
 # DAT-686 — business cycles the finance-9 corpus REALISTICALLY supports, derived
 # from the finance cycle vocabulary (cycles.yaml) × the corpus's actual tables +
 # completion columns — NOT from what the detector happened to land (that would set

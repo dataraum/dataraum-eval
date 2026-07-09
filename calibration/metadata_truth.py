@@ -200,6 +200,90 @@ def expected_relationships(truth: dict[str, Any]) -> set[tuple[str, str, str, st
     return out
 
 
+def read_table_entities(session: Any) -> dict[str, dict[str, Any]]:
+    """``current_table_entities`` per table (narrow name): ``{is_fact, is_dimension,
+    entity_type}``.
+
+    The table-level role surface DAT-685 grades — is_fact_table HARD where structure
+    decides it, ``detected_entity_type`` reported (free text, no ontology vocabulary).
+    """
+    from dataraum.storage.read_views import read_schema_name_for
+    from sqlalchemy import text
+
+    from calibration.tools._runs import short
+
+    read_schema = read_schema_name_for(
+        str(session.execute(text("SELECT current_schema()")).scalar())
+    )
+    rows = session.execute(
+        text(
+            "SELECT t.table_name AS tn, te.is_fact_table AS f, "
+            "te.is_dimension_table AS d, te.detected_entity_type AS et "
+            f'FROM "{read_schema}".current_table_entities te '
+            f'JOIN "{read_schema}".current_tables t ON t.table_id = te.table_id'
+        )
+    ).all()
+    return {
+        short(r.tn): {
+            "is_fact": bool(r.f),
+            "is_dimension": bool(r.d),
+            "entity_type": r.et,
+        }
+        for r in rows
+    }
+
+
+def read_semantic_roles(session: Any) -> dict[str, str]:
+    """``current_semantic_annotations.semantic_role`` keyed ``"table.column"`` (narrow).
+
+    The per-column role ∈ {key, measure, dimension, timestamp, attribute} DAT-685
+    grades — measure/timestamp HARD, the rest reported.
+    """
+    from dataraum.storage.read_views import read_schema_name_for
+    from sqlalchemy import text
+
+    from calibration.tools._runs import short
+
+    read_schema = read_schema_name_for(
+        str(session.execute(text("SELECT current_schema()")).scalar())
+    )
+    rows = session.execute(
+        text(
+            "SELECT t.table_name AS tn, c.column_name AS cn, sa.semantic_role AS role "
+            f'FROM "{read_schema}".current_semantic_annotations sa '
+            f'JOIN "{read_schema}".current_columns c ON c.column_id = sa.column_id '
+            f'JOIN "{read_schema}".current_tables t ON t.table_id = c.table_id'
+        )
+    ).all()
+    return {f"{short(r.tn)}.{r.cn}": r.role for r in rows}
+
+
+def read_business_concepts(session: Any) -> dict[str, str]:
+    """Non-null ``current_column_concepts.business_concept`` keyed ``"table.column"``.
+
+    The ontology-concept binding DAT-685 grades — the measure→concept bindings metric
+    grounding depends on (HARD) plus the reported dimension-concept bindings.
+    """
+    from dataraum.storage.read_views import read_schema_name_for
+    from sqlalchemy import text
+
+    from calibration.tools._runs import short
+
+    read_schema = read_schema_name_for(
+        str(session.execute(text("SELECT current_schema()")).scalar())
+    )
+    rows = session.execute(
+        text(
+            "SELECT t.table_name AS tn, c.column_name AS cn, cc.business_concept AS bc "
+            f'FROM "{read_schema}".current_column_concepts cc '
+            f'JOIN "{read_schema}".current_columns c ON c.column_id = cc.column_id '
+            f'JOIN "{read_schema}".current_tables t ON t.table_id = c.table_id '
+            "WHERE cc.business_concept IS NOT NULL"
+        )
+    ).all()
+    return {f"{short(r.tn)}.{r.cn}": r.bc for r in rows}
+
+
 def read_detected_cycles(session: Any) -> list[dict[str, Any]]:
     """Detected business cycles from ``current_detected_business_cycles``.
 

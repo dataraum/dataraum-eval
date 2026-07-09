@@ -86,6 +86,38 @@ def test_cycles_are_well_formed() -> None:
         )
 
 
+def test_table_roles_are_disjoint_and_named() -> None:
+    """facts/dimensions/ambiguous partition tables with no overlap (DAT-685)."""
+    roles = load_truth().get("table_roles") or {}
+    facts = set(roles.get("facts") or [])
+    dims = set(roles.get("dimensions") or [])
+    amb = set(roles.get("ambiguous") or [])
+    assert facts and dims, "table_roles needs non-empty facts + dimensions"
+    assert facts.isdisjoint(dims) and facts.isdisjoint(amb) and dims.isdisjoint(amb), (
+        "a table appears in more than one of facts/dimensions/ambiguous"
+    )
+
+
+def test_semantic_roles_are_well_formed() -> None:
+    """measure/timestamp truth is 'table.column', disjoint, non-empty (DAT-685)."""
+    sr = load_truth().get("semantic_roles") or {}
+    measure = set(sr.get("measure") or [])
+    timestamp = set(sr.get("timestamp") or [])
+    assert measure and timestamp, "semantic_roles needs non-empty measure + timestamp"
+    assert measure.isdisjoint(timestamp), "a column is both measure and timestamp"
+    for col in measure | timestamp:
+        assert str(col).count(".") == 1, f"semantic_roles key {col!r} must be 'table.column'"
+
+
+def test_business_concepts_required_is_well_formed() -> None:
+    """Every required business_concept binding is 'table.column' → non-empty concept (DAT-685)."""
+    required = (load_truth().get("business_concepts") or {}).get("required") or {}
+    assert required, "business_concepts.required is empty"
+    for col, concept in required.items():
+        assert str(col).count(".") == 1, f"business_concept key {col!r} must be 'table.column'"
+        assert concept and isinstance(concept, str), f"{col}: concept must be a non-empty string"
+
+
 @pytest.mark.parametrize("target", sorted(expected_additivity(load_truth())))
 def test_each_verdict_is_consistent(target: tuple[str, str]) -> None:
     spec = expected_additivity(load_truth())[target]
