@@ -1,0 +1,174 @@
+# metadata_truth.yaml — agent-layer ground truth for the finance corpus.
+#
+# The DAT-680 P1 seed ("grade the agents on the existing finance generator"):
+# the engine persists agent-authored / derived metadata in `current_*` read views
+# that today NO eval asserts (relationships, labels, cycles, validation SQL, the
+# metric graph's own SQL, drivers, additivity). This file is the oracle those
+# assertions read — the agent-layer analogue of testdata's entropy_map.yaml.
+#
+# Scope today (DAT-718): the `metric_additivity` section — the first populated
+# entry, proving the pattern. Sibling sections are stubs the P1 tasks fill:
+# relationships (DAT-684), table/semantic roles + column stock/flow (DAT-685),
+# cycles (DAT-686). Hand-authored eval-side for now; DAT-682 moves generation
+# into dataraum-testdata's export (the generator already knows FK topology, roles,
+# stock/flow, formulas, cycles), at which point this becomes the schema it emits.
+#
+# Assertion grammar (entropy_eval_architecture.md, agent-metadata contract): a
+# named set-statistic / exact-match verdict accuracy over the `current_*` view
+# keys — never a new framework.
+
+vertical: finance
+
+# --- metric_additivity (DAT-716 verdict, DAT-718 matrix) ---------------------
+# Expected drill additivity verdict per target, checked against
+# current_metric_additivity keyed (target_kind, target_key). `categorical_additive`
+# / `time_additive` say whether a breakdown by that axis class reconciles to the
+# unsliced total; the reason names why it does not (engine vocab: stock / average /
+# distinct_count / snapshot_count / min_max / ratio), null when it reconciles.
+#
+# `determinism` governs the assertion grammar (the anti-Goodhart split):
+#   function_symmetry — the verdict is fixed by the aggregate ALONE, independent of
+#     any upstream label: AVG, COUNT(DISTINCT), and ratios never reconcile on any
+#     axis. HARD-asserted — a mismatch is a real defect in the DAT-716 classifier
+#     or its persistence, and no stock/flow label can game it (the
+#     no-deterministic-override rule is respected: we assert only what is
+#     label-invariant).
+#   label_dependent — the verdict ALSO needs a correct stock/flow verdict (the
+#     pooled temporal_behavior detector, DAT-685) or event/snapshot grain
+#     (DAT-716): SUM(flow)→additive, SUM(stock)→time-stripped, COUNT→additive only
+#     on an event fact. Reported as a DIAGNOSTIC, never a hard build-break —
+#     re-grading an upstream detector deterministically through this downstream
+#     oracle would be Goodhart at the harness level; it is graded in its own P1 lane.
+metric_additivity:
+  # A metric verdict rolls the metric's extracts up through its DAG; a MEASURE
+  # verdict is a standard_field's extract classified directly, folded
+  # most-restrictive across every metric that grounds that field. Both kinds are
+  # drill targets and both are graded. Inventory-dependent metrics (dio,
+  # cash_conversion_cycle) are omitted — this corpus has no inventory accounts, so
+  # they never ground (an honest corpus fact, not a matrix gap).
+  metrics:
+    # ---- function-symmetry (HARD): every ratio + COUNT(DISTINCT) + AVG ----
+    active_accounts:
+      determinism: function_symmetry
+      categorical_additive: false
+      time_additive: false
+      categorical_reason: distinct_count
+      time_reason: distinct_count
+      note: "COUNT(DISTINCT account) — the distinct set overlaps across slices."
+    average_transaction_value:
+      determinism: function_symmetry
+      categorical_additive: false
+      time_additive: false
+      categorical_reason: average
+      time_reason: average
+      note: "AVG — an average of averages does not reconcile on any axis."
+    current_ratio:
+      determinism: function_symmetry
+      categorical_additive: false
+      time_additive: false
+      categorical_reason: ratio
+      time_reason: ratio
+      note: "current_assets / current_liabilities — a ratio; non-additive everywhere."
+    gross_margin: &ratio
+      determinism: function_symmetry
+      categorical_additive: false
+      time_additive: false
+      categorical_reason: ratio
+      time_reason: ratio
+      note: "a margin (X / revenue) — a ratio; non-additive on every axis."
+    ebitda_margin: *ratio
+    net_margin: *ratio
+    operating_margin: *ratio
+    dso:
+      determinism: function_symmetry
+      categorical_additive: false
+      time_additive: false
+      categorical_reason: ratio
+      time_reason: ratio
+      note: "days-sales-outstanding — a ratio (AR / revenue × days); non-additive."
+    dpo:
+      determinism: function_symmetry
+      categorical_additive: false
+      time_additive: false
+      categorical_reason: ratio
+      time_reason: ratio
+      note: "days-payable-outstanding — a ratio (AP / COGS × days); non-additive."
+    # ---- label/grain-dependent (soft): COUNT(event) + additive flow roll-ups ----
+    transaction_count:
+      determinism: label_dependent   # additive only if journal_lines is an EVENT fact (grain)
+      categorical_additive: true
+      time_additive: true
+      categorical_reason: null
+      time_reason: null
+      note: "COUNT over the journal_lines event fact — additive (needs event-grain)."
+    gross_profit: &flow_metric
+      determinism: label_dependent   # additive only if its flow operands are flow-labeled
+      categorical_additive: true
+      time_additive: true
+      categorical_reason: null
+      time_reason: null
+      note: "a sum/difference of flow measures — additive on both axes (needs flow labels)."
+    operating_income: *flow_metric
+    ebitda: *flow_metric
+    net_income: *flow_metric
+  measures:
+    # ---- function-symmetry (HARD) ----
+    account:
+      determinism: function_symmetry
+      categorical_additive: false
+      time_additive: false
+      categorical_reason: distinct_count
+      time_reason: distinct_count
+      note: "The active_accounts extract — COUNT(DISTINCT), grounded by one metric."
+    # ---- label-dependent (soft): SUM(flow) additive ----
+    revenue: &flow_measure
+      determinism: label_dependent   # additive only if the summed amount is labeled flow
+      categorical_additive: true
+      time_additive: true
+      categorical_reason: null
+      time_reason: null
+      note: "SUM of an income-statement flow — additive on both axes (needs a flow label)."
+    cost_of_goods_sold: *flow_measure
+    operating_expense: *flow_measure
+    depreciation: *flow_measure
+    interest: *flow_measure
+    tax: *flow_measure
+    # ---- label-dependent (soft): SUM(stock) time-stripped (semi-additive) ----
+    current_assets: &stock_measure
+      determinism: label_dependent   # time-stripped only if the balance is labeled point_in_time
+      categorical_additive: true
+      time_additive: false
+      categorical_reason: null
+      time_reason: stock
+      note: "SUM of a balance-sheet stock — reconciles across categories, time-stripped."
+    current_liabilities: *stock_measure
+    accounts_receivable: *stock_measure
+    accounts_payable: *stock_measure
+    # ---- label-dependent (soft): the shared-field most-restrictive fold ----
+    transaction_amount:
+      determinism: label_dependent   # soft: the fold's non-additivity needs the AVG metric grounded
+      categorical_additive: false
+      time_additive: false
+      categorical_reason: average
+      time_reason: average
+      note: >-
+        Grounded by BOTH transaction_count (COUNT) and average_transaction_value
+        (AVG); the measure verdict is the deduped most-restrictive fold across
+        metrics, so AVG wins — proves the shared-field fold end-to-end.
+
+# --- stock/flow atomic facts (DAT-685 seed) ----------------------------------
+# The generator-known temporal_behavior per measure column — what
+# column_concepts.temporal_behavior SHOULD resolve to. The label_dependent
+# additivity verdicts above compose from these × the config aggregation, so this
+# is where a stock-cell diagnostic ultimately traces. Populated as a seed;
+# DAT-685 asserts it as its own recall/precision lane.
+stock_flow:
+  balance_sheet.ending_balance: point_in_time   # a carry-forward level — a STOCK
+  trial_balance.debit_balance: additive         # per-period movement — a FLOW
+  trial_balance.credit_balance: additive
+
+# --- P1 sibling stubs (unpopulated; owning task noted) -----------------------
+relationships: []     # DAT-684 — FK topology recall/precision vs current_relationships
+table_roles: {}       # DAT-685 — fact/dimension role vs current table_entities
+semantic_roles: {}    # DAT-685 — semantic_role / business_concept vs current_semantic_annotations
+cycles: []            # DAT-686 — business cycles vs current_business_cycles

@@ -90,6 +90,35 @@ DAT-405 lesson; relearned 2026-06-11 when a value_overlap r synthesized from
 candidate rows of LLM-rejected pairs was shipped and withdrawn). Pairs that
 never reach the catalog are a finding about the SELECTOR (coverage), not votes.
 
+### Agent-metadata oracles (DAT-680 P1)
+
+Detectors are graded against `entropy_map.yaml`; the **agent layer** — the
+relationships, labels, cycles, validation SQL, metric-graph SQL, drivers, and
+additivity verdicts the engine persists in `current_*` views — needs the same
+discipline. Its ground truth lives in `calibration/fixtures/metadata_truth.yaml`
+(hand-authored today; generator-exported under DAT-682), and the assertion reuses
+the existing grammar: a named set-statistic (precision/recall/F1/Jaccard) for
+set-valued claims, exact-match verdict accuracy for categorical ones — never a new
+framework.
+
+The **determinism split** governs that grammar. A claim fixed by structure alone
+(a `COUNT(DISTINCT)` never reconciles under SUM) is **hard-asserted** — a mismatch
+is a real defect and no upstream label can game it. A claim that depends on an
+upstream detector label or grain (is this column a stock? is this fact an event? —
+stock/flow is the pooled `temporal_behavior` detector, not a raw LLM call) is a
+**diagnostic** (xfail, strict=False): hard-grading it here would re-grade that
+upstream detector deterministically through a downstream oracle — Goodhart at the
+harness level — so it is graded in its own labeling lane.
+
+**First entry — metric additivity (DAT-716/718).** `current_metric_additivity`'s
+per-`(target_kind, target_key)` verdict (does a categorical / time breakdown
+reconcile to the unsliced total?) vs the derived truth = function-symmetry ×
+stock/flow × grain. Hard core: AVG / COUNT(DISTINCT) / ratio → non-additive.
+Diagnostics: SUM(flow) additive, SUM(stock) time-stripped, COUNT additive only on
+an event fact — a divergence feeds DAT-685 (stock/flow) or DAT-716 (grain).
+Tier-1 fixture gate `calibration/unit/test_metadata_truth.py`; Tier-3 oracle
+`calibration/test_metric_additivity_e2e.py`.
+
 ## Measurement catalog
 
 The grounded statistic per measurement, and the honest "earns its place" call. The
