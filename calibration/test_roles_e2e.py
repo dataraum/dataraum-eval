@@ -69,17 +69,17 @@ def test_fact_dimension_roles() -> None:
 
     wrong: list[str] = []
     for tbl in sorted(facts):
-        e = entities.get(tbl)
-        if e is None:
+        ent = entities.get(tbl)
+        if ent is None:
             wrong.append(f"  {tbl}: expected FACT, absent from table_entities")
-        elif not e["is_fact"]:
-            wrong.append(f"  {tbl}: expected FACT, got is_fact={e['is_fact']} is_dim={e['is_dimension']}")
+        elif not ent["is_fact"]:
+            wrong.append(f"  {tbl}: expected FACT, got is_fact={ent['is_fact']} is_dim={ent['is_dimension']}")
     for tbl in sorted(dims):
-        e = entities.get(tbl)
-        if e is None:
+        ent = entities.get(tbl)
+        if ent is None:
             wrong.append(f"  {tbl}: expected DIMENSION, absent from table_entities")
-        elif e["is_fact"] or not e["is_dimension"]:
-            wrong.append(f"  {tbl}: expected DIMENSION, got is_fact={e['is_fact']} is_dim={e['is_dimension']}")
+        elif ent["is_fact"] or not ent["is_dimension"]:
+            wrong.append(f"  {tbl}: expected DIMENSION, got is_fact={ent['is_fact']} is_dim={ent['is_dimension']}")
 
     assert not wrong, (
         "fact/dimension classification is wrong where structure is unambiguous "
