@@ -52,6 +52,17 @@ def test_stock_flow_values_are_legal() -> None:
         assert behavior in {"additive", "point_in_time"}, f"{col}: illegal {behavior!r}"
 
 
+def test_reconciles_structurally_is_a_stock_flow_subset() -> None:
+    """Expected-to-reconcile measures must be declared stock_flow columns (DAT-722)
+    — keeps the reconciliation-coverage guard from drifting out of the truth."""
+    truth = load_truth()
+    stock_flow = truth.get("stock_flow") or {}
+    expected = truth.get("reconciles_structurally") or []
+    assert expected, "reconciles_structurally is empty"
+    for col in expected:
+        assert col in stock_flow, f"{col!r} not a declared stock_flow column"
+
+
 @pytest.mark.parametrize("target", sorted(expected_additivity(load_truth())))
 def test_each_verdict_is_consistent(target: tuple[str, str]) -> None:
     spec = expected_additivity(load_truth())[target]

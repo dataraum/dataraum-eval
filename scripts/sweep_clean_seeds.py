@@ -113,12 +113,39 @@ def sweep_seed(strategy: str, seed: int) -> Path:
     return out
 
 
+def dump_completed(strategy: str, seed: int) -> Path:
+    """Dump an ALREADY-completed run's scores as a sweep seed — no re-pipeline.
+
+    Budget-sensitive resweep: after a well-understood change, an existing run (e.g.
+    the calibration gate's own ``clean`` run) is a valid seed, so it can be folded
+    in instead of spending a fresh pipeline for it. The reused run is a distinct
+    seed of the same corpus; the band is still [min, max] across all dumps.
+    """
+    doc: dict[str, Any] = {"seed": seed, **_scored_keys_for_dump(strategy)}
+    SWEEP_DIR.mkdir(parents=True, exist_ok=True)
+    out = SWEEP_DIR / f"seed_{seed}.yaml"
+    out.write_text(yaml.safe_dump(doc, sort_keys=False))
+    print(f"[sweep] reused completed {strategy!r} → {out}", flush=True)
+    return out
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seeds", type=int, nargs="+", default=[46, 47, 48])
+    parser.add_argument(
+        "--reuse",
+        nargs="*",
+        default=[],
+        metavar="STRATEGY:SEED",
+        help="Fold an already-completed run in as a seed (no re-pipeline), e.g. "
+        "'clean:0' to reuse the gate's clean run — budget-sensitive resweep.",
+    )
     args = parser.parse_args()
 
     _ensure_stack_ready()
+    for entry in args.reuse:
+        strat, _, seed_s = entry.partition(":")
+        dump_completed(strat, int(seed_s))
     temp_files: list[Path] = []
     try:
         for seed in args.seeds:

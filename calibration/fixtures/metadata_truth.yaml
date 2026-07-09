@@ -178,6 +178,18 @@ stock_flow:
   balance_sheet.ending_balance: point_in_time   # carry-forward level — a STOCK
   fx_rates.rate: point_in_time                  # a rate/price level — not additive
 
+# Measures expected to reconcile against a finer event fact via the DAT-491
+# structural stock/flow witness (read_structural_patterns). Only a rollup fact
+# with a finer event fact sharing a slice dimension reconciles: trial_balance ←
+# journal_lines (by account_type). The event facts (journal_lines/invoices/
+# payments/bank_transactions) are the anchors, and balance_sheet/fx_rates have no
+# finer fact — none of those reconcile. DAT-722: BOTH trial_balance measures must
+# reconcile; before declines were cut at the source, a coincidental conf=0.05
+# debit→payments "FK" stripped debit's only convention, so only credit did.
+reconciles_structurally:
+  - trial_balance.debit_balance
+  - trial_balance.credit_balance
+
 # --- P1 sibling stubs (unpopulated; owning task noted) -----------------------
 relationships: []     # DAT-684 — FK topology recall/precision vs current_relationships
 table_roles: {}       # DAT-685 — fact/dimension role vs current table_entities
