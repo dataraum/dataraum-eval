@@ -76,3 +76,31 @@ def expected_additivity(truth: dict[str, Any]) -> dict[tuple[str, str], dict[str
         for key, spec in (block.get(f"{kind}s") or {}).items():
             out[(kind, key)] = spec
     return out
+
+
+def read_temporal_behavior(session: Any) -> dict[str, str]:
+    """``current_column_concepts.temporal_behavior`` keyed ``"table.column"`` (narrow names).
+
+    The catalogue-grain stock/flow verdict (DAT-637 re-homed it to ``ColumnConcept``)
+    — the surface DAT-685 grades against ``metadata_truth.stock_flow``. Only columns
+    the detector resolved (``temporal_behavior IS NOT NULL``) are returned.
+    """
+    from dataraum.storage.read_views import read_schema_name_for
+    from sqlalchemy import text
+
+    from calibration.tools._runs import short
+
+    read_schema = read_schema_name_for(
+        str(session.execute(text("SELECT current_schema()")).scalar())
+    )
+    rows = session.execute(
+        text(
+            "SELECT t.table_name AS table_name, c.column_name AS column_name, "
+            "cc.temporal_behavior AS temporal_behavior "
+            f'FROM "{read_schema}".current_column_concepts cc '
+            f'JOIN "{read_schema}".current_columns c ON c.column_id = cc.column_id '
+            f'JOIN "{read_schema}".current_tables t ON t.table_id = c.table_id '
+            "WHERE cc.temporal_behavior IS NOT NULL"
+        )
+    ).all()
+    return {f"{short(r.table_name)}.{r.column_name}": r.temporal_behavior for r in rows}

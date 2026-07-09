@@ -43,6 +43,15 @@ def test_flatten_keys_are_kinded() -> None:
         assert ("metric", key) in keyed, f"missing metric target {key}"
 
 
+def test_stock_flow_values_are_legal() -> None:
+    """Every stock_flow ground-truth value is a legal temporal_behavior (DAT-685)."""
+    stock_flow = load_truth().get("stock_flow") or {}
+    assert stock_flow, "stock_flow ground truth is empty"
+    for col, behavior in stock_flow.items():
+        assert "." in col, f"stock_flow key {col!r} must be 'table.column'"
+        assert behavior in {"additive", "point_in_time"}, f"{col}: illegal {behavior!r}"
+
+
 @pytest.mark.parametrize("target", sorted(expected_additivity(load_truth())))
 def test_each_verdict_is_consistent(target: tuple[str, str]) -> None:
     spec = expected_additivity(load_truth())[target]
