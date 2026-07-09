@@ -198,6 +198,16 @@ reconciles_structurally:
 # (`_sk__date__payment_id`), so recall matches surrogate-aware (the true column name
 # is a component of the surrogate column). invoices.entry_id and
 # bank_transactions.payment_id are nullable FKs.
+#
+# COMPLETENESS (audited against the live corpus topology, not detector output):
+# enumerating every FK-bearing column across the 9 source tables yields EXACTLY
+# these 9 — the list is complete, not set-where-the-detector-landed. Two near-miss
+# links are DELIBERATELY excluded (do NOT add them to "fix recall"):
+#   * `currency` columns → would be FKs to a currency dimension, but the generator
+#     models Currency as an enum, so no such table exists (honest corpus gap).
+#   * trial_balance.period ↔ balance_sheet.period → a SHARED conformed period
+#     dimension (fan trap), not an FK. This is exactly the DAT-723 false positive
+#     the precision test catches; declaring it expected would mask that bug.
 relationships:
   - {from: journal_lines.entry_id, to: journal_entries.entry_id}
   - {from: journal_lines.account_id, to: chart_of_accounts.account_id}
