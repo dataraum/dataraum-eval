@@ -198,3 +198,37 @@ def expected_relationships(truth: dict[str, Any]) -> set[tuple[str, str, str, st
         tt, tc = str(rel["to"]).split(".", 1)
         out.add((ft, fc, tt, tc))
     return out
+
+
+def read_detected_cycles(session: Any) -> list[dict[str, Any]]:
+    """Detected business cycles from ``current_detected_business_cycles``.
+
+    Each is ``{canonical_type, cycle_name, is_known_type, confidence, tables}`` with
+    ``tables`` a set of narrow table names. The LLM-inferred process cycles DAT-686
+    grades — recall of the corpus's backbone cycles + legitimacy (known type, real
+    tables) of what was detected.
+    """
+    from dataraum.storage.read_views import read_schema_name_for
+    from sqlalchemy import text
+
+    from calibration.tools._runs import short
+
+    read_schema = read_schema_name_for(
+        str(session.execute(text("SELECT current_schema()")).scalar())
+    )
+    rows = session.execute(
+        text(
+            "SELECT canonical_type, cycle_name, is_known_type, confidence, tables_involved "
+            f'FROM "{read_schema}".current_detected_business_cycles'
+        )
+    ).all()
+    return [
+        {
+            "canonical_type": r.canonical_type,
+            "cycle_name": r.cycle_name,
+            "is_known_type": bool(r.is_known_type),
+            "confidence": r.confidence,
+            "tables": {short(t) for t in (r.tables_involved or [])},
+        }
+        for r in rows
+    ]

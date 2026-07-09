@@ -75,6 +75,17 @@ def test_relationships_are_well_formed() -> None:
             )
 
 
+def test_cycles_are_well_formed() -> None:
+    """Every cycles ground-truth entry has a canonical_type + non-empty key_tables (DAT-686)."""
+    cycles = load_truth().get("cycles") or []
+    assert cycles, "cycles ground truth is empty"
+    for c in cycles:
+        assert c.get("canonical_type"), f"cycle {c} needs canonical_type"
+        assert isinstance(c.get("key_tables"), list) and c["key_tables"], (
+            f"cycle {c} needs a non-empty key_tables list"
+        )
+
+
 @pytest.mark.parametrize("target", sorted(expected_additivity(load_truth())))
 def test_each_verdict_is_consistent(target: tuple[str, str]) -> None:
     spec = expected_additivity(load_truth())[target]

@@ -210,4 +210,11 @@ relationships:
   - {from: chart_of_accounts.parent_id, to: chart_of_accounts.account_id}
 table_roles: {}       # DAT-685 — fact/dimension role vs current table_entities
 semantic_roles: {}    # DAT-685 — semantic_role / business_concept vs current_semantic_annotations
-cycles: []            # DAT-686 — business cycles vs current_business_cycles
+# DAT-686 — business cycles the finance-9 corpus supports (from the finance cycle
+# vocabulary + corpus structure), graded vs detected_business_cycles. Cycle detection
+# is LLM-inferred, so only the structural-backbone cycles are `required` (a miss is a
+# real gap); others are reported soft. Match = canonical_type + key_tables ⊆ tables_involved.
+cycles:
+  - {canonical_type: journal_entry_cycle, key_tables: [journal_entries, journal_lines], required: true}
+  - {canonical_type: accounts_payable, key_tables: [invoices, payments], required: true}
+  - {canonical_type: period_close, key_tables: [trial_balance, balance_sheet], required: false}
