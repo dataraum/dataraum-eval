@@ -210,11 +210,27 @@ relationships:
   - {from: chart_of_accounts.parent_id, to: chart_of_accounts.account_id}
 table_roles: {}       # DAT-685 — fact/dimension role vs current table_entities
 semantic_roles: {}    # DAT-685 — semantic_role / business_concept vs current_semantic_annotations
-# DAT-686 — business cycles the finance-9 corpus supports (from the finance cycle
-# vocabulary + corpus structure), graded vs detected_business_cycles. Cycle detection
-# is LLM-inferred, so only the structural-backbone cycles are `required` (a miss is a
-# real gap); others are reported soft. Match = canonical_type + key_tables ⊆ tables_involved.
+# DAT-686 — business cycles the finance-9 corpus REALISTICALLY supports, derived
+# from the finance cycle vocabulary (cycles.yaml) × the corpus's actual tables +
+# completion columns — NOT from what the detector happened to land (that would set
+# the bar where we are, not where it is realistic, and silently accept a dropped
+# cycle). Graded vs detected_business_cycles. Match = canonical_type + key_tables
+# ⊆ tables_involved.
+#
+# The vocabulary has 12 cycles; this corpus supports exactly FOUR — the rest need
+# tables it lacks (order_to_cash/AR: invoices are vendor-side `vendor_id` not
+# customer; procure_to_pay: no PO/requisition/GRN — its tail IS accounts_payable;
+# inventory/hire_to_retire/payroll/asset_lifecycle/intercompany: no such tables).
+# Three have strong structural backbone (status/completion columns + a clear FK
+# chain) → `required`, a miss is a real recall gap:
+#   - journal_entry_cycle   journal_entries.status(draft→posted) → lines → CoA
+#   - accounts_payable      invoices.status(open→paid), vendor_id → payments → bank
+#   - bank_reconciliation   bank_transactions.reconciled (the vocabulary's exact
+#                           completion flag) + payment_id FK → payments  [HIGH value]
+# period_close is real but weakly signalled (no period-status column; `period` is a
+# bare identifier — detector lands it at conf ~0.35) → soft, reported not asserted.
 cycles:
   - {canonical_type: journal_entry_cycle, key_tables: [journal_entries, journal_lines], required: true}
   - {canonical_type: accounts_payable, key_tables: [invoices, payments], required: true}
+  - {canonical_type: bank_reconciliation, key_tables: [bank_transactions, payments], required: true}
   - {canonical_type: period_close, key_tables: [trial_balance, balance_sheet], required: false}
