@@ -104,3 +104,59 @@ def read_temporal_behavior(session: Any) -> dict[str, str]:
         )
     ).all()
     return {f"{short(r.table_name)}.{r.column_name}": r.temporal_behavior for r in rows}
+
+
+def read_structural_witness_fired(session: Any) -> tuple[int, int]:
+    """``(fired, total)`` over this run's ``temporal_behavior`` entropy objects.
+
+    ``fired`` counts objects whose structural-reconciliation witness (DAT-491)
+    produced a pattern (``evidence[0].structural_pattern`` is non-null) — the
+    data-grounded witness that dissents when the two name-based witnesses are
+    fooled together. ``fired == 0`` with ``total > 0`` is the inert-safeguard
+    signature: stock/flow decided by names alone (the DAT-720 regression).
+    """
+    from dataraum.storage.read_views import read_schema_name_for
+    from sqlalchemy import text
+
+    read_schema = read_schema_name_for(
+        str(session.execute(text("SELECT current_schema()")).scalar())
+    )
+    rows = session.execute(
+        text(
+            f'SELECT evidence FROM "{read_schema}".current_entropy_objects '
+            "WHERE detector_id = 'temporal_behavior'"
+        )
+    ).all()
+    total = fired = 0
+    for r in rows:
+        evidence = r.evidence if isinstance(r.evidence, list) else []
+        first = evidence[0] if evidence and isinstance(evidence[0], dict) else {}
+        total += 1
+        if first.get("structural_pattern") is not None:
+            fired += 1
+    return fired, total
+
+
+def read_structural_patterns(session: Any) -> dict[str, str]:
+    """``measure_aggregation_lineage`` pattern per measure, keyed ``"table.column"``.
+
+    The DATA-grounded stock/flow verdict for measures that reconciled against an
+    event fact (DAT-491): ``per_period`` (a flow) or ``cumulative`` (a stock). This
+    is deterministic where it fires — unlike the two name-based witnesses — so it's
+    the surface DAT-685 can grade HARD. A measure that didn't reconcile is absent
+    (name-only, LLM-variable → graded soft).
+    """
+    from sqlalchemy import text
+
+    from calibration.tools._runs import short
+
+    rows = session.execute(
+        text(
+            "SELECT t.table_name AS table_name, c.column_name AS column_name, "
+            "mal.pattern AS pattern "
+            "FROM measure_aggregation_lineage mal "
+            "JOIN columns c ON c.column_id = mal.measure_column_id "
+            "JOIN tables t ON t.table_id = c.table_id"
+        )
+    ).all()
+    return {f"{short(r.table_name)}.{r.column_name}": r.pattern for r in rows}
