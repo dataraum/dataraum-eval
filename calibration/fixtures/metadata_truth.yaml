@@ -179,16 +179,22 @@ stock_flow:
   fx_rates.rate: point_in_time                  # a rate/price level — not additive
 
 # Measures expected to reconcile against a finer event fact via the DAT-491
-# structural stock/flow witness (read_structural_patterns). Only a rollup fact
-# with a finer event fact sharing a slice dimension reconciles: trial_balance ←
-# journal_lines (by account_type). The event facts (journal_lines/invoices/
-# payments/bank_transactions) are the anchors, and balance_sheet/fx_rates have no
-# finer fact — none of those reconcile. DAT-722: BOTH trial_balance measures must
-# reconcile; before declines were cut at the source, a coincidental conf=0.05
-# debit→payments "FK" stripped debit's only convention, so only credit did.
+# structural stock/flow witness (read_structural_patterns). A period-keyed ROLLUP
+# fact reconciles against journal_lines (the finest event fact) by account: the
+# per-period movement tables reconcile `per_period` (a FLOW), and the carry-forward
+# level table reconciles `cumulative` (a STOCK). Audited against the live witness
+# (DAT-685 completeness): it fires on THREE measures, not two — an earlier note
+# here wrongly claimed balance_sheet "has no finer fact"; it reconciles cumulatively
+# against journal_lines and must be covered. The event facts themselves
+# (journal_lines/invoices/payments/bank_transactions) are the anchors and fx_rates
+# is a standalone rate table — none of those roll up a finer fact, so none reconcile.
+# DAT-722: BOTH trial_balance measures must reconcile; before declines were cut at
+# the source, a coincidental conf=0.05 debit→payments "FK" stripped debit's only
+# convention, so only credit did.
 reconciles_structurally:
-  - trial_balance.debit_balance
-  - trial_balance.credit_balance
+  - trial_balance.debit_balance   # per_period → FLOW
+  - trial_balance.credit_balance  # per_period → FLOW
+  - balance_sheet.ending_balance  # cumulative → STOCK (reconciles vs journal_lines)
 
 # --- P1 sibling stubs (unpopulated; owning task noted) -----------------------
 # DAT-684 — the generator's TRUE FK topology (finance-9), from the testdata models'
