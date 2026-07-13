@@ -52,5 +52,5 @@ Shaping division of labor (the ledger prints on every run): skrub `Cleaner`
 *fuzzy* joiner — wrong tool for exact keys), leak-column drops, and derived
 quantities (`days_until_due`, `net_balance`).
 
-Phase 0 verdicts, the full inventory matrix, and shaping notes live in the epic
-(DAT-741 / DAT-742).
+Phase 0 verdicts, the full inventory matrix, and shaping notes:
+[`PHASE0_FINDINGS.md`](PHASE0_FINDINGS.md) (mirrored into the DAT-741 epic).

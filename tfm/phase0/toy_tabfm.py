@@ -42,13 +42,17 @@ def classify() -> str:
 
 
 def regress() -> str:
+    # TabFM moves y to the device BEFORE its float64->float32 guard
+    # (classifier_and_regressor.py:1801) — float64 transfer raises on MPS,
+    # so feed float32 from the harness side.
     model, combo = load_model("regression")
     reg = TabFMRegressor(model=model)
-    reg.fit(Xr_tr, yr_tr)
+    reg.fit(Xr_tr, yr_tr.astype("float32"))
     pred = reg.predict(Xr_te)
     return (
         f"v1.0.0 pytorch on {combo}: r2={r2_score(yr_te, pred):.3f} "
-        f"mae={mean_absolute_error(yr_te, pred):.0f} ({len(Xr_tr)} train rows)"
+        f"mae={mean_absolute_error(yr_te, pred):.0f} ({len(Xr_tr)} train rows; "
+        f"y cast float32 — float64 y crashes on mps upstream)"
     )
 
 
