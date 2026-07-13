@@ -15,6 +15,12 @@ dependencies = [
     "scikit-learn",
     "pyyaml",
     "python-dotenv",
+    # DAT-743 Phase 1: TabPFN's non-core read-outs + classical baselines
+    "tabpfn-extensions",
+    "tabpfn-time-series",
+    "lightgbm",
+    "statsmodels",
+    "scipy",
 ]
 
 [tool.uv.sources]
