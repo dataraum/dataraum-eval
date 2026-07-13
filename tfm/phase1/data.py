@@ -161,6 +161,17 @@ def _posted_line_aggregates(corpus: str) -> pd.DataFrame:
     return agg
 
 
+def fill_cat_na(X: pd.DataFrame) -> pd.DataFrame:
+    """Sentinel-fill missing categoricals ('missing') for the supervised
+    frames — TabICL's sklearn encoder rejects object columns mixing NAType
+    with str. Uniform across engines so the task stays identical."""
+    out = X.copy()
+    for col in out.columns:
+        if not pd.api.types.is_numeric_dtype(out[col]):
+            out[col] = out[col].astype(object).where(out[col].notna(), "missing")
+    return out
+
+
 # --------------------------------------------------------------- P2 tables
 
 _RNG = np.random.default_rng(SEED)
@@ -184,7 +195,7 @@ def p2_net_amount(corpus: str = "p3-clean-s42", n: int = 4000) -> tuple[pd.DataF
     X = df[["debit", "credit", "cost_center", "account_type", "month", "noise_num", "noise_cat"]]
     X = X.assign(debit=pd.to_numeric(X["debit"], errors="coerce").astype(float),
                  credit=pd.to_numeric(X["credit"], errors="coerce").astype(float))
-    return X, y
+    return fill_cat_na(X), y
 
 
 def p2_tb_balance(corpus: str = "p3-clean-s42", side: str = "debit") -> tuple[pd.DataFrame, pd.Series]:
@@ -200,7 +211,7 @@ def p2_tb_balance(corpus: str = "p3-clean-s42", side: str = "debit") -> tuple[pd
     df["noise_num"] = _RNG.normal(size=len(df))
     y = df[f"{side}_balance"].astype(float)
     X = df[["sum_debit", "sum_credit", "n_lines", "account_type", "month", "noise_num"]]
-    return X, y
+    return fill_cat_na(X), y
 
 
 # --------------------------------------------------------------- P4 frames
@@ -278,7 +289,7 @@ def supervised_regression(corpus: str = "p3-clean-s42") -> tuple[pd.DataFrame, p
     X = df.drop(
         columns=[c for c in ("debit", "credit", "net_amount", "line_id", "entry_id", "date") if c in df.columns]
     )
-    return X, y
+    return fill_cat_na(X), y
 
 
 def supervised_classification(corpus: str = "p3-clean-s42") -> tuple[pd.DataFrame, pd.Series]:
@@ -295,7 +306,7 @@ def supervised_classification(corpus: str = "p3-clean-s42") -> tuple[pd.DataFram
     df["month"] = df["date"].dt.month
     y = df["status"].astype(str)
     X = df.drop(columns=["status", "invoice_id", "entry_id", "date", "due_date"])
-    return X, y
+    return fill_cat_na(X), y
 
 
 def p6_table(corpus: str = "p3-clean-s42", n: int = 2000) -> pd.DataFrame:

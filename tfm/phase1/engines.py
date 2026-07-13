@@ -51,6 +51,10 @@ def encode_for_density(
             codes = cat.cat.codes.to_numpy().astype(np.float32)
             codes[codes == -1] = np.nan  # cat.codes uses -1 for NaN
             out[:, j] = codes
+    # corrupt_type injects float64-max-scale tokens that overflow float32 to
+    # inf and fail sklearn validation — treat non-finite as missing (the NaN
+    # itself remains an anomaly trace)
+    out[~np.isfinite(out)] = np.nan
     return out, cat_idx, vocab
 
 
@@ -146,24 +150,28 @@ class TabPFN:
 
         import torch
 
-        Xn, cat_idx, _vocab = encode_for_density(X)
+        Xn, cat_idx, vocab = encode_for_density(X)
         model = TabPFNUnsupervisedModel(tabpfn_clf=self._clf(), tabpfn_reg=self._reg())
         model.set_categorical_features(cat_idx)
         model.fit(Xn)
         filled = model.impute(torch.tensor(Xn))
-        return pd.DataFrame(np.asarray(filled.cpu()), columns=X.columns, index=X.index)
+        return decode_from_density(np.asarray(filled.cpu()), X, vocab)
 
     def feature_importance(self, X: pd.DataFrame, y, task: str):
         """Mean |SHAP| via the shap package's permutation explainer over the
         fitted TabPFN predictor (the tabpfn-extensions documented route)."""
         import shap
 
+        # shap does float arithmetic on the input — feed the ordinal-encoded
+        # matrix (TabPFN takes NaN codes natively; importance is per column)
+        Xn, _, _vocab = encode_for_density(X)
+        Xn = pd.DataFrame(Xn, columns=X.columns)
         model = self._clf() if task == "classification" else self._reg()
-        model.fit(X, y)
+        model.fit(Xn, y)
         fn = model.predict_proba if task == "classification" else model.predict
-        explainer = shap.PermutationExplainer(fn, X, seed=SEED)
+        explainer = shap.PermutationExplainer(fn, Xn, seed=SEED)
         # each explained row costs O(features) full-context predicts — bound it
-        explain = X.sample(n=min(200, len(X)), random_state=SEED)
+        explain = Xn.sample(n=min(200, len(Xn)), random_state=SEED)
         sv = explainer(explain)
         return _shap_to_importance(sv.values, list(X.columns))
 
@@ -215,11 +223,11 @@ class TabICL:
     def impute(self, X: pd.DataFrame):
         from tabicl import TabICLUnsupervised
 
-        Xn, _, _vocab = encode_for_density(X)
+        Xn, _, vocab = encode_for_density(X)
         uns = TabICLUnsupervised(device=DEVICE)
         uns.fit(Xn)
         filled = uns.impute(Xn)
-        return pd.DataFrame(filled, columns=X.columns, index=X.index)
+        return decode_from_density(np.asarray(filled), X, vocab)
 
     def feature_importance(self, X: pd.DataFrame, y, task: str):
         from tabicl import TabICLClassifier, TabICLRegressor
@@ -230,8 +238,10 @@ class TabICL:
             if task == "classification"
             else TabICLRegressor(device=DEVICE)
         )
-        model.fit(X, y)
-        sv = get_shap_values(model, X, attribute_names=list(X.columns))
+        # tabicl.shap casts the matrix to float — feed ordinal codes
+        Xn, _, _vocab = encode_for_density(X)
+        model.fit(Xn, y)
+        sv = get_shap_values(model, Xn, attribute_names=list(X.columns))
         return _shap_to_importance(sv.values, list(X.columns))
 
 
@@ -241,19 +251,19 @@ class TabFM:
     name = "tabfm"
 
     def _load(self, model_type: str):
-        import tabfm_v1_0_0_pytorch as tabfm
+        from tabfm import tabfm_v1_0_0_pytorch
 
-        return tabfm.load(model_type=model_type, device=DEVICE)
+        return tabfm_v1_0_0_pytorch.load(model_type=model_type, device=DEVICE)
 
     def classify(self, X_tr, y_tr, X_te):
-        from tabfm_v1_0_0_pytorch import TabFMClassifier
+        from tabfm import TabFMClassifier
 
         clf = TabFMClassifier(model=self._load("classification"))
         clf.fit(X_tr, y_tr)
         return clf.predict(X_te), clf.predict_proba(X_te), clf.classes_
 
     def regress(self, X_tr, y_tr, X_te):
-        from tabfm_v1_0_0_pytorch import TabFMRegressor
+        from tabfm import TabFMRegressor
 
         reg = TabFMRegressor(model=self._load("regression"))
         # float32: TabFM moves y to mps before its own float64 guard (tabfm#68)

@@ -72,10 +72,11 @@ def main() -> None:
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--scorers", default="isolation_forest,tabicl2,tabpfn3")
     ap.add_argument("--corpora", default=",".join(CORPORA))
+    ap.add_argument("--tables", default=",".join(data.P3_TABLES))
     args = ap.parse_args()
 
     corpora = args.corpora.split(",")
-    tables = data.P3_TABLES
+    tables = tuple(args.tables.split(","))
     n_max = N_MAX
     if args.smoke:
         corpora = ["p3-medium-s42"]

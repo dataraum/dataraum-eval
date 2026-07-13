@@ -1,0 +1,7 @@
+# DAT-743: clean baseline under a FRESH workspace — the legacy 'clean'
+# workspace fails typing on a binder error (stale overlay suspect, see PHASE1_FINDINGS).
+name: clean
+level: clean
+description: "No injections — baseline for precision testing"
+
+injections: []
