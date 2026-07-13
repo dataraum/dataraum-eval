@@ -16,22 +16,23 @@ Machine: MacBook Pro, Apple Silicon, 48 GB RAM.
 
 ## Engine × read-out inventory (measured on mps, toy runs on the shaped corpus)
 
-| read-out | TabPFN | TabICL v2 | TabFM |
+| read-out | TabPFN-3 | TabICL v2 | TabFM |
 |---|---|---|---|
-| classification | OK 13s, acc .904¹ | OK 3s, acc .908 | OK 70s, acc .907 |
-| regression | OK 15s, R² .31¹ | OK 3s, R² .31 | OK 129s, R² .33² |
-| quantiles | OK native, 80% cover .81¹ | OK native, 80% cover .74 | — point only |
+| classification | OK 10s, acc .904 | OK 3s, acc .908 | OK 70s, acc .907 |
+| regression | OK 8s, R² .31 | OK 3s, R² .31 | OK 129s, R² .33² |
+| quantiles | OK native, 80% cover .72¹ | OK native, 80% cover .74 | — point only |
 | forecast | — (separate `tabpfn-time-series` pkg) | OK `TabICLForecaster`, quantile bands (27 account series, h=3) | — |
 | anomaly (density) | — (via `tabpfn-extensions`) | OK `TabICLUnsupervised.score_samples` log-density | — |
 | imputation | — (via `tabpfn-extensions`) | OK `TabICLUnsupervised.impute` | — |
 | feature importance | — (via `tabpfn-extensions`, SHAP) | OK `tabicl.shap` (all-NaN column masking) | — |
 
-¹ TabPFN rows measured on the **TabPFN-2 fallback** (Apache-2.0, ungated) — V3
-auth pending, see caveats. ² With a harness-side float32 cast, see caveats.
+¹ On the same toy split the TabPFN-2 fallback covered .81 and TabICL .74 at
+nominal 80% — single split, no calibration claim; Phase 1 measures reliability
+properly. ² With a harness-side float32 cast, see caveats.
 
 **Headline: TabICL v2 is the only engine with the full native read-out surface —
-including the density-based anomaly read-out P3 needs — and it is ~4× faster
-than TabPFN and ~30× faster than TabFM at these toy sizes.** TabPFN reaches
+including the density-based anomaly read-out P3 needs — and it is ~3× faster
+than TabPFN-3 and ~30× faster than TabFM at these toy sizes.** TabPFN reaches
 anomaly/importance/forecast only via extension packages (Phase 1 should add
 `tabpfn-extensions`). TabFM is classification/regression only, point
 predictions — for P1/P3–P6 it participates only via prediction-based
@@ -52,10 +53,11 @@ Ledger from `phase0/shape.py`: 8 skrub steps / 7 hand steps.
 
 ## Recorded caveats
 
-- **TabPFN-3 gated weights**: non-interactive runs raise `TabPFNLicenseError`
-  with instructions (login → accept license → `TABPFN_TOKEN`). One-time; token
-  cached under `~/.cache/tabpfn/`. Until then the harness falls back to
-  TabPFN-2 automatically, and V3 inventory rows are pending.
+- **TabPFN-3 gated weights** (RESOLVED 2026-07-13): needs `TABPFN_TOKEN` (from
+  ux.priorlabs.ai, loaded from repo-root `.env`) *and* the license accepted on
+  the account — token-valid-but-license-unaccepted still raises
+  `TabPFNLicenseError` (diagnose with `phase0/auth_probe.py`). Without either,
+  the harness falls back to TabPFN-2 (Apache-2.0, ungated) automatically.
 - **TabFM regression × MPS bug**: float64 `y` crashes — the device move precedes
   the model's own float64→float32 guard (`classifier_and_regressor.py:1801`).
   Harness feeds float32; trivially upstream-fixable.
