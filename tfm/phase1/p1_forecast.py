@@ -126,11 +126,16 @@ RUNNERS = {
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--smoke", action="store_true")
+    # NB: never mix lgbm_quantile with the torch engines in ONE process —
+    # lightgbm's libomp and torch's OpenMP clash and abort the process.
     ap.add_argument("--engines", default=",".join(RUNNERS))
+    ap.add_argument("--origins", default=None, help="comma list, e.g. 39,42,45")
     args = ap.parse_args()
 
     series = data.monthly_series()
     origins = (36,) if args.smoke else ORIGINS
+    if args.origins:
+        origins = tuple(int(o) for o in args.origins.split(","))
     if args.smoke:
         keep = series["item_id"].drop_duplicates().sample(12, random_state=42)
         series = series[series["item_id"].isin(keep)]

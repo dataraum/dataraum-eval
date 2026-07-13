@@ -112,7 +112,10 @@ def p3_table(corpus: str, table: str, enriched: bool) -> pd.DataFrame:
     """
     df = load_table(corpus, table)
     drop = [c for c in _OWN_PK[table] if c in df.columns]
-    df = df.drop(columns=drop)
+    # constant columns (e.g. currency=USD everywhere) carry no density signal
+    # and break TabICL's conditional sampler — dropped, rows untouched
+    drop += [c for c in df.columns if df[c].nunique(dropna=True) <= 1]
+    df = df.drop(columns=[*dict.fromkeys(drop)])
 
     if not enriched:
         return df

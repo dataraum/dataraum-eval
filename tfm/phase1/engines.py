@@ -134,7 +134,7 @@ class TabPFN:
     def anomaly_scores(self, X: pd.DataFrame, n_permutations: int = 5):
         from tabpfn_extensions.unsupervised import TabPFNUnsupervisedModel
 
-        Xn, cat_idx = encode_for_density(X)
+        Xn, cat_idx, _vocab = encode_for_density(X)
         model = TabPFNUnsupervisedModel(tabpfn_clf=self._clf(), tabpfn_reg=self._reg())
         model.set_categorical_features(cat_idx)
         model.fit(Xn)
@@ -146,7 +146,7 @@ class TabPFN:
 
         import torch
 
-        Xn, cat_idx = encode_for_density(X)
+        Xn, cat_idx, _vocab = encode_for_density(X)
         model = TabPFNUnsupervisedModel(tabpfn_clf=self._clf(), tabpfn_reg=self._reg())
         model.set_categorical_features(cat_idx)
         model.fit(Xn)
@@ -162,7 +162,9 @@ class TabPFN:
         model.fit(X, y)
         fn = model.predict_proba if task == "classification" else model.predict
         explainer = shap.PermutationExplainer(fn, X, seed=SEED)
-        sv = explainer(X)
+        # each explained row costs O(features) full-context predicts — bound it
+        explain = X.sample(n=min(200, len(X)), random_state=SEED)
+        sv = explainer(explain)
         return _shap_to_importance(sv.values, list(X.columns))
 
 
@@ -205,7 +207,7 @@ class TabICL:
     def anomaly_scores(self, X: pd.DataFrame, n_permutations: int = 4):
         from tabicl import TabICLUnsupervised
 
-        Xn, _ = encode_for_density(X)
+        Xn, _, _vocab = encode_for_density(X)
         uns = TabICLUnsupervised(device=DEVICE)
         uns.fit(Xn)
         return -uns.score_samples(Xn, n_permutations=n_permutations)
@@ -213,7 +215,7 @@ class TabICL:
     def impute(self, X: pd.DataFrame):
         from tabicl import TabICLUnsupervised
 
-        Xn, _ = encode_for_density(X)
+        Xn, _, _vocab = encode_for_density(X)
         uns = TabICLUnsupervised(device=DEVICE)
         uns.fit(Xn)
         filled = uns.impute(Xn)
