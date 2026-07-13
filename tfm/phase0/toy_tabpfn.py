@@ -6,7 +6,10 @@ if auth is pending. Both outcomes are inventory findings.
 """
 
 import numpy as np
-from common import Inventory, clf_split, reg_split
+from common import REPO, Inventory, clf_split, reg_split
+from dotenv import load_dotenv
+
+load_dotenv(REPO / ".env")  # TABPFN_TOKEN for the gated V3 weights
 from sklearn.metrics import accuracy_score, log_loss, mean_absolute_error, r2_score
 from tabpfn import TabPFNClassifier, TabPFNRegressor
 from tabpfn.constants import ModelVersion

@@ -14,6 +14,7 @@ dependencies = [
     "pyarrow",
     "scikit-learn",
     "pyyaml",
+    "python-dotenv",
 ]
 
 [tool.uv.sources]
