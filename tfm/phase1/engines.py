@@ -233,15 +233,21 @@ class TabICL:
         from tabicl import TabICLClassifier, TabICLRegressor
         from tabicl.shap import get_shap_values
 
+        # kv_cache: SHAP replays thousands of predicts against ONE fitted
+        # context — the KV cache pays that context cost once (35 min -> see
+        # findings harness notes for the measured speedup)
         model = (
-            TabICLClassifier(device=DEVICE)
+            TabICLClassifier(device=DEVICE, kv_cache=True)
             if task == "classification"
-            else TabICLRegressor(device=DEVICE)
+            else TabICLRegressor(device=DEVICE, kv_cache=True)
         )
         # tabicl.shap casts the matrix to float — feed ordinal codes
         Xn, _, _vocab = encode_for_density(X)
         model.fit(Xn, y)
-        sv = get_shap_values(model, Xn, attribute_names=list(X.columns))
+        # get_shap_values explains every row given — bound like the TabPFN path
+        rng = np.random.default_rng(SEED)
+        explain = Xn[rng.choice(len(Xn), size=min(200, len(Xn)), replace=False)]
+        sv = get_shap_values(model, explain, attribute_names=list(X.columns))
         return _shap_to_importance(sv.values, list(X.columns))
 
 

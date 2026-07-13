@@ -130,6 +130,9 @@ def main() -> None:
     # lightgbm's libomp and torch's OpenMP clash and abort the process.
     ap.add_argument("--engines", default=",".join(RUNNERS))
     ap.add_argument("--origins", default=None, help="comma list, e.g. 39,42,45")
+    ap.add_argument("--dump", action="store_true",
+                    help="write per-(engine, origin) prediction+actual parquet "
+                         "to output/phase1/p1_preds/ (conformal probe input)")
     args = ap.parse_args()
 
     series = data.monthly_series()
@@ -153,6 +156,14 @@ def main() -> None:
                 rs.record(PROBE, name, config, {"error": f"{type(exc).__name__}: {exc}"})
                 continue
             rs.record(PROBE, name, config, metrics, latency_s=t["s"])
+            if args.dump:
+                cols = _quantile_cols(pred)
+                slim = pred[["item_id", "timestamp", *dict.fromkeys(cols.values())]]
+                slim = slim.rename(columns={v: str(k) for k, v in cols.items()})
+                out = fut.merge(slim, on=["item_id", "timestamp"], validate="1:1")
+                dump_dir = rs.RESULTS_DIR / "p1_preds"
+                dump_dir.mkdir(parents=True, exist_ok=True)
+                out.to_parquet(dump_dir / f"{name}_o{origin}.parquet", index=False)
 
 
 if __name__ == "__main__":

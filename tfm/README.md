@@ -54,3 +54,37 @@ quantities (`days_until_due`, `net_balance`).
 
 Phase 0 verdicts, the full inventory matrix, and shaping notes:
 [`PHASE0_FINDINGS.md`](PHASE0_FINDINGS.md) (mirrored into the DAT-741 epic).
+
+## Phase 1 (DAT-743) — probe harness + P1–P4, P6
+
+Measured probes over the severity-ladder corpora, classical baselines
+included; every result row (metrics + latency) appends to
+`tfm/output/phase1/*.jsonl`. Full findings:
+[`PHASE1_FINDINGS.md`](PHASE1_FINDINGS.md).
+
+```bash
+# corpora (PARENT env — testdata needs Python 3.14):
+uv run python tfm/phase1/generate_corpora.py
+
+# probes (tfm env, cd tfm/phase1). NEVER mix lgbm with the torch engines
+# in one process — duplicate OpenMP runtimes abort on macOS:
+uv run python p1_forecast.py --engines tabpfn3,tabicl2   # + --dump for conformal
+uv run python p1_forecast.py --engines seasonal_naive,ets
+uv run python p1_forecast.py --engines lgbm_quantile
+uv run python p1_conformal.py                            # CQR over dumped preds
+uv run python p2_importance.py --engines lgbm            # then tabicl2,tabpfn3
+uv run python p3_anomaly.py --scorers isolation_forest   # then tabicl2, tabpfn3
+uv run python p4_conditioning.py --engines lgbm          # then tabicl2,tabpfn3,tabfm
+uv run python p6_impute.py                               # all methods
+uv run python tiers.py --engines lgbm                    # then TFM engines
+uv run python report.py all                              # aggregate tables
+
+# detector head-to-head (PARENT env; docker + LLM):
+uv run python -m calibration.run -s tfm-clean,tfm-low,tfm-medium,tfm-high --no-assert
+uv run python tfm/phase1/p3_headtohead.py
+```
+
+Modules: `data.py` (corpus loading + label-preserving probe shaping),
+`ground_truth.py` (DGP facts codified from testdata source, with citations),
+`metrics.py` (named methods only), `engines.py` (uniform adapters),
+`baselines.py`, `results.py` (JSONL store), `report.py`.
