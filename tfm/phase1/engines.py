@@ -27,8 +27,11 @@ SEED = 42
 QUANTILE_LEVELS = [0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975]
 
 
-def encode_for_density(X: pd.DataFrame) -> tuple[np.ndarray, list[int]]:
-    """Ordinal-encode object columns -> float32 matrix + categorical indices.
+def encode_for_density(
+    X: pd.DataFrame,
+) -> tuple[np.ndarray, list[int], dict[str, pd.Index]]:
+    """Ordinal-encode object columns -> float32 matrix, categorical indices,
+    and the per-column category vocabularies (for decoding back).
 
     Shared by the density/imputation read-outs whose engines take bare
     matrices (TabPFN unsupervised wants explicit categorical indices;
@@ -36,16 +39,35 @@ def encode_for_density(X: pd.DataFrame) -> tuple[np.ndarray, list[int]]:
     """
     out = np.empty(X.shape, dtype=np.float32)
     cat_idx: list[int] = []
+    vocab: dict[str, pd.Index] = {}
     for j, col in enumerate(X.columns):
         s = X[col]
         if pd.api.types.is_numeric_dtype(s):
             out[:, j] = s.astype(np.float32)
         else:
             cat_idx.append(j)
-            codes = s.astype("category").cat.codes.to_numpy().astype(np.float32)
+            cat = s.astype("category")
+            vocab[col] = cat.cat.categories
+            codes = cat.cat.codes.to_numpy().astype(np.float32)
             codes[codes == -1] = np.nan  # cat.codes uses -1 for NaN
             out[:, j] = codes
-    return out, cat_idx
+    return out, cat_idx, vocab
+
+
+def decode_from_density(
+    matrix: np.ndarray, template: pd.DataFrame, vocab: dict[str, pd.Index]
+) -> pd.DataFrame:
+    """Inverse of encode_for_density: imputed codes -> original categories
+    (rounded + clipped to the vocabulary), numerics passed through."""
+    out = pd.DataFrame(np.asarray(matrix, dtype=float), columns=template.columns,
+                       index=template.index)
+    for col, cats in vocab.items():
+        codes = out[col].round().clip(0, len(cats) - 1)
+        decoded = pd.Series(pd.NA, index=out.index, dtype=object)
+        ok = codes.notna()
+        decoded[ok] = cats[codes[ok].astype(int)]
+        out[col] = decoded
+    return out
 
 
 def _quantile_matrix(raw: object, levels: list[float], n: int) -> np.ndarray:
