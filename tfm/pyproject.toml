@@ -1,0 +1,23 @@
+[project]
+name = "dataraum-tfm"
+version = "0.1.0"
+description = "TFM capability evaluation track (DAT-741) — engines, shaping, probes"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    # DAT-742: torch 2.13.0 pinned for the MPS flash-attention / Metal SDPA kernels
+    "torch==2.13.0",
+    "tabpfn>=8.1.0",
+    "tabicl[forecast,shap]>=2.1.1",
+    "tabfm[pytorch]",
+    "skrub",
+    "pandas",
+    "pyarrow",
+    "scikit-learn",
+    "pyyaml",
+]
+
+[tool.uv.sources]
+tabfm = { git = "https://github.com/google-research/tabfm" }
+
+[tool.uv]
+package = false
