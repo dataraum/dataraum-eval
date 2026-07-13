@@ -34,11 +34,14 @@ import metrics as mx
 import results as rs
 
 PROBE = "p3_anomaly"
-N_MAX = 4000
+# 2000-row cap + enrichment only where relational visibility is the question
+# (payments: RI breaks; trial_balance: formula gaps) — the 4000-row full-
+# enrichment grid priced TabICL at ~7 min/config, ~4 h/engine sweep.
+N_MAX = 2000
 SEED = 42
 
 CORPORA = ("p3-low-s42", "p3-medium-s42", "p3-high-s42", "p3-medium-s43", "p3-clean-s42")
-ENRICHABLE = ("payments", "journal_lines", "trial_balance")
+ENRICHABLE = ("payments", "trial_balance")
 
 
 def scorers(names: list[str]) -> dict:
