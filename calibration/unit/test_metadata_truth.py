@@ -10,9 +10,14 @@ the fixture would otherwise only surface in a 10-minute run.
 from __future__ import annotations
 
 import pytest
-from testdata.metadata_truth import canonical_metadata_truth
+from testdata.metadata_truth import canonical_metadata_truth, remap_metadata_truth
 
-from calibration.metadata_truth import expected_additivity, load_truth
+from calibration.metadata_truth import (
+    expected_additivity,
+    expected_degenerate_ids,
+    expected_folded_dimensions,
+    load_truth,
+)
 
 # The engine's reason vocabulary (dataraum.graphs.additivity) — the only strings a
 # non-additive axis may carry; a reconciling axis carries None.
@@ -127,6 +132,57 @@ def test_business_concepts_required_is_well_formed() -> None:
     for col, concept in required.items():
         assert str(col).count(".") == 1, f"business_concept key {col!r} must be 'table.column'"
         assert concept and isinstance(concept, str), f"{col}: concept must be a non-empty string"
+
+
+# --- folded dimensions (DAT-757) --------------------------------------------
+# The committed fixture is `full` → no folds; the folded truth is level-specific, so
+# these gates exercise the generator's per-level output directly (ms, no corpus).
+
+
+def test_folded_dimensions_empty_at_full() -> None:
+    """The `full` corpus is normalized — nothing is folded, nothing is degenerate."""
+    truth = load_truth()
+    assert expected_folded_dimensions(truth) == []
+    assert expected_degenerate_ids(truth) == set()
+
+
+@pytest.mark.parametrize("level", ["flat", "single"])
+def test_folded_dimensions_well_formed_at_denormalized_level(level: str) -> None:
+    """Every folded-dimension entry names a concept, a fold key, non-empty attributes,
+    and at least one fact it is folded into (DAT-757)."""
+    folded = expected_folded_dimensions(remap_metadata_truth(canonical_metadata_truth(), level=level))
+    assert folded, f"{level}: expected a folded dimension, got none"
+    for fold in folded:
+        assert fold.get("concept"), f"{level}: folded dim missing concept"
+        assert fold.get("fold_key"), f"{level}: folded dim missing fold_key"
+        attrs = fold.get("attributes") or []
+        assert attrs, f"{level}: folded dim has no attributes"
+        into = fold.get("folded_into") or []
+        assert isinstance(into, list) and into, f"{level}: folded dim not folded into any fact"
+
+
+def test_flat_account_dim_is_shared_across_two_facts() -> None:
+    """The cross-fact identity case: at `flat`, the account concept is folded into BOTH
+    general_ledger and trial_balance → they are ONE dimension (DAT-757 AC)."""
+    folded = expected_folded_dimensions(remap_metadata_truth(canonical_metadata_truth(), level="flat"))
+    account = next((f for f in folded if f["concept"] == "account"), None)
+    assert account is not None, "account folded dimension missing at flat"
+    assert set(account["folded_into"]) >= {"general_ledger", "trial_balance"}
+
+
+@pytest.mark.parametrize("level", ["flat", "single"])
+def test_degenerate_ids_well_formed_and_disjoint_from_folds(level: str) -> None:
+    """Degenerate IDs are `table.column` operational PKs, and none is also a folded
+    attribute or a fold key (an abstain must not be claimed as identity) — DAT-757."""
+    truth = remap_metadata_truth(canonical_metadata_truth(), level=level)
+    degenerate = expected_degenerate_ids(truth)
+    assert degenerate, f"{level}: expected a degenerate operational id"
+    fold_cols = {
+        a for fold in expected_folded_dimensions(truth) for a in [*fold["attributes"], fold["fold_key"]]
+    }
+    for col in degenerate:
+        assert col.count(".") == 1, f"degenerate id {col!r} must be 'table.column'"
+        assert col.split(".", 1)[1] not in fold_cols, f"{col} is both degenerate and a folded column"
 
 
 @pytest.mark.parametrize("target", sorted(expected_additivity(load_truth())))

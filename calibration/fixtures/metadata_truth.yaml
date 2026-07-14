@@ -298,3 +298,5 @@ cycles:
   - trial_balance
   - balance_sheet
   required: false
+folded_dimensions: []
+degenerate_ids: []

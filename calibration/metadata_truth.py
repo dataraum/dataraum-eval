@@ -78,6 +78,23 @@ def expected_additivity(truth: dict[str, Any]) -> dict[tuple[str, str], dict[str
     return out
 
 
+def expected_folded_dimensions(truth: dict[str, Any]) -> list[dict[str, Any]]:
+    """The ``folded_dimensions`` truth (DAT-757) — empty unless the run denormalized.
+
+    Each entry: ``{concept, source_dimension, fold_key, attributes, folded_into}``. Two
+    facts sharing a ``concept`` are ONE dimension (cross-fact identity). The engine
+    reader that grades against this lands with the DAT-757 folded-identity build; until
+    then this flattener + the Tier-1 consistency test bind the truth to the corpus.
+    """
+    return list(truth.get("folded_dimensions") or [])
+
+
+def expected_degenerate_ids(truth: dict[str, Any]) -> set[str]:
+    """The ``degenerate_ids`` truth (DAT-757) — ``table.column`` operational PKs that
+    ground to no concept and must ABSTAIN (no cross-table folded identity)."""
+    return set(truth.get("degenerate_ids") or [])
+
+
 def read_temporal_behavior(session: Any) -> dict[str, str]:
     """``current_column_concepts.temporal_behavior`` keyed ``"table.column"`` (narrow names).
 
