@@ -119,6 +119,28 @@ an event fact — a divergence feeds DAT-685 (stock/flow) or DAT-716 (grain).
 Tier-1 fixture gate `calibration/unit/test_metadata_truth.py`; Tier-3 oracle
 `calibration/test_metric_additivity_e2e.py`.
 
+**Driver ordering (DAT-688) — /ground GATE PASSED → BUILD (2026-07-14).** Does a
+known effect concentrated in ONE dimension value surface in `driver_rankings`? Probe
+ran the engine's real driver core (`dataraum.analysis.drivers`, permutation-gated
+variance-reduction gain, n_perm=500, α=0.05) offline on generated finance data —
+cost_center is assigned per-row at random, so its clean gain ≈ 0 / p ≈ 1 (rank −1),
+the ideal recall substrate; account_type is the natural dominant driver. **Grounded
+design constraint the probe discovered:** the gain reduces between-group MEAN variance,
+so the injection must shift a group **mean** — a *balanced* multiplicative scale
+(`net_amount × f`, mean ≈ 0 per cost_center) stays **invisible even at 3×** (rank −1,
+gain 0.000 — the `slice_variance` mean-blindness wall). A **one-sided** scale
+(`debit × f`) or an additive location shift DO separate: cost_center goes significant
+from the smallest step (f=1.2), gain **monotone** (0.0019 → 0.0070 → 0.0194 → 0.0440
+across f=1.2→3.0), and the injected value tops `interesting_slices` with effect **exactly
+f−1** — a precise, assertable ground truth. It stays rank-1 behind the genuine
+account_type driver, so recall is **ordering** (injected dim becomes significant + its
+slice is top), not "rank #0". ICC/DAT-544 respected by construction: row-grain measure ×
+row-random dimension → η²(clean) ≈ 0 → row permutation null valid (verified in-probe).
+BUILD = a testdata `driver_effect` injection family (scale one cost_center's one-sided
+measure by f) + a Tier-3 oracle asserting significance-vs-clean, gain monotonicity in f,
+and the injected slice = top cost_center slice with effect ≈ f−1. NOT the deferred
+SCM/DAG lane — the fixed schema's cost_center + a mean-shift injection suffice.
+
 ## Measurement catalog
 
 The grounded statistic per measurement, and the honest "earns its place" call. The
