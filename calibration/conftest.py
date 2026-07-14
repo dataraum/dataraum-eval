@@ -220,6 +220,24 @@ def ground_truth(strategy_data_dir: Path) -> dict[str, Any]:
 
 
 @pytest.fixture(scope="session")
+def metadata_truth(strategy_data_dir: Path) -> dict[str, Any]:
+    """Agent-layer ground truth for the current run (DAT-682).
+
+    Prefers the generator's per-run ``metadata_truth.yaml`` (table/column names
+    remapped to THIS run's exported schema — the seam for normalized/wide-variant
+    grading), falling back to the committed canonical fixture for runs generated
+    before the export existed. The metric_additivity section is schema-shape
+    invariant either way.
+    """
+    path = strategy_data_dir / "metadata_truth.yaml"
+    if path.exists():
+        return _load_yaml(path)
+    from calibration.metadata_truth import load_truth
+
+    return load_truth()
+
+
+@pytest.fixture(scope="session")
 def injections(entropy_map: dict[str, Any]) -> list[dict[str, Any]]:
     """List of injection dicts from entropy_map."""
     result: list[dict[str, Any]] = entropy_map.get("injections", [])

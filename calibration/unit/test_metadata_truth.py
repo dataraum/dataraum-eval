@@ -10,6 +10,7 @@ the fixture would otherwise only surface in a 10-minute run.
 from __future__ import annotations
 
 import pytest
+from testdata.metadata_truth import canonical_metadata_truth
 
 from calibration.metadata_truth import expected_additivity, load_truth
 
@@ -26,6 +27,16 @@ _REASONS = {
     "unknown_temporal",
 }
 _DETERMINISM = {"function_symmetry", "label_dependent"}
+
+
+def test_fixture_matches_generator() -> None:
+    """The committed fixture is the testdata generator's export — bind them so they
+    can never drift (DAT-682: dataraum-testdata is the single source of this truth).
+
+    If this fails, the generator changed: rerun ``scripts/regen_metadata_truth.py``
+    (never hand-edit the fixture) or reconcile the generator.
+    """
+    assert load_truth() == canonical_metadata_truth()
 
 
 def test_fixture_loads_and_has_additivity() -> None:
