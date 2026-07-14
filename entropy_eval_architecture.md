@@ -158,6 +158,23 @@ orders exactly by factor with every scaled center above the reference. Not grade
 entropy band detector — `test_detector_recall` skips `detector_id=driver_rankings` with
 an honest `OUT_OF_SLICE_REASON`.
 
+**TIER-3 RUN (2026-07-14) — oracle xfail(strict=False) on a REAL wiring gap it surfaced.**
+First live gate (fresh PG19 stack; the eval Postgres had to be reset PG18→PG19beta1 for the
+DAT-725/PGQ substrate — any Tier-3 run on this branch needs that reset first). The pipeline ran
+end-to-end and the driver phase works (clean `journal_lines.debit` ranks `account_id__name` /
+`account_id__account_type`, `cost_center` present-not-significant = /ground reproduced;
+`bank_transactions.amount` ranks `reconciled`). But the injected `journal_lines.debit` ranking is
+EMPTY (`n_rows=0`, `driver_too_few_candidates n=1`): **the driver's candidate dimensions come
+entirely from the slicing phase (`_candidate_dims` reads `SliceDefinition`), which evaluates only
+REFERENTIAL (FK-joined) dims — never a FOLDED native column like `cost_center`.** So the injected
+driver never enters the candidate set. This is the gap the /ground offline probe missed by
+hand-feeding `cost_center` to the driver core, bypassing the real slicing gate — a kill-gate lesson:
+probe the ACTUAL candidate path, not a hand-fed one. Folded-dimension slicing is being fixed in
+parallel; both oracle tests are `xfail(strict=False)` (reason `_FOLDED_DIM_XFAIL`) so they run every
+calibration and XPASS the moment the fix lands → flip to hard. (Aside: the same run showed the eval
+is broadly un-rebaselined for DAT-725 — roles/relationships/reconciliation oracles fail on view-schema
+drift + several enriched views empty in both runs; that is DAT-736/P11's rebaseline, not DAT-688.)
+
 ## Measurement catalog
 
 The grounded statistic per measurement, and the honest "earns its place" call. The

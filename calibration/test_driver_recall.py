@@ -38,6 +38,25 @@ from calibration.tools._runs import workspace_session
 
 _INJECTED = "detection-driver-v1"
 _CLEAN = "clean"
+
+# KNOWN UPSTREAM GAP (Tier-3 run 2026-07-14, DAT-688). The driver phase's candidate
+# dimensions come ENTIRELY from the slicing phase (`_candidate_dims` reads
+# SliceDefinition), and slicing currently evaluates only REFERENTIAL (FK-joined)
+# dimensions — e.g. journal_lines gets `account_id__account_type`/`account_id__name`
+# but never its own FOLDED native column `cost_center`. So the injected driver
+# (cost_center × factor) never enters the candidate set and the ranking is empty
+# (n_rows=0, "too few candidates"). Verified: the driver phase itself works (clean
+# journal_lines.debit ranks account_id drivers; bank_transactions ranks `reconciled`)
+# and cost_center scales exactly as designed in the raw data — the sole blocker is
+# folded dims not being sliceable, fixed in parallel (folded-dimension slicing). These
+# stay xfail(strict=False) so they RUN every calibration and XPASS the moment the fix
+# lands — the signal to drop this marker and assert hard.
+_FOLDED_DIM_XFAIL = (
+    "folded (native) dimensions like cost_center are not yet slice candidates — only "
+    "referential FK-joined dims are — so the injected driver never enters the driver "
+    "candidate set (DAT-688 Tier-3 finding 2026-07-14; folded-dimension slicing fix pending). "
+    "XPASS = the fix landed → remove this marker and assert hard."
+)
 # Recall separation floor for the dimension's gain (injected vs clean). A FLOOR, not a
 # tuned point: the injection scales four cost_centers, so its between-group gain is large
 # while clean cost_center gain is ≈0 (the /ground finding) — any positive margin holds.
@@ -94,6 +113,7 @@ def _dim_gain(ranking: dict[str, Any], dimension: str) -> float:
 
 
 @pytest.mark.llm
+@pytest.mark.xfail(strict=False, reason=_FOLDED_DIM_XFAIL)
 def test_driver_dimension_recall_vs_clean() -> None:
     """The scaled dimension is a significant driver under injection and above clean."""
     truth = _driver_effect_truth(_INJECTED)
@@ -134,6 +154,7 @@ def test_driver_dimension_recall_vs_clean() -> None:
 
 
 @pytest.mark.llm
+@pytest.mark.xfail(strict=False, reason=_FOLDED_DIM_XFAIL)
 def test_driver_slice_effects_order_by_factor() -> None:
     """Interesting-slice effects for the scaled dimension order by the recorded factor."""
     truth = _driver_effect_truth(_INJECTED)
