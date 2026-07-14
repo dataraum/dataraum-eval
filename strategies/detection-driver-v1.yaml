@@ -1,0 +1,39 @@
+name: detection-driver-v1
+level: high
+description: >
+  Driver-ordering calibration (DAT-688). Makes a categorical dimension a KNOWN
+  driver of a measure: inject_driver_effect scales journal_lines.debit by an
+  ascending factor ladder [1.2, 1.5, 2.0, 3.0] across four (seed-chosen) cost_center
+  values, leaving the fifth at its natural scale as the in-run reference. Because
+  debit is ONE-SIDED (zero on credit lines), scaling a group's rows by f multiplies
+  that group's mean debit by exactly f — a positive slice mean shift the driver
+  phase's permutation-gated variance-reduction gain reads. A higher factor is a
+  stronger driver, so the interesting-slice effects order by factor.
+
+  Grounded (DAT-688 /ground gate, PASSED): a BALANCED net_amount x f scale is
+  invisible to a mean-based statistic (the slice_variance wall); the one-sided
+  debit x f shape separates cleanly and its effect is monotone in f. Row-grain and
+  ICC-safe: cost_center is not an entity key (eta^2 ~ 0 on clean), so the row
+  permutation null is valid (DAT-544). Generative, not memorized: the seed chooses
+  which cost_center gets which factor; the LADDER is the invariant.
+
+  Graded by ORDERING (cost_center significant under injection + effects monotone in
+  the recorded factor + injected slices above the natural reference), never a point
+  threshold (ADR-0009 eval grammar). Not an entropy-band detector — the driver
+  ranking is a driver-discovery oracle graded by calibration/test_driver_recall.py,
+  so test_detector_recall skips detector_id=driver_rankings (see its
+  OUT_OF_SLICE_REASON).
+
+# Oracle: calibration/test_driver_recall.py (Tier-3, docker + Temporal; @pytest.mark.llm)
+#   reads current_driver_rankings for the scaled measure; asserts ordering, not a point.
+
+injections:
+  - injector: inject_driver_effect
+    table: journal_lines
+    detector_id: driver_rankings
+    params:
+      col: debit
+      slice_col: cost_center
+      factors: [1.2, 1.5, 2.0, 3.0]
+      seed: 20260714
+      severity: high

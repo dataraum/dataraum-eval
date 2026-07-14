@@ -141,6 +141,23 @@ measure by f) + a Tier-3 oracle asserting significance-vs-clean, gain monotonici
 and the injected slice = top cost_center slice with effect ≈ f−1. NOT the deferred
 SCM/DAG lane — the fixed schema's cost_center + a mean-shift injection suffice.
 
+**BUILT (2026-07-14).** `inject_driver_effect` (testdata `31538c2`) scales
+`journal_lines.debit` by the whole ascending ladder `[1.2, 1.5, 2.0, 3.0]` across four
+seed-chosen cost_centers in ONE dataset, leaving the fifth at its natural scale as the
+in-run reference — strategy `detection-driver-v1`, oracle
+`calibration/test_driver_recall.py` (Tier-3, `@pytest.mark.llm`), reader
+`read_driver_rankings` over `current_driver_rankings`. Grading is **ordering** (the
+project's mandated grammar), refined from the /ground single-center diagnostic: (a)
+cost_center is a significant driver of the scaled measure and its gain sits a margin
+above clean (recall separation); (b) the `interesting_slices` effects order by the
+recorded factor, reference lowest. The single-center **f−1 identity does NOT survive the
+multi-slice config** — with several groups scaled, each slice effect is relative to the
+now-inflated *shared* baseline, so low-factor slices read *negative* (still strictly
+ordered by factor). The offline generate-verify confirmed per-cost_center mean(debit)
+orders exactly by factor with every scaled center above the reference. Not graded as an
+entropy band detector — `test_detector_recall` skips `detector_id=driver_rankings` with
+an honest `OUT_OF_SLICE_REASON`.
+
 ## Measurement catalog
 
 The grounded statistic per measurement, and the honest "earns its place" call. The

@@ -284,6 +284,54 @@ def read_business_concepts(session: Any) -> dict[str, str]:
     return {f"{short(r.tn)}.{r.cn}": r.bc for r in rows}
 
 
+def read_driver_rankings(session: Any) -> dict[str, dict[str, Any]]:
+    """``current_driver_rankings`` per measure column, keyed ``"table.column"`` (narrow).
+
+    Each value is the persisted :class:`DriverRanking` surface DAT-688 grades:
+    ``{measure_label, target_type, grain, entity, n_rows, ranked_dimensions,
+    interesting_slices, secondary_dimensions}`` — ``ranked_dimensions`` a list of
+    ``(dimension, gain)`` (the primary family's significant dims, strongest first) and
+    ``interesting_slices`` a list of ``{dimension, value, effect, support}`` (sharp
+    slices across the tree). Read from the promoted head's ``current_*`` view — exactly
+    what the answer agent's ``look_drivers`` consumes.
+    """
+    from dataraum.storage.read_views import read_schema_name_for
+    from sqlalchemy import text
+
+    from calibration.tools._runs import short
+
+    read_schema = read_schema_name_for(
+        str(session.execute(text("SELECT current_schema()")).scalar())
+    )
+    rows = session.execute(
+        text(
+            "SELECT t.table_name AS tn, c.column_name AS cn, dr.measure_label AS ml, "
+            "dr.target_type AS tt, dr.grain AS grain, dr.entity AS entity, "
+            "dr.n_rows AS n_rows, dr.ranked_dimensions AS ranked, "
+            "dr.interesting_slices AS slices, dr.secondary_dimensions AS secondary "
+            f'FROM "{read_schema}".current_driver_rankings dr '
+            f'JOIN "{read_schema}".current_columns c ON c.column_id = dr.measure_column_id '
+            f'JOIN "{read_schema}".current_tables t ON t.table_id = dr.measure_table_id'
+        )
+    ).all()
+    return {
+        f"{short(r.tn)}.{r.cn}": {
+            "measure_label": r.ml,
+            "target_type": r.tt,
+            "grain": r.grain,
+            "entity": r.entity,
+            "n_rows": r.n_rows,
+            # JSON columns arrive parsed; ranked as [(dim, gain)] for ergonomic reads.
+            "ranked_dimensions": [
+                (d["dimension"], d["gain"]) for d in (r.ranked or [])
+            ],
+            "interesting_slices": list(r.slices or []),
+            "secondary_dimensions": list(r.secondary or []),
+        }
+        for r in rows
+    }
+
+
 def read_detected_cycles(session: Any) -> list[dict[str, Any]]:
     """Detected business cycles from ``current_detected_business_cycles``.
 

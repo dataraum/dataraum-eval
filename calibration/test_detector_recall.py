@@ -147,7 +147,17 @@ CURRENT_SLICE_DETECTORS = frozenset(
 
 # Why each out-of-slice detector produces no score yet (empty since DAT-432
 # wired validation; repopulate as new phases land ahead of their detect).
-OUT_OF_SLICE_REASON: dict[str, str] = {}
+# ``driver_rankings`` is not an entropy-band detector at all: the driver-discovery
+# phase (DAT-546) emits a per-measure ranking, not a column entropy score, so its
+# injection (inject_driver_effect, DAT-688) is graded by ORDERING in
+# calibration/test_driver_recall.py — never by a band score here.
+OUT_OF_SLICE_REASON: dict[str, str] = {
+    "driver_rankings": (
+        "driver_rankings is a driver-discovery oracle (DAT-688), not a band-scored "
+        "entropy detector — recall is graded by ordering in test_driver_recall.py "
+        "(cost_center significant vs clean + slice effects monotone in factor)"
+    ),
+}
 
 # Detectors where the injection is known-misaligned (documents the gap)
 KNOWN_MISALIGNED = frozenset(
