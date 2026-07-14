@@ -95,6 +95,17 @@ def expected_degenerate_ids(truth: dict[str, Any]) -> set[str]:
     return set(truth.get("degenerate_ids") or [])
 
 
+def expected_bus_matrix(truth: dict[str, Any]) -> dict[str, dict[str, dict[str, str]]]:
+    """The ``bus_matrix`` truth (DAT-756/757): ``{fact: {concept: {provenance, key}}}``.
+
+    Provenance ∈ {referenced, folded, key_only}. The unifying oracle for dimension
+    identity — a correct bus matrix implies correct referenced identity, folded identity,
+    and cross-fact bridging at once. The engine reader (a persisted bus-matrix surface,
+    per Philipp 2026-07-14 "we should persist that") lands with the DAT-756/757 builds.
+    """
+    return dict(truth.get("bus_matrix") or {})
+
+
 def read_temporal_behavior(session: Any) -> dict[str, str]:
     """``current_column_concepts.temporal_behavior`` keyed ``"table.column"`` (narrow names).
 

@@ -300,3 +300,20 @@ cycles:
   required: false
 folded_dimensions: []
 degenerate_ids: []
+bus_matrix:
+  balance_sheet:
+    account:
+      provenance: referenced
+      key: account_id
+  bank_transactions:
+    account:
+      provenance: referenced
+      key: account_id
+  journal_lines:
+    account:
+      provenance: referenced
+      key: account_id
+  trial_balance:
+    account:
+      provenance: referenced
+      key: account_id

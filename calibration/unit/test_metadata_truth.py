@@ -14,10 +14,13 @@ from testdata.metadata_truth import canonical_metadata_truth, remap_metadata_tru
 
 from calibration.metadata_truth import (
     expected_additivity,
+    expected_bus_matrix,
     expected_degenerate_ids,
     expected_folded_dimensions,
     load_truth,
 )
+
+_PROVENANCE = {"referenced", "folded", "key_only"}
 
 # The engine's reason vocabulary (dataraum.graphs.additivity) — the only strings a
 # non-additive axis may carry; a reconciling axis carries None.
@@ -183,6 +186,64 @@ def test_degenerate_ids_well_formed_and_disjoint_from_folds(level: str) -> None:
     for col in degenerate:
         assert col.count(".") == 1, f"degenerate id {col!r} must be 'table.column'"
         assert col.split(".", 1)[1] not in fold_cols, f"{col} is both degenerate and a folded column"
+
+
+# --- bus matrix (DAT-756/757) ------------------------------------------------
+
+
+def test_bus_matrix_full_is_all_referenced() -> None:
+    """The committed (`full`) fixture: every account exposure is a surviving FK."""
+    bus = expected_bus_matrix(load_truth())
+    assert bus, "bus_matrix is empty at full"
+    for fact, concepts in bus.items():
+        for concept, cell in concepts.items():
+            assert cell["provenance"] == "referenced", (fact, concept, cell)
+
+
+@pytest.mark.parametrize("level", ["full", "partial", "flat", "single"])
+def test_bus_matrix_well_formed_and_consistent(level: str) -> None:
+    """Every cell has a legal provenance + a key; folded cells agree with the
+    folded_dimensions section (same concept folded into the same fact)."""
+    truth = remap_metadata_truth(canonical_metadata_truth(), level=level)
+    bus = expected_bus_matrix(truth)
+    assert bus, f"{level}: bus_matrix is empty"
+    folded_pairs = {
+        (fact, fold["concept"])
+        for fold in expected_folded_dimensions(truth)
+        for fact in fold["folded_into"]
+    }
+    bus_folded = set()
+    for fact, concepts in bus.items():
+        for concept, cell in concepts.items():
+            assert cell["provenance"] in _PROVENANCE, (level, fact, concept, cell)
+            assert cell.get("key"), (level, fact, concept, "missing key")
+            if cell["provenance"] == "folded":
+                bus_folded.add((fact, concept))
+    assert bus_folded == folded_pairs, f"{level}: bus folded cells != folded_dimensions"
+
+
+def test_bus_matrix_no_ghost_relationship_targets() -> None:
+    """At levels that remove a dim table, no relationship survives pointing at it —
+    the key_only bus cell is the only remaining record of the exposure."""
+    for level in ("flat", "single"):
+        truth = remap_metadata_truth(canonical_metadata_truth(), level=level)
+        rel_tables = {
+            str(rel[side]).partition(".")[0]
+            for rel in truth.get("relationships") or []
+            for side in ("from", "to")
+        }
+        key_only_facts = {
+            fact
+            for fact, concepts in expected_bus_matrix(truth).items()
+            if any(c["provenance"] == "key_only" for c in concepts.values())
+        }
+        assert "chart_of_accounts" not in rel_tables, level
+        if level == "flat":
+            # at flat, bank_transactions/balance_sheet keep bare account keys;
+            # at single everything folds into mega_table — no key_only remains.
+            assert key_only_facts == {"bank_transactions", "balance_sheet"}
+        else:
+            assert not key_only_facts, f"{level}: unexpected key_only {key_only_facts}"
 
 
 @pytest.mark.parametrize("target", sorted(expected_additivity(load_truth())))
