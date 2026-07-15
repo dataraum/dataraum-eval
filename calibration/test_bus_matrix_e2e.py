@@ -64,6 +64,7 @@ def engine_cells(strategy_name: str) -> list[dict[str, Any]]:
                     "b.concept_label AS concept_label, b.roles AS roles, "
                     "b.attributes AS attributes, "
                     "b.confirmation_source AS confirmation_source, "
+                    "b.conformed_group AS conformed_group, "
                     "b.needs_confirmation AS needs_confirmation "
                     f'FROM "{read_schema}".current_bus_matrix b '
                     "JOIN tables t ON t.table_id = b.fact_table_id"
@@ -82,6 +83,7 @@ def engine_cells(strategy_name: str) -> list[dict[str, Any]]:
             "roles": list(r.roles),
             "attributes": list(r.attributes),
             "confirmation_source": r.confirmation_source,
+            "conformed_group": r.conformed_group,
             "needs_confirmation": r.needs_confirmation,
         }
         for r in rows
@@ -135,18 +137,26 @@ def test_folded_recall_and_conformity(
                 continue
             cells_by_fact[fact] = matches[0]
         if len(facts) >= 2 and len(cells_by_fact) == len(facts):
-            # The cross-fact claim: ONE concept, asserted by the judge. Label
-            # equality is graded among the cells (structure), never vs a word.
+            # The cross-fact claim: ONE conformed_group (the judge's identity
+            # assertion — the DAT-800 group key), with the canonicalized label
+            # shared across the group. Both graded among the cells
+            # (structure), never vs a truth word.
+            groups = {c["conformed_group"] for c in cells_by_fact.values()}
             labels = {c["concept_label"] for c in cells_by_fact.values()}
             sources = {c["confirmation_source"] for c in cells_by_fact.values()}
-            if len(labels) != 1:
+            if len(groups) != 1 or None in groups:
                 problems.append(
-                    f"fold {key!r}: facts {facts} carry distinct labels {sorted(labels)} "
-                    "— cross-fact identity not conformed"
+                    f"fold {key!r}: facts {facts} carry conformed_group={sorted(map(str, groups))}"
+                    " — cross-fact identity not conformed"
+                )
+            elif len(labels) != 1:
+                problems.append(
+                    f"fold {key!r}: one conformed_group but drifting labels {sorted(labels)} "
+                    "— the conform pass's canonicalization is broken"
                 )
             elif sources != {"judge"}:
                 problems.append(
-                    f"fold {key!r}: shared label but confirmation_source={sorted(sources)} "
+                    f"fold {key!r}: conformed but confirmation_source={sorted(sources)} "
                     "(expected the conform judge's claim)"
                 )
     assert not problems, "; ".join(problems)
