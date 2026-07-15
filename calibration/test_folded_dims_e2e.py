@@ -71,12 +71,20 @@ def test_folded_dimension_recall(
         )
     runner_mod.activate_workspace(strategy_name)
 
+    from dataraum.storage.read_views import read_schema_name_for
+
     with workspace_session() as session:
+        # The current_* views live in the per-workspace READ schema — the same
+        # promoted-head surface the cockpit consumes (read_metric_additivity's
+        # pattern).
+        read_schema = read_schema_name_for(
+            str(session.execute(text("SELECT current_schema()")).scalar())
+        )
         rows = session.execute(
             text(
                 "SELECT t.table_name AS table_name, h.kind AS kind, "
                 "h.members AS members, h.needs_confirmation AS needs_confirmation "
-                "FROM current_dimension_hierarchies h "
+                f'FROM "{read_schema}".current_dimension_hierarchies h '
                 "JOIN tables t ON t.table_id = h.table_id"
             )
         ).all()
