@@ -259,6 +259,13 @@ def activate_workspace(strategy: str) -> str:
     task_queue = f"engine-{workspace_id}"
     os.environ["DATARAUM_WORKSPACE_ID"] = workspace_id
     os.environ["TEMPORAL_TASK_QUEUE"] = task_queue
+    # Every rendered prompt + raw agent response, dumped at the provider
+    # chokepoint (engine settings.prompt_dump_dir) — the run's produced
+    # metadata is only auditable when what the agents SAW and SAID is on disk
+    # (an empty forced-tool call is invisible in token logs).
+    prompt_dir = OUTPUT_DIR / strategy / "prompts"
+    prompt_dir.mkdir(parents=True, exist_ok=True)
+    os.environ["PROMPT_DUMP_DIR"] = str(prompt_dir)
     # One workspace per DuckLake (DAT-767): the lake catalog's raw/typed/
     # quarantine schemas are GLOBAL with bare table names, so strategies sharing
     # one catalog CREATE-OR-REPLACE each other's physical tables. Each strategy

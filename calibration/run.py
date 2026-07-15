@@ -140,6 +140,13 @@ def main() -> None:
     if args.reset:
         print("[reset] tearing down the eval stack + volume (down -v)")
         stack.down(volumes=True)
+        # A sidecar describes a run in the wiped volume — stale by definition.
+        # Leaving it makes _activate_or_skip treat the NEXT batch's not-yet-run
+        # strategies as runnable, so their e2e tests read empty workspaces
+        # during the first strategy's assert pass (phantom all-missing block).
+        for sidecar in runner.OUTPUT_DIR.glob("*/calibration_run.json"):
+            sidecar.unlink()
+            print(f"[reset] removed stale sidecar {sidecar}")
         return
 
     if args.all:
