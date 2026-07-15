@@ -13,7 +13,10 @@ skips. Two layers:
   every folded attribute. Detection is the v4 stats stack (``g3`` +
   perm-p/BH/λ — deterministic, no LLM), so this asserts hard: a miss is a
   finding, not noise. ``needs_confirmation`` rows count as detected — presence
-  is graded, not confidence (the DAT-762 judge will rule on those).
+  is graded, not confidence (the DAT-762 judge will rule on those). A fold
+  attribute whose exported domain is DEGENERATE (≤1 distinct — e.g. a
+  single-currency corpus) is exempt: nothing groupable exists and the engine
+  is right to ignore it (Philipp's ruling, 2026-07-16).
 
 The persisted bus-matrix cells themselves are graded in DAT-762 Phase E once
 the engine persists them; until then ``expected_bus_matrix`` grades shape only.
@@ -21,6 +24,7 @@ the engine persists them; until then ``expected_bus_matrix`` grades shape only.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -58,10 +62,29 @@ def test_folded_truth_shape(
             assert cell["key"] == key
 
 
+def _degenerate_domain_columns(
+    data_dir: Path, fact: str, columns: set[str]
+) -> set[str]:
+    """The subset of *columns* with ≤1 distinct value in the exported fact data."""
+    import duckdb
+
+    csv = data_dir / f"{fact}.csv"
+    if not csv.exists():
+        return set()
+    cols = sorted(columns)
+    row = duckdb.connect().execute(
+        "SELECT "
+        + ", ".join(f'COUNT(DISTINCT "{c}")' for c in cols)
+        + f" FROM '{csv}'"
+    ).fetchone()
+    assert row is not None
+    return {c for c, d in zip(cols, row, strict=True) if int(d) <= 1}
+
+
 def test_folded_dimension_recall(
-    folds: list[dict[str, Any]], strategy_name: str
+    folds: list[dict[str, Any]], strategy_name: str, strategy_data_dir: Path
 ) -> None:
-    """Every folded attribute is grouped to its fold key by the engine."""
+    """Every folded attribute with a live domain is grouped to its fold key."""
     from sqlalchemy import text
 
     if not runner_mod.sidecar_path(strategy_name).exists():
@@ -99,7 +122,10 @@ def test_folded_dimension_recall(
         expected = {fold["fold_key"], *fold["attributes"]}
         for fact in fold["folded_into"]:
             got = grouped_cols.get(fact, set())
-            for col in sorted(expected - got):
+            degenerate = _degenerate_domain_columns(strategy_data_dir, fact, expected - got)
+            for col in sorted(degenerate):
+                print(f"exempt (degenerate domain, ≤1 distinct): {fact}.{col}")
+            for col in sorted(expected - got - degenerate):
                 missing.append(f"{fact}.{col} (concept {fold['concept']})")
 
     assert not missing, (
