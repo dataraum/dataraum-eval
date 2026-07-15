@@ -254,13 +254,20 @@ def read_candidate_relationship(
     return None
 
 
-def expected_relationships(truth: dict[str, Any]) -> set[tuple[str, str, str, str]]:
-    """Flatten the ``relationships`` truth to ``(from_table, from_col, to_table, to_col)``."""
-    out: set[tuple[str, str, str, str]] = set()
+def expected_relationships(truth: dict[str, Any]) -> dict[tuple[str, str, str, str], bool]:
+    """``relationships`` truth as ``(from_table, from_col, to_table, to_col) -> direction_reliable``.
+
+    ``direction_reliable=False`` means a merge destroyed the parent side's grain
+    (e.g. ``journal_entries.entry_id`` repeats per general_ledger line at flat),
+    so the engine's uniqueness-canonical orientation (#495 many→one) may
+    legitimately flip — grade the edge in EITHER direction (Philipp's ruling,
+    2026-07-16). An absent flag (canonical/full truth) means reliable.
+    """
+    out: dict[tuple[str, str, str, str], bool] = {}
     for rel in truth.get("relationships") or []:
         ft, fc = str(rel["from"]).split(".", 1)
         tt, tc = str(rel["to"]).split(".", 1)
-        out.add((ft, fc, tt, tc))
+        out[(ft, fc, tt, tc)] = bool(rel.get("direction_reliable", True))
     return out
 
 

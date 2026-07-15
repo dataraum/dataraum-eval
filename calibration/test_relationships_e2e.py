@@ -73,7 +73,16 @@ def test_relationship_recall(metadata_truth: dict[str, Any]) -> None:
         if not true_fks:
             pytest.skip("no relationships ground truth declared")
 
-        missing = [t for t in sorted(true_fks) if not _satisfies(t, defined)]
+        missing = [
+            t
+            for t, reliable in sorted(true_fks.items())
+            if not (
+                _satisfies(t, defined)
+                # direction_reliable=False: the merge destroyed the parent
+                # grain — either orientation satisfies (ruling 2026-07-16).
+                or (not reliable and _satisfies((t[2], t[3], t[0], t[1]), defined))
+            )
+        ]
         print(f"\n[relationship recall] {len(true_fks) - len(missing)}/{len(true_fks)} true FKs confirmed")
         for t in missing:
             # Self-documenting miss (learned 2026-07-15, DAT-763 follow-up): a
@@ -103,7 +112,14 @@ def test_relationship_precision(metadata_truth: dict[str, Any]) -> None:
     if not defined:
         pytest.skip("no defined relationships produced")
 
-    spurious = [d for d in sorted(defined) if not any(_satisfies(t, {d}) for t in true_fks)]
+    spurious = [
+        d
+        for d in sorted(defined)
+        if not any(
+            _satisfies(t, {d}) or (not reliable and _satisfies((t[2], t[3], t[0], t[1]), {d}))
+            for t, reliable in true_fks.items()
+        )
+    ]
     print(f"\n[relationship precision] {len(defined) - len(spurious)}/{len(defined)} defined edges are true FKs")
     for d in spurious:
         print(f"  SPURIOUS: {d[0]}.{d[1]} -> {d[2]}.{d[3]}")
