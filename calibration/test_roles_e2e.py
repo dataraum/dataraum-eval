@@ -3,8 +3,9 @@
 Grades the agent's role/semantic surfaces against ground truth authored from the
 generator STRUCTURE (not detector output):
 
-* ``current_table_entities`` — is_fact_table (HARD where structure decides it),
-  ``detected_entity_type`` (reported: free text, no ontology vocabulary to grade).
+* ``current_table_entities`` — ``table_role`` (DAT-728: fact | periodic_snapshot |
+  dimension; HARD where structure decides it), ``detected_entity_type`` (reported:
+  free text, no ontology vocabulary to grade).
 * ``current_semantic_annotations`` — semantic_role. measure + timestamp are HARD
   (load-bearing: drivers_phase filters ``semantic_role='measure'``, slicing reads
   timestamps); key/dimension/attribute are reported (convention-dependent).
@@ -64,8 +65,7 @@ def test_fact_dimension_roles() -> None:
     for tbl in sorted(entities):
         e = entities[tbl]
         tag = "fact" if tbl in facts else "dim" if tbl in dims else "ambiguous" if tbl in ambiguous else "?"
-        print(f"  {tbl:<22} is_fact={e['is_fact']!s:<5} is_dim={e['is_dimension']!s:<5} "
-              f"entity={e['entity_type']!r}  [{tag}]")
+        print(f"  {tbl:<22} role={e['role']!s:<18} entity={e['entity_type']!r}  [{tag}]")
 
     wrong: list[str] = []
     for tbl in sorted(facts):
@@ -73,13 +73,13 @@ def test_fact_dimension_roles() -> None:
         if ent is None:
             wrong.append(f"  {tbl}: expected FACT, absent from table_entities")
         elif not ent["is_fact"]:
-            wrong.append(f"  {tbl}: expected FACT, got is_fact={ent['is_fact']} is_dim={ent['is_dimension']}")
+            wrong.append(f"  {tbl}: expected FACT, got table_role={ent['role']!r}")
     for tbl in sorted(dims):
         ent = entities.get(tbl)
         if ent is None:
             wrong.append(f"  {tbl}: expected DIMENSION, absent from table_entities")
         elif ent["is_fact"] or not ent["is_dimension"]:
-            wrong.append(f"  {tbl}: expected DIMENSION, got is_fact={ent['is_fact']} is_dim={ent['is_dimension']}")
+            wrong.append(f"  {tbl}: expected DIMENSION, got table_role={ent['role']!r}")
 
     assert not wrong, (
         "fact/dimension classification is wrong where structure is unambiguous "

@@ -229,11 +229,15 @@ def expected_relationships(truth: dict[str, Any]) -> set[tuple[str, str, str, st
 
 
 def read_table_entities(session: Any) -> dict[str, dict[str, Any]]:
-    """``current_table_entities`` per table (narrow name): ``{is_fact, is_dimension,
-    entity_type}``.
+    """``current_table_entities`` per table (narrow name): ``{role, is_fact,
+    is_dimension, entity_type}``.
 
-    The table-level role surface DAT-685 grades — is_fact_table HARD where structure
-    decides it, ``detected_entity_type`` reported (free text, no ontology vocabulary).
+    The table-level role surface DAT-685 grades — ``table_role`` (DAT-728:
+    fact | periodic_snapshot | dimension, replacing the two booleans) HARD where
+    structure decides it, ``detected_entity_type`` reported (free text, no
+    ontology vocabulary). ``is_fact``/``is_dimension`` are derived here so the
+    grading semantics stay put: a measure-bearing periodic snapshot IS a fact
+    table for role-accuracy purposes.
     """
     from dataraum.storage.read_views import read_schema_name_for
     from sqlalchemy import text
@@ -245,16 +249,17 @@ def read_table_entities(session: Any) -> dict[str, dict[str, Any]]:
     )
     rows = session.execute(
         text(
-            "SELECT t.table_name AS tn, te.is_fact_table AS f, "
-            "te.is_dimension_table AS d, te.detected_entity_type AS et "
+            "SELECT t.table_name AS tn, te.table_role AS role, "
+            "te.detected_entity_type AS et "
             f'FROM "{read_schema}".current_table_entities te '
             f'JOIN "{read_schema}".current_tables t ON t.table_id = te.table_id'
         )
     ).all()
     return {
         short(r.tn): {
-            "is_fact": bool(r.f),
-            "is_dimension": bool(r.d),
+            "role": r.role,
+            "is_fact": r.role in ("fact", "periodic_snapshot"),
+            "is_dimension": r.role == "dimension",
             "entity_type": r.et,
         }
         for r in rows
