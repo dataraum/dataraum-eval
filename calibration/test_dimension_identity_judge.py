@@ -69,7 +69,11 @@ def _judge() -> Any:
 
 
 def _routed_cells() -> list[tuple[dict[str, Any], str]]:
-    from dataraum.analysis.hierarchies import routing
+    import importlib
+
+    # Dynamic import: the installed engine may predate the module (mypy runs
+    # against vendored main; the importorskip at module top gates execution).
+    routing = importlib.import_module("dataraum.analysis.hierarchies.routing")
 
     cells = json.loads(_FIXTURE.read_text())["cells"]
     out = []

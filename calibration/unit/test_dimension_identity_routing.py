@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -54,7 +54,7 @@ _PROTECTED = {
 
 
 def _cells() -> list[dict[str, Any]]:
-    return json.loads(_FIXTURE.read_text())["cells"]
+    return cast("list[dict[str, Any]]", json.loads(_FIXTURE.read_text())["cells"])
 
 
 def _evidence(col: dict[str, Any]) -> Any:
@@ -70,8 +70,8 @@ def _route(cell: dict[str, Any]) -> str | None:
     """Route one asserted cell through the engine's router, arm by C1 verdict."""
     a, b = _evidence(cell["col_a"]), _evidence(cell["col_b"])
     if cell["c1_verdict"] == "MERGE":
-        return routing.route_alias(a, b)
-    return routing.route_edge(a, b)
+        return cast("str | None", routing.route_alias(a, b))
+    return cast("str | None", routing.route_edge(a, b))
 
 
 def _asserted(cell: dict[str, Any]) -> bool:
