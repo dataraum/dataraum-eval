@@ -9,7 +9,7 @@ generator STRUCTURE (not detector output):
 * ``current_semantic_annotations`` — semantic_role. measure + timestamp are HARD
   (load-bearing: drivers_phase filters ``semantic_role='measure'``, slicing reads
   timestamps); key/dimension/attribute are reported (convention-dependent).
-* ``current_column_concepts`` — business_concept. The measure→ontology-concept
+* ``current_column_concepts`` — meaning presence (DAT-769). The measure→ontology-concept
   bindings metric grounding depends on are HARD; dimension bindings are reported.
 
 The determinism split is the DAT-685 rule: HARD only where structurally
@@ -24,7 +24,7 @@ import pytest
 from calibration import runner as runner_mod
 from calibration.metadata_truth import (
     load_truth,
-    read_business_concepts,
+    read_column_meanings,
     read_semantic_roles,
     read_table_entities,
 )
@@ -155,34 +155,26 @@ def test_timestamp_role_recall() -> None:
 
 
 @pytest.mark.llm
-def test_business_concept_grounding() -> None:
-    """The measure→ontology-concept bindings metric grounding needs are present (HARD).
+def test_column_meanings_present() -> None:
+    """Every column metric grounding depends on carries an authored meaning (DAT-769).
 
-    A missing binding means the metric cannot ground its measure. Dimension-concept
-    bindings (account/currency/fiscal_period/entity) are LLM-selective discriminators
-    — printed for review, not required.
+    The exact-binding oracle is RETIRED — meanings are graded at the CONSUMERS
+    (cycle recall, reconciliation coverage, /deliver accuracy), never as strings
+    against a fixed truth. This smoke pins the presence contract only; the
+    printout is for human inspection of grounding-context quality.
     """
     _activate_or_skip()
     with workspace_session() as session:
-        concepts = read_business_concepts(session)
+        meanings = read_column_meanings(session)
 
-    required: dict[str, str] = load_truth().get("business_concepts", {}).get("required") or {}
-    assert required, "no required business_concept bindings declared"
+    required_cols = load_truth().get("business_concepts", {}).get("required") or {}
+    print(f"\n[column meanings] {len(meanings)} columns carry a meaning")
+    for c, m in sorted(meanings.items()):
+        print(f"  {c}: {m[:110]}")
 
-    wrong: list[str] = []
-    for col, want in sorted(required.items()):
-        got = concepts.get(col)
-        marker = "✓" if got == want else "✗"
-        print(f"  {marker} {col}: {got!r} (need {want!r})")
-        if got != want:
-            wrong.append(f"  {col}: bound {got!r}, need {want!r}")
-
-    extra = {c: b for c, b in sorted(concepts.items()) if c not in required}
-    print("[business_concept — reported (dimension bindings, not required)]:")
-    for c, b in extra.items():
-        print(f"  {c} -> {b}")
-
-    assert not wrong, (
-        "a measure→ontology-concept binding metric grounding depends on is wrong or "
-        "missing:\n" + "\n".join(wrong)
+    assert meanings, "no column carries a meaning — the grounding context is empty"
+    missing = [c for c in required_cols if c not in meanings]
+    assert not missing, (
+        "columns metric grounding depends on carry no meaning:\n"
+        + "\n".join(f"  {c}" for c in missing)
     )

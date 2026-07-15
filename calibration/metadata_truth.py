@@ -327,11 +327,12 @@ def read_semantic_roles(session: Any) -> dict[str, str]:
     return {f"{short(r.tn)}.{r.cn}": r.role for r in rows}
 
 
-def read_business_concepts(session: Any) -> dict[str, str]:
-    """Non-null ``current_column_concepts.business_concept`` keyed ``"table.column"``.
+def read_column_meanings(session: Any) -> dict[str, str]:
+    """Non-null ``current_column_concepts.meaning`` keyed ``"table.column"`` (DAT-769).
 
-    The ontology-concept binding DAT-685 grades — the measure→concept bindings metric
-    grounding depends on (HARD) plus the reported dimension-concept bindings.
+    The binding oracle is RETIRED (grade consumers, not mappings — DAT-769); this
+    read supports the meaning-PRESENCE smoke only. Meaning contents are never
+    graded against fixed strings.
     """
     from dataraum.storage.read_views import read_schema_name_for
     from sqlalchemy import text
@@ -343,11 +344,11 @@ def read_business_concepts(session: Any) -> dict[str, str]:
     )
     rows = session.execute(
         text(
-            "SELECT t.table_name AS tn, c.column_name AS cn, cc.business_concept AS bc "
+            "SELECT t.table_name AS tn, c.column_name AS cn, cc.meaning AS bc "
             f'FROM "{read_schema}".current_column_concepts cc '
             f'JOIN "{read_schema}".current_columns c ON c.column_id = cc.column_id '
             f'JOIN "{read_schema}".current_tables t ON t.table_id = c.table_id '
-            "WHERE cc.business_concept IS NOT NULL"
+            "WHERE cc.meaning IS NOT NULL"
         )
     ).all()
     return {f"{short(r.tn)}.{r.cn}": r.bc for r in rows}
