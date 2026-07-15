@@ -61,11 +61,15 @@ def _judge() -> Any:
     os.environ.setdefault("S3_SECRET_ACCESS_KEY", stack.S3_SECRET_ACCESS_KEY)
 
     from dataraum.analysis.hierarchies.judge import DimensionIdentityJudge
+    from dataraum.llm import create_provider, load_llm_config
 
-    judge = DimensionIdentityJudge.from_config()
-    if judge is None:
-        pytest.skip("dimension_identity_judgment disabled in llm config")
-    return judge
+    # Construct like the phase does (config + provider, fail loud) — this is
+    # the live-LLM leg, so a misconfiguration is a test failure, not a skip.
+    config = load_llm_config()
+    provider = create_provider(
+        config.active_provider, config.providers[config.active_provider].model_dump()
+    )
+    return DimensionIdentityJudge(config=config, provider=provider)
 
 
 def _routed_cells() -> list[tuple[dict[str, Any], str]]:
