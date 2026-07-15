@@ -108,6 +108,57 @@ DUCKLAKE_CATALOG_URL = (
 )
 
 
+def lake_catalog_db_for(strategy: str) -> str:
+    """The per-strategy DuckLake catalog database name (DAT-767).
+
+    One workspace per DuckLake is the engine's intended shape — its lake catalog
+    holds GLOBAL ``raw``/``typed``/``quarantine`` schemas with bare table names,
+    so two workspaces sharing one catalog silently ``CREATE OR REPLACE`` each
+    other's physical tables (the last importer owns the shape; the other
+    workspace's re-run then types against a foreign body — the DAT-767 binder
+    error). Postgres identifier limit is 63 bytes; strategy slugs are truncated
+    defensively (uniqueness holds for every current strategy name).
+    """
+    slug = "".join(ch if ch.isalnum() else "_" for ch in strategy.lower())
+    return f"{POSTGRES_LAKE_CATALOG_DB}_{slug}"[:63]
+
+
+def lake_env_for(strategy: str) -> dict[str, str]:
+    """Per-strategy DuckLake env (catalog URL + data path), see :func:`lake_catalog_db_for`."""
+    db = lake_catalog_db_for(strategy)
+    slug = db.removeprefix(f"{POSTGRES_LAKE_CATALOG_DB}_")
+    return {
+        "DUCKLAKE_CATALOG_URL": (
+            f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}"
+            f"@{POSTGRES_HOST}:{POSTGRES_PORT}/{db}"
+        ),
+        "DUCKLAKE_DATA_PATH": f"s3://{S3_BUCKET}/lake/{slug}",
+    }
+
+
+def ensure_lake_catalog_db(db_name: str) -> None:
+    """Create the per-strategy lake catalog database if absent (idempotent).
+
+    ``CREATE DATABASE`` cannot run inside a transaction — psycopg autocommit
+    against the base metadata DB. The eval project's ``--reset`` (``down -v``)
+    drops the whole Postgres volume, taking every per-strategy catalog with it,
+    so no separate cleanup path is needed.
+    """
+    import psycopg
+
+    with psycopg.connect(
+        f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}"
+        f"@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}",
+        autocommit=True,
+    ) as conn:
+        exists = conn.execute(
+            "SELECT 1 FROM pg_database WHERE datname = %s", (db_name,)
+        ).fetchone()
+        if not exists:
+            # Identifier is derived (sanitized slug), not user input.
+            conn.execute(f'CREATE DATABASE "{db_name}"')
+
+
 def _ensure_env_file() -> None:
     """Write the .env that vendor's compose file consumes via --env-file."""
     lines = [

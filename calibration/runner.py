@@ -259,6 +259,13 @@ def activate_workspace(strategy: str) -> str:
     task_queue = f"engine-{workspace_id}"
     os.environ["DATARAUM_WORKSPACE_ID"] = workspace_id
     os.environ["TEMPORAL_TASK_QUEUE"] = task_queue
+    # One workspace per DuckLake (DAT-767): the lake catalog's raw/typed/
+    # quarantine schemas are GLOBAL with bare table names, so strategies sharing
+    # one catalog CREATE-OR-REPLACE each other's physical tables. Each strategy
+    # gets its own catalog DB + data-path prefix; the worker subprocess inherits
+    # this env.
+    stack.ensure_lake_catalog_db(stack.lake_catalog_db_for(strategy))
+    os.environ.update(stack.lake_env_for(strategy))
     # The worker's polling check + the client's task_queue read these module
     # mirrors, not the env, so keep them in lockstep with the env above.
     stack.DATARAUM_WORKSPACE_ID = workspace_id
