@@ -218,6 +218,42 @@ def read_defined_relationships(session: Any) -> set[tuple[str, str, str, str]]:
     return {(short(r.ft), r.fc, short(r.tt), r.tc) for r in rows}
 
 
+def read_candidate_relationship(
+    session: Any, from_table: str, from_col: str, to_table: str, to_col: str
+) -> dict[str, Any] | None:
+    """The judge-DECLINED row for one pair, if any: ``{confidence, evidence}``.
+
+    Diagnostic for a recall miss: since DAT-699 a declined pair persists as
+    ``detection_method='candidate'`` with the judge's evidence/reasoning kept — so
+    a flaked decline is auditable in the failing run itself. Narrow table names;
+    direction-insensitive (the judge's orientation is not run-stable). Returns
+    None when the pair never became a candidate (a Layer-A gap, not a judge
+    decline — a different bug class).
+    """
+    from sqlalchemy import text
+
+    from calibration.tools._runs import short
+
+    rows = session.execute(
+        text(
+            "SELECT ft.table_name AS ft, fc.column_name AS fc, "
+            "tt.table_name AS tt, tc.column_name AS tc, "
+            "r.confidence AS confidence, r.evidence AS evidence "
+            "FROM relationships r "
+            "JOIN columns fc ON fc.column_id = r.from_column_id "
+            "JOIN tables ft ON ft.table_id = fc.table_id "
+            "JOIN columns tc ON tc.column_id = r.to_column_id "
+            "JOIN tables tt ON tt.table_id = tc.table_id "
+            "WHERE r.detection_method = 'candidate'"
+        )
+    ).all()
+    want = {(from_table, from_col, to_table, to_col), (to_table, to_col, from_table, from_col)}
+    for r in rows:
+        if (short(r.ft), r.fc, short(r.tt), r.tc) in want:
+            return {"confidence": r.confidence, "evidence": r.evidence}
+    return None
+
+
 def expected_relationships(truth: dict[str, Any]) -> set[tuple[str, str, str, str]]:
     """Flatten the ``relationships`` truth to ``(from_table, from_col, to_table, to_col)``."""
     out: set[tuple[str, str, str, str]] = set()

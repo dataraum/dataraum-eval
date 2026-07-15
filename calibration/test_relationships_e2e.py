@@ -26,6 +26,7 @@ from calibration import runner as runner_mod
 from calibration.metadata_truth import (
     expected_relationships,
     load_truth,
+    read_candidate_relationship,
     read_defined_relationships,
 )
 from calibration.tools._runs import workspace_session
@@ -63,14 +64,24 @@ def test_relationship_recall() -> None:
     with workspace_session() as session:
         defined = read_defined_relationships(session)
 
-    true_fks = expected_relationships(load_truth())
-    if not true_fks:
-        pytest.skip("no relationships ground truth declared")
+        true_fks = expected_relationships(load_truth())
+        if not true_fks:
+            pytest.skip("no relationships ground truth declared")
 
-    missing = [t for t in sorted(true_fks) if not _satisfies(t, defined)]
-    print(f"\n[relationship recall] {len(true_fks) - len(missing)}/{len(true_fks)} true FKs confirmed")
-    for t in missing:
-        print(f"  MISSING: {t[0]}.{t[1]} -> {t[2]}.{t[3]}")
+        missing = [t for t in sorted(true_fks) if not _satisfies(t, defined)]
+        print(f"\n[relationship recall] {len(true_fks) - len(missing)}/{len(true_fks)} true FKs confirmed")
+        for t in missing:
+            # Self-documenting miss (learned 2026-07-15, DAT-763 follow-up): a
+            # declined pair persists as 'candidate' with the judge's evidence, so
+            # print WHY before the workspace is reset — decline-with-reasoning is
+            # a judge/prompt issue, no candidate at all is a Layer-A gap.
+            cand = read_candidate_relationship(session, *t)
+            verdict = (
+                f"judge DECLINED at confidence {cand['confidence']}: {cand['evidence']!r}"
+                if cand
+                else "never a candidate (Layer-A gap)"
+            )
+            print(f"  MISSING: {t[0]}.{t[1]} -> {t[2]}.{t[3]} — {verdict}")
     assert not missing, (
         "true FKs (generator topology) absent from the judge-confirmed catalog — a "
         "real recall gap:\n" + "\n".join(f"  {t[0]}.{t[1]} -> {t[2]}.{t[3]}" for t in missing)
