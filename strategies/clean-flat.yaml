@@ -1,0 +1,10 @@
+name: clean-flat
+level: clean
+description: "No injections, flat normalization — folded-dimension truth e2e (DAT-770)"
+
+# The scenario carries the shape (normalization level); the strategy carries
+# injections. runner.generate() reads this key; testdata's load_strategy
+# ignores it (only name/level/description/injections are parsed).
+scenario: month-end-close-flat
+
+injections: []

@@ -296,13 +296,22 @@ def generate(
     *,
     seed: int = 42,
     months: int | None = None,
-    scenario: str = "month-end-close",
+    scenario: str | None = None,
     fmt: str = "csv",
 ) -> Path:
-    """Generate test data using a strategy file from this repo."""
+    """Generate test data using a strategy file from this repo.
+
+    The scenario (data SHAPE: tables, months, normalization level) resolves
+    strategy-YAML ``scenario:`` key → param → ``month-end-close``. The strategy
+    carries injections; a normalization variant (DAT-770 ``clean-flat``) is a
+    different scenario, not a different injection set.
+    """
+    import yaml
     from testdata.scenarios.runner import run_scenario
 
     sf = strategy_path(strategy)
+    if scenario is None:
+        scenario = yaml.safe_load(sf.read_text()).get("scenario") or "month-end-close"
     data_dir = DATA_DIR / strategy
     data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -978,7 +987,7 @@ def calibration_run(
     *,
     seed: int = 42,
     months: int | None = None,
-    scenario: str = "month-end-close",
+    scenario: str | None = None,
     contract: str | None = "aggregation_safe",
     vertical: str | None = "finance",
 ) -> CalibrationRun:
