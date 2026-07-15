@@ -72,8 +72,10 @@ def _llm_claims() -> dict[str, str | None]:
 
 
 @pytest.mark.llm
-def test_llm_reads_clear_named_stock_flow_accurately() -> None:
+def test_llm_reads_clear_named_stock_flow_accurately(strategy_name: str) -> None:
     """Does the LLM read stock/flow from a clear name? (the gate's load-bearing residual)."""
+    if strategy_name != _STRATEGY:
+        pytest.skip(f"scoped to {_STRATEGY!r} — runs on its own --strategy pass only (DAT-797)")
     if not (DATA_DIR / _STRATEGY).exists():
         pytest.skip(
             f"no data for {_STRATEGY}; run `python -m calibration.runner {_STRATEGY}` first"

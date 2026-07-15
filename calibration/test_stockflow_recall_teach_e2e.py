@@ -89,8 +89,10 @@ def _probe_state() -> dict[str, tuple[str | None, float | None]]:
 
 
 @pytest.mark.llm
-def test_stockflow_mislabel_recall_and_concept_teach_closure() -> None:
+def test_stockflow_mislabel_recall_and_concept_teach_closure(strategy_name: str) -> None:
     """quiet → mislabel concept (recall) → correct concept (teach-closure)."""
+    if strategy_name != _STRATEGY:
+        pytest.skip(f"scoped to {_STRATEGY!r} — runs on its own --strategy pass only (DAT-797)")
     if not (DATA_DIR / _STRATEGY).exists():
         pytest.skip(
             f"no data for {_STRATEGY}; run `python -m calibration.runner {_STRATEGY}` first"

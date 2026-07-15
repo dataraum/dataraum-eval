@@ -17,33 +17,34 @@ Tier-3 (docker + Temporal + LLM): marked ``llm``.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from calibration import runner as runner_mod
-from calibration.metadata_truth import load_truth, read_detected_cycles
+from calibration.metadata_truth import read_detected_cycles
 from calibration.tools._runs import workspace_session
 
-_STRATEGY = "clean"
 
-
-def _activate_or_skip() -> None:
-    sidecar = runner_mod.sidecar_path(_STRATEGY)
+@pytest.fixture(autouse=True)
+def _scoped_run(strategy_name: str) -> None:
+    """Grade ONLY the strategy under test against its own truth (DAT-797)."""
+    sidecar = runner_mod.sidecar_path(strategy_name)
     if not sidecar.exists():
         pytest.skip(
-            f"no completed run for {_STRATEGY!r}; run "
-            f"`python -m calibration.run -s {_STRATEGY}` first"
+            f"no completed run for {strategy_name!r}; run "
+            f"`python -m calibration.run -s {strategy_name}` first"
         )
-    runner_mod.activate_workspace(_STRATEGY)
+    runner_mod.activate_workspace(strategy_name)
 
 
 @pytest.mark.llm
-def test_cycle_recall() -> None:
+def test_cycle_recall(metadata_truth: dict[str, Any]) -> None:
     """Backbone cycles are detected with their key tables; optional cycles reported."""
-    _activate_or_skip()
     with workspace_session() as session:
         detected = read_detected_cycles(session)
 
-    expected = load_truth().get("cycles") or []
+    expected = metadata_truth.get("cycles") or []
     if not expected:
         pytest.skip("no cycles ground truth declared")
 
@@ -67,7 +68,6 @@ def test_cycle_recall() -> None:
 @pytest.mark.llm
 def test_cycle_legitimacy() -> None:
     """Detected cycles are known types over ≥2 real tables; soft (LLM-inferred)."""
-    _activate_or_skip()
     with workspace_session() as session:
         detected = read_detected_cycles(session)
 

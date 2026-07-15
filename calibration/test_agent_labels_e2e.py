@@ -23,31 +23,32 @@ Tier-3 (docker + Temporal + LLM): marked `llm`.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from calibration import runner as runner_mod
 from calibration.metadata_truth import (
-    load_truth,
     read_structural_patterns,
     read_structural_witness_fired,
     read_temporal_behavior,
 )
 from calibration.tools._runs import workspace_session
 
-_STRATEGY = "clean"
-
 # Reconciliation pattern → the stock/flow behaviour it proves (DAT-491 vocab).
 _PATTERN_TO_BEHAVIOR = {"per_period": "additive", "cumulative": "point_in_time"}
 
 
-def _activate_or_skip() -> None:
-    sidecar = runner_mod.sidecar_path(_STRATEGY)
+@pytest.fixture(autouse=True)
+def _scoped_run(strategy_name: str) -> None:
+    """Grade ONLY the strategy under test against its own truth (DAT-797)."""
+    sidecar = runner_mod.sidecar_path(strategy_name)
     if not sidecar.exists():
         pytest.skip(
-            f"no completed run for {_STRATEGY!r}; run "
-            f"`python -m calibration.run -s {_STRATEGY}` first"
+            f"no completed run for {strategy_name!r}; run "
+            f"`python -m calibration.run -s {strategy_name}` first"
         )
-    runner_mod.activate_workspace(_STRATEGY)
+    runner_mod.activate_workspace(strategy_name)
 
 
 @pytest.mark.llm
@@ -59,7 +60,6 @@ def test_structural_stockflow_witness_is_live() -> None:
     lineage), so stock/flow fell back to name-only and nothing warned. This guard
     makes that fail loudly instead of hiding behind name-luck.
     """
-    _activate_or_skip()
     with workspace_session() as session:
         fired, total = read_structural_witness_fired(session)
 
@@ -75,7 +75,7 @@ def test_structural_stockflow_witness_is_live() -> None:
 
 
 @pytest.mark.llm
-def test_structural_reconciliation_matches_truth() -> None:
+def test_structural_reconciliation_matches_truth(metadata_truth: dict[str, Any]) -> None:
     """Every measure that reconciled carries the right pattern for its behaviour.
 
     This is the HARD data-grounded check: `per_period`⇒flow, `cumulative`⇒stock. A
@@ -83,11 +83,10 @@ def test_structural_reconciliation_matches_truth() -> None:
     vice-versa) is a real defect in the reconciliation, not LLM variance. Measures
     that didn't reconcile are absent here (name-only → the soft test below).
     """
-    _activate_or_skip()
     with workspace_session() as session:
         patterns = read_structural_patterns(session)
 
-    truth: dict[str, str] = load_truth().get("stock_flow") or {}
+    truth: dict[str, str] = metadata_truth.get("stock_flow") or {}
     graded = {col: pat for col, pat in patterns.items() if col in truth}
     if not graded:
         pytest.skip("no measure reconciled against an event fact — nothing to grade")
@@ -108,7 +107,7 @@ def test_structural_reconciliation_matches_truth() -> None:
 
 
 @pytest.mark.llm
-def test_reconciliation_covers_expected_rollup_measures() -> None:
+def test_reconciliation_covers_expected_rollup_measures(metadata_truth: dict[str, Any]) -> None:
     """Every rollup measure with a finer event fact reconciles — none is stripped
     (DAT-722). The regression signature is asymmetric: before judge-declined
     relationships were cut at the source, a coincidental conf=0.05
@@ -117,11 +116,10 @@ def test_reconciliation_covers_expected_rollup_measures() -> None:
     did not (1/2). This guards that exact asymmetry: if the witness fired on ANY
     expected rollup it must have fired on ALL of them.
     """
-    _activate_or_skip()
     with workspace_session() as session:
         patterns = read_structural_patterns(session)
 
-    expected: list[str] = load_truth().get("reconciles_structurally") or []
+    expected: list[str] = metadata_truth.get("reconciles_structurally") or []
     if not expected:
         pytest.skip("no reconciles_structurally expectations declared")
 
@@ -141,7 +139,9 @@ def test_reconciliation_covers_expected_rollup_measures() -> None:
 
 
 @pytest.mark.llm
-def test_resolved_stockflow_labels_accuracy() -> None:
+def test_resolved_stockflow_labels_accuracy(
+    metadata_truth: dict[str, Any], strategy_name: str
+) -> None:
     """Reported accuracy of the pooled stock/flow label; soft (LLM-variable).
 
     A fact with no finer event fact is name-only, and a structurally-contested
@@ -149,11 +149,10 @@ def test_resolved_stockflow_labels_accuracy() -> None:
     divergence is surfaced (xfail), never a hard fail: a miss becomes a teach
     scenario / ticket, never a truth patch (DAT-685 hard rule).
     """
-    _activate_or_skip()
     with workspace_session() as session:
         actual = read_temporal_behavior(session)
 
-    truth: dict[str, str] = load_truth().get("stock_flow") or {}
+    truth: dict[str, str] = metadata_truth.get("stock_flow") or {}
     graded = {col: exp for col, exp in truth.items() if col in actual}
     if not graded:
         pytest.skip("no stock/flow labels produced — temporal_behavior didn't resolve")
@@ -167,7 +166,7 @@ def test_resolved_stockflow_labels_accuracy() -> None:
         else:
             diverged.append(f"  {col}: resolved {got}, truth {expected}")
 
-    print(f"\n[resolved stock/flow] {correct}/{len(graded)} match truth on {_STRATEGY}")
+    print(f"\n[resolved stock/flow] {correct}/{len(graded)} match truth on {strategy_name}")
     for line in diverged:
         print(line)
 

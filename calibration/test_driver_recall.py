@@ -114,8 +114,10 @@ def _dim_gain(ranking: dict[str, Any], dimension: str) -> float:
 
 @pytest.mark.llm
 @pytest.mark.xfail(strict=False, reason=_FOLDED_DIM_XFAIL)
-def test_driver_dimension_recall_vs_clean() -> None:
+def test_driver_dimension_recall_vs_clean(strategy_name: str) -> None:
     """The scaled dimension is a significant driver under injection and above clean."""
+    if strategy_name != _INJECTED:
+        pytest.skip(f"cross-strategy driver oracle — runs on the {_INJECTED!r} pass only (DAT-797)")
     truth = _driver_effect_truth(_INJECTED)
     assert truth, f"{_INJECTED} recorded no driver_effect ground truth"
     _activate_or_skip(_CLEAN)
@@ -155,8 +157,10 @@ def test_driver_dimension_recall_vs_clean() -> None:
 
 @pytest.mark.llm
 @pytest.mark.xfail(strict=False, reason=_FOLDED_DIM_XFAIL)
-def test_driver_slice_effects_order_by_factor() -> None:
+def test_driver_slice_effects_order_by_factor(strategy_name: str) -> None:
     """Interesting-slice effects for the scaled dimension order by the recorded factor."""
+    if strategy_name != _INJECTED:
+        pytest.skip(f"cross-strategy driver oracle — runs on the {_INJECTED!r} pass only (DAT-797)")
     truth = _driver_effect_truth(_INJECTED)
     assert truth, f"{_INJECTED} recorded no driver_effect ground truth"
     _activate_or_skip(_INJECTED)

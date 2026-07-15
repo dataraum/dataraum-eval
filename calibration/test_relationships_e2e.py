@@ -20,30 +20,36 @@ Tier-3 (docker + Temporal + LLM): marked ``llm``.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from calibration import runner as runner_mod
 from calibration.metadata_truth import (
     expected_relationships,
-    load_truth,
     read_candidate_relationship,
     read_defined_relationships,
 )
 from calibration.tools._runs import workspace_session
 
-_STRATEGY = "clean"
-
 _Edge = tuple[str, str, str, str]  # (from_table, from_col, to_table, to_col)
 
 
-def _activate_or_skip() -> None:
-    sidecar = runner_mod.sidecar_path(_STRATEGY)
+@pytest.fixture(autouse=True)
+def _scoped_run(strategy_name: str) -> None:
+    """Grade ONLY the strategy under test against its own truth (DAT-797).
+
+    The module used to hardcode ``clean`` — activating a foreign workspace
+    mid-pass poisoned every later read in the same pytest process, and the
+    strategy under test was never graded here at all.
+    """
+    sidecar = runner_mod.sidecar_path(strategy_name)
     if not sidecar.exists():
         pytest.skip(
-            f"no completed run for {_STRATEGY!r}; run "
-            f"`python -m calibration.run -s {_STRATEGY}` first"
+            f"no completed run for {strategy_name!r}; run "
+            f"`python -m calibration.run -s {strategy_name}` first"
         )
-    runner_mod.activate_workspace(_STRATEGY)
+    runner_mod.activate_workspace(strategy_name)
 
 
 def _satisfies(true_fk: _Edge, defined: set[_Edge]) -> bool:
@@ -58,13 +64,12 @@ def _satisfies(true_fk: _Edge, defined: set[_Edge]) -> bool:
 
 
 @pytest.mark.llm
-def test_relationship_recall() -> None:
+def test_relationship_recall(metadata_truth: dict[str, Any]) -> None:
     """Every true FK (generator topology) is judge-confirmed (surrogate-aware)."""
-    _activate_or_skip()
     with workspace_session() as session:
         defined = read_defined_relationships(session)
 
-        true_fks = expected_relationships(load_truth())
+        true_fks = expected_relationships(metadata_truth)
         if not true_fks:
             pytest.skip("no relationships ground truth declared")
 
@@ -89,13 +94,12 @@ def test_relationship_recall() -> None:
 
 
 @pytest.mark.llm
-def test_relationship_precision() -> None:
+def test_relationship_precision(metadata_truth: dict[str, Any]) -> None:
     """No spurious FKs; soft (the judge is LLM-variable on value-overlap pairs)."""
-    _activate_or_skip()
     with workspace_session() as session:
         defined = read_defined_relationships(session)
 
-    true_fks = expected_relationships(load_truth())
+    true_fks = expected_relationships(metadata_truth)
     if not defined:
         pytest.skip("no defined relationships produced")
 

@@ -19,32 +19,33 @@ override of an LLM judgment. Tier-3 (docker + Temporal + LLM): marked ``llm``.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from calibration import runner as runner_mod
 from calibration.metadata_truth import (
-    load_truth,
     read_column_meanings,
     read_semantic_roles,
     read_table_entities,
 )
 from calibration.tools._runs import workspace_session
 
-_STRATEGY = "clean"
 
-
-def _activate_or_skip() -> None:
-    sidecar = runner_mod.sidecar_path(_STRATEGY)
+@pytest.fixture(autouse=True)
+def _scoped_run(strategy_name: str) -> None:
+    """Grade ONLY the strategy under test against its own truth (DAT-797)."""
+    sidecar = runner_mod.sidecar_path(strategy_name)
     if not sidecar.exists():
         pytest.skip(
-            f"no completed run for {_STRATEGY!r}; run "
-            f"`python -m calibration.run -s {_STRATEGY}` first"
+            f"no completed run for {strategy_name!r}; run "
+            f"`python -m calibration.run -s {strategy_name}` first"
         )
-    runner_mod.activate_workspace(_STRATEGY)
+    runner_mod.activate_workspace(strategy_name)
 
 
 @pytest.mark.llm
-def test_fact_dimension_roles() -> None:
+def test_fact_dimension_roles(metadata_truth: dict[str, Any]) -> None:
     """Fact/dimension classification is right where structure decides it (HARD).
 
     Measure-bearing transaction/snapshot tables are facts; a pure reference table is
@@ -52,11 +53,10 @@ def test_fact_dimension_roles() -> None:
     lookup) are structurally debatable — reported, not asserted. entity_type is free
     text with no ontology vocabulary — reported for review only.
     """
-    _activate_or_skip()
     with workspace_session() as session:
         entities = read_table_entities(session)
 
-    roles = load_truth().get("table_roles") or {}
+    roles = metadata_truth.get("table_roles") or {}
     facts = set(roles.get("facts") or [])
     dims = set(roles.get("dimensions") or [])
     ambiguous = set(roles.get("ambiguous") or [])
@@ -88,18 +88,17 @@ def test_fact_dimension_roles() -> None:
 
 
 @pytest.mark.llm
-def test_measure_role_recall_and_precision() -> None:
+def test_measure_role_recall_and_precision(metadata_truth: dict[str, Any]) -> None:
     """Exactly the true measure columns carry semantic_role='measure' (HARD).
 
     Load-bearing: drivers_phase and the additivity classifier consume
     ``semantic_role='measure'``. A true measure mislabeled is silently dropped from
     both; a non-measure mislabeled measure pollutes them. So both directions are hard.
     """
-    _activate_or_skip()
     with workspace_session() as session:
         roles = read_semantic_roles(session)
 
-    expected = set(load_truth().get("semantic_roles", {}).get("measure") or [])
+    expected = set(metadata_truth.get("semantic_roles", {}).get("measure") or [])
     assert expected, "no measure ground truth declared"
     actual = {col for col, r in roles.items() if r == "measure"}
 
@@ -122,18 +121,17 @@ def test_measure_role_recall_and_precision() -> None:
 
 
 @pytest.mark.llm
-def test_timestamp_role_recall() -> None:
+def test_timestamp_role_recall(metadata_truth: dict[str, Any]) -> None:
     """Every genuine date column carries semantic_role='timestamp' (HARD).
 
     Slicing reads timestamp columns as its time axes; a date mislabeled is dropped
     from temporal analysis. Also prints the key/dimension/attribute assignments for
     review — those are convention-dependent and reported, not asserted.
     """
-    _activate_or_skip()
     with workspace_session() as session:
         roles = read_semantic_roles(session)
 
-    expected = set(load_truth().get("semantic_roles", {}).get("timestamp") or [])
+    expected = set(metadata_truth.get("semantic_roles", {}).get("timestamp") or [])
     assert expected, "no timestamp ground truth declared"
 
     missing = sorted(c for c in expected if roles.get(c) != "timestamp")
@@ -155,7 +153,7 @@ def test_timestamp_role_recall() -> None:
 
 
 @pytest.mark.llm
-def test_column_meanings_present() -> None:
+def test_column_meanings_present(metadata_truth: dict[str, Any]) -> None:
     """Every column metric grounding depends on carries an authored meaning (DAT-769).
 
     The exact-binding oracle is RETIRED — meanings are graded at the CONSUMERS
@@ -163,11 +161,10 @@ def test_column_meanings_present() -> None:
     against a fixed truth. This smoke pins the presence contract only; the
     printout is for human inspection of grounding-context quality.
     """
-    _activate_or_skip()
     with workspace_session() as session:
         meanings = read_column_meanings(session)
 
-    required_cols = load_truth().get("business_concepts", {}).get("required") or {}
+    required_cols = metadata_truth.get("business_concepts", {}).get("required") or {}
     print(f"\n[column meanings] {len(meanings)} columns carry a meaning")
     for c, m in sorted(meanings.items()):
         print(f"  {c}: {m[:110]}")

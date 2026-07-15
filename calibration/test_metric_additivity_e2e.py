@@ -38,12 +38,9 @@ import pytest
 from calibration import runner as runner_mod
 from calibration.metadata_truth import (
     expected_additivity,
-    load_truth,
     read_metric_additivity,
 )
 from calibration.tools._runs import workspace_session
-
-_STRATEGY = "clean"
 
 # The DAT-718 cells whose total absence means grounding never reached them (the
 # /smoke concern) rather than an oracle failure — if NONE produced a verdict, we
@@ -69,20 +66,25 @@ def _fields(spec_or_verdict: object) -> tuple[Any, Any, Any, Any]:
 
 
 @pytest.mark.llm
-def test_metric_additivity_matrix_oracle() -> None:
-    """The persisted additivity verdicts match the matrix ground truth."""
-    sidecar = runner_mod.sidecar_path(_STRATEGY)
+def test_metric_additivity_matrix_oracle(
+    metadata_truth: dict[str, Any], strategy_name: str
+) -> None:
+    """The persisted additivity verdicts match the matrix ground truth.
+
+    Grades ONLY the strategy under test against its own truth (DAT-797).
+    """
+    sidecar = runner_mod.sidecar_path(strategy_name)
     if not sidecar.exists():
         pytest.skip(
-            f"no completed run for {_STRATEGY!r}; run "
-            f"`python -m calibration.run -s {_STRATEGY}` first"
+            f"no completed run for {strategy_name!r}; run "
+            f"`python -m calibration.run -s {strategy_name}` first"
         )
-    runner_mod.activate_workspace(_STRATEGY)
+    runner_mod.activate_workspace(strategy_name)
 
     with workspace_session() as session:
         actual = read_metric_additivity(session)
 
-    expected = expected_additivity(load_truth())
+    expected = expected_additivity(metadata_truth)
 
     if not (actual.keys() & _NEW_MATRIX_TARGETS):
         pytest.skip(
@@ -124,7 +126,7 @@ def test_metric_additivity_matrix_oracle() -> None:
 
     print(
         f"\n[additivity oracle] {grounded}/{len(expected)} targets grounded on "
-        f"{_STRATEGY}; hard-fail={len(hard_fail)} soft-mismatch={len(soft_mismatch)} "
+        f"{strategy_name}; hard-fail={len(hard_fail)} soft-mismatch={len(soft_mismatch)} "
         f"not-grounded={len(soft_missing)}"
     )
     for line in matrix:
