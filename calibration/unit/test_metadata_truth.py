@@ -239,9 +239,10 @@ def test_bus_matrix_no_ghost_relationship_targets() -> None:
         }
         assert "chart_of_accounts" not in rel_tables, level
         if level == "flat":
-            # at flat, bank_transactions/balance_sheet keep bare account keys;
-            # at single everything folds into mega_table — no key_only remains.
-            assert key_only_facts == {"bank_transactions", "balance_sheet"}
+            # at flat, CoA folds into GL/trial_balance/balance_sheet; only
+            # bank_transactions keeps a bare account key (2 distinct → the Layer-A
+            # blind-spot boundary). at single everything folds into mega_table.
+            assert key_only_facts == {"bank_transactions"}
         else:
             assert not key_only_facts, f"{level}: unexpected key_only {key_only_facts}"
 

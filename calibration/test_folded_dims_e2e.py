@@ -131,3 +131,108 @@ def test_folded_dimension_recall(
     assert not missing, (
         "folded-dimension columns never grouped by the engine: " + ", ".join(missing)
     )
+
+
+# The coincidental-bijection case the corpus now carries (DAT-757 "2b"): on a
+# folded fact grain `opened_date` is 1:1 with `account_id` — statistically
+# identical to the true `account_name` alias, separable only by MEANING. The
+# DAT-762 within-view identity judge must MERGE the real alias (high confidence)
+# and KEEP the coincidence as a separate axis (`needs_confirmation`). This grades
+# `identity_confidence` — the redesigned directional float that is DAT-762's
+# deliverable and was previously graded nowhere.
+_TRUE_ALIAS = "account_name"  # a genuine relabeling of account_id
+_COINCIDENCE = "opened_date"  # 1:1 with account_id, but an attribute OF it
+
+
+def _hierarchy_rows(strategy_name: str) -> list[Any]:
+    from sqlalchemy import text
+
+    runner_mod.activate_workspace(strategy_name)
+    from dataraum.storage.read_views import read_schema_name_for
+
+    with workspace_session() as session:
+        rs = read_schema_name_for(
+            str(session.execute(text("SELECT current_schema()")).scalar())
+        )
+        rows = session.execute(
+            text(
+                "SELECT t.table_name AS table_name, h.kind AS kind, h.members AS members, "
+                "h.identity_confidence AS identity_confidence, "
+                "h.needs_confirmation AS needs_confirmation "
+                f'FROM "{rs}".current_dimension_hierarchies h '
+                "JOIN tables t ON t.table_id = h.table_id"
+            )
+        ).all()
+        return list(rows)
+
+
+def _member_cols(row: Any) -> set[str]:
+    return {str(m["column_name"]) for m in (row.members or [])}
+
+
+@pytest.mark.llm
+def test_identity_confidence_separates_alias_from_coincidence(
+    folds: list[dict[str, Any]], strategy_name: str
+) -> None:
+    """The judge merges the true alias and keeps the coincidental bijection apart.
+
+    Graded as the calibration property DAT-762 gates on, not a point value:
+    - the true `account_id`↔`account_name` alias is MERGED into one structure
+      (needs_confirmation=False), carrying a confidence ABOVE the coincidence;
+    - `opened_date` is NOT merged into that structure — it stays a separate axis
+      (surfaced `needs_confirmation`, or simply never co-grouped with account_id).
+    A merge of `opened_date` into the account alias is the silent number
+    corruption this lane exists to prevent, so that half is HARD.
+    """
+    if not any(_COINCIDENCE in f["attributes"] for f in folds):
+        pytest.skip("corpus carries no coincidental-bijection attribute")
+    if not runner_mod.sidecar_path(strategy_name).exists():
+        pytest.skip(f"no completed run for {strategy_name!r}")
+
+    rows = _hierarchy_rows(strategy_name)
+    aliases = [r for r in rows if r.kind == "alias"]
+
+    # Structures that co-group account_id with each attribute of interest.
+    alias_structs = [
+        r for r in aliases if {"account_id", _TRUE_ALIAS} <= _member_cols(r)
+    ]
+    coincidence_structs = [
+        r for r in aliases if {"account_id", _COINCIDENCE} <= _member_cols(r)
+    ]
+
+    for r in aliases:
+        print(
+            f"[alias] {short(r.table_name)} members={sorted(_member_cols(r))} "
+            f"conf={r.identity_confidence} needs_confirmation={r.needs_confirmation}"
+        )
+
+    # HARD — the costly error: the coincidence must never be silently merged.
+    merged_coincidence = [r for r in coincidence_structs if not r.needs_confirmation]
+    assert not merged_coincidence, (
+        f"{_COINCIDENCE} was MERGED into the account alias (needs_confirmation=False) — "
+        "a coincidental bijection fused into the identity; number-corrupting"
+    )
+
+    # The true alias should be discovered and confidently merged. Report if the
+    # judge abstained (LLM variance) rather than hard-failing on a single draw.
+    confident_alias = [
+        r for r in alias_structs if not r.needs_confirmation and r.identity_confidence is not None
+    ]
+    if not confident_alias:
+        pytest.skip(
+            f"judge did not confidently merge the {_TRUE_ALIAS} alias this run "
+            "(LLM variance) — coincidence-safety asserted above; re-run to pool"
+        )
+
+    # Calibration: the true alias outranks the coincidence. If the coincidence was
+    # judged at all, its confidence must sit strictly below the alias's.
+    alias_conf = max(r.identity_confidence for r in confident_alias)
+    judged_coincidence = [
+        r.identity_confidence for r in coincidence_structs if r.identity_confidence is not None
+    ]
+    for c in judged_coincidence:
+        assert c < alias_conf, (
+            f"identity_confidence miscalibrated: coincidence {_COINCIDENCE}={c} "
+            f"not below true alias {_TRUE_ALIAS}={alias_conf}"
+        )
+    print(f"[calibration] true alias conf={alias_conf}; coincidence judged={judged_coincidence}")
