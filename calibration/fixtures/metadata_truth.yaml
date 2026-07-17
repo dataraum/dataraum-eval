@@ -217,22 +217,31 @@ reconciles_structurally:
 relationships:
 - from: journal_lines.entry_id
   to: journal_entries.entry_id
+  direction_reliable: true
 - from: journal_lines.account_id
   to: chart_of_accounts.account_id
+  direction_reliable: true
 - from: invoices.entry_id
   to: journal_entries.entry_id
+  direction_reliable: true
 - from: payments.invoice_id
   to: invoices.invoice_id
+  direction_reliable: true
 - from: bank_transactions.account_id
   to: chart_of_accounts.account_id
+  direction_reliable: true
 - from: bank_transactions.payment_id
   to: payments.payment_id
+  direction_reliable: true
 - from: trial_balance.account_id
   to: chart_of_accounts.account_id
+  direction_reliable: true
 - from: balance_sheet.account_id
   to: chart_of_accounts.account_id
+  direction_reliable: true
 - from: chart_of_accounts.parent_id
   to: chart_of_accounts.account_id
+  direction_reliable: true
 table_roles:
   facts:
   - journal_lines

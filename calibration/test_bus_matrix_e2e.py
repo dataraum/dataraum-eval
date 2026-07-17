@@ -16,9 +16,12 @@ Assertion tiers:
   cells share one concept label with confirmation_source='judge' (the conform
   judge's cross-fact claim — the capability this ticket adds).
 - degenerate abstain — HARD: a ``degenerate_ids`` column never appears in any
-  folded/referenced cell (the abstention the DAT-757 gate proved necessary);
-  its own degenerate cell is REPORTED, not asserted (shape-gate recall is
-  measured, not promised).
+  folded/referenced cell (the abstention the DAT-757 gate proved necessary).
+  The engine emits no ``degenerate`` cell of its own — ``attachment`` is a
+  CHECK-constrained ``folded``/``referenced`` vocabulary, and the near-key
+  half of the concept died with the shape router (DAT-762). Truth keeps
+  ``degenerate_ids`` as the abstention oracle above; it is a recorded
+  acceptance boundary, not a cell to recall.
 - ``key_only`` truth cells — REPORTED only: they sit on the Layer-A blind-spot
   FK classes (DAT-762 comments 16642/16643), the lane's recorded acceptance
   boundary.
@@ -184,17 +187,8 @@ def test_degenerate_ids_never_asserted(
 def test_boundary_report(
     engine_cells: list[dict[str, Any]], metadata_truth: dict[str, Any]
 ) -> None:
-    """REPORT-ONLY: degenerate-cell recall + key_only boundary + extra cells."""
+    """REPORT-ONLY: key_only boundary + extra cells."""
     truth = expected_bus_matrix(metadata_truth)
-    degenerate = expected_degenerate_ids(metadata_truth)
-
-    for qualified in sorted(degenerate):
-        fact, col = qualified.split(".", 1)
-        found = any(
-            c["fact"] == fact and c["attachment"] == "degenerate" and col in c["roles"]
-            for c in engine_cells
-        )
-        print(f"degenerate cell {qualified}: {'recorded' if found else 'NOT recorded'}")
 
     key_only = [
         f"{fact} x {concept} (key {cell['key']})"
