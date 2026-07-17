@@ -364,7 +364,6 @@ def _seed_run_sources(objects: list[SourceObject]) -> list[str]:
                         name=obj.source_name,
                         source_type=obj.source_type,
                         connection_config={"file_uris": [obj.uri]},
-                        status="configured",
                     )
                     s.add(src)
                     s.flush()
