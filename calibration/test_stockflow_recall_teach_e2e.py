@@ -99,11 +99,14 @@ def test_stockflow_mislabel_recall_and_concept_teach_closure(strategy_name: str)
         )
 
     sidecar = runner_mod.sidecar_path(_STRATEGY)
-    if sidecar.exists():
-        runner_mod.activate_workspace(_STRATEGY)  # read this strategy's workspace (DAT-508)
-        run = runner_mod.CalibrationRun.from_json(sidecar.read_text())
-    else:
-        run = runner_mod.run_pipeline(_STRATEGY)  # activates the workspace itself
+    if not sidecar.exists():
+        # Tests never drive pipelines (real LLM) — the runner does (run-#2 forensics).
+        pytest.skip(
+            f"no completed run for {_STRATEGY!r}; run "
+            f"`python -m calibration.run -s {_STRATEGY}` first — tests never drive pipelines"
+        )
+    runner_mod.activate_workspace(_STRATEGY)  # read this strategy's workspace (DAT-508)
+    run = runner_mod.CalibrationRun.from_json(sidecar.read_text())
 
     truth = _true_behaviours()
     base = _probe_state()

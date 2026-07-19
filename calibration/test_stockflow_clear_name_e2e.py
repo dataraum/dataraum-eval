@@ -83,7 +83,11 @@ def test_llm_reads_clear_named_stock_flow_accurately(strategy_name: str) -> None
 
     sidecar = runner_mod.sidecar_path(_STRATEGY)
     if not sidecar.exists():
-        runner_mod.run_pipeline(_STRATEGY)  # produce the run + its sidecar
+        # Tests never drive pipelines (real LLM) — the runner does (run-#2 forensics).
+        pytest.skip(
+            f"no completed run for {_STRATEGY!r}; run "
+            f"`python -m calibration.run -s {_STRATEGY}` first — tests never drive pipelines"
+        )
     runner_mod.activate_workspace(_STRATEGY)  # read this strategy's workspace (DAT-508)
 
     truth = _true_behaviours()
