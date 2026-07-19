@@ -807,24 +807,42 @@ _SKIP_ROWS: dict[str, str] = {
 
 # The teach vocabulary: 9 applier-backed types (engine appliable_teach_types) +
 # the relationship overlay family. Tier-3 rows (docker + Temporal + LLM) are
-# marked ``llm`` per the suite convention; the relationship row reads only
-# persisted state and runs everywhere.
+# marked ``llm`` per the suite convention. Each row names the strategy it rides
+# so the DAT-797 scoping guard below can pin it to that strategy's own pass.
 _ROWS = [
-    pytest.param(_prove_null_value_closure, id="null_value", marks=pytest.mark.llm),
-    pytest.param(_prove_concept_property_closure, id="concept_property", marks=pytest.mark.llm),
-    pytest.param(_prove_unit_declaration_landing, id="unit", marks=pytest.mark.llm),
-    pytest.param(_prove_validation_expected_formula, id="validation", marks=pytest.mark.llm),
+    pytest.param(_NULL_STRATEGY, _prove_null_value_closure, id="null_value", marks=pytest.mark.llm),
     pytest.param(
-        _prove_slice_conditional_null_closure, id="slice_conditional_null", marks=pytest.mark.llm
+        _TB_STRATEGY, _prove_concept_property_closure, id="concept_property", marks=pytest.mark.llm
     ),
-    pytest.param(_prove_relationship_confirm_keep, id="relationship"),
+    pytest.param(_UNIT_STRATEGY, _prove_unit_declaration_landing, id="unit", marks=pytest.mark.llm),
+    pytest.param(
+        _DERIVED_STRATEGY, _prove_validation_expected_formula, id="validation", marks=pytest.mark.llm
+    ),
+    pytest.param(
+        _SLICE_STRATEGY,
+        _prove_slice_conditional_null_closure,
+        id="slice_conditional_null",
+        marks=pytest.mark.llm,
+    ),
+    pytest.param(_REL_STRATEGY, _prove_relationship_confirm_keep, id="relationship"),
 ] + [
-    pytest.param(None, id=teach_type, marks=pytest.mark.skip(reason=reason))
+    pytest.param(None, None, id=teach_type, marks=pytest.mark.skip(reason=reason))
     for teach_type, reason in _SKIP_ROWS.items()
 ]
 
 
-@pytest.mark.parametrize("prove", _ROWS)
-def test_teach_closure(prove: Callable[[], None]) -> None:
-    """One row per teach type — the executable closure map of the teach vocabulary."""
+@pytest.mark.parametrize(("strategy", "prove"), _ROWS)
+def test_teach_closure(strategy: str, prove: Callable[[], None], strategy_name: str) -> None:
+    """One row per teach type — the executable closure map of the teach vocabulary.
+
+    DAT-797 scoping (senior-review finding): each row rides its OWN hardcoded
+    strategy and runs only on that strategy's ``--strategy`` pass. Sidecars
+    persist across runner invocations by design (per-strategy workspaces, no
+    reset between strategies), so without this guard a row whose sidecar exists
+    from an EARLIER batch re-fires its Tier-3 teach re-run (real Temporal + LLM)
+    inside every OTHER strategy's assert pass — the same cross-strategy LLM-leak
+    class as the sidecar fallback this cut removed (run-#2 forensics).
+    """
+    if strategy_name != strategy:
+        pytest.skip(f"row rides {strategy!r} — runs on its own --strategy pass only (DAT-797)")
     prove()
