@@ -39,7 +39,6 @@ from typing import Any
 import psycopg
 
 EVAL_ROOT = Path(__file__).resolve().parent.parent
-SCHEMA = "ws_00000000_0000_0000_0000_000000000001"
 FIXTURE = EVAL_ROOT / "calibration" / "fixtures" / "entropy_inputs.sqlite"
 
 # Measurement-input + output tables in the ws_ schema.
@@ -59,13 +58,6 @@ PG_TABLES = [
 STRATEGIES = ["clean", "detection-v1", "detection-null-v1"]
 
 
-def _pg_password() -> str:
-    for line in (EVAL_ROOT / ".docker.env").read_text().splitlines():
-        if line.startswith("POSTGRES_PASSWORD="):
-            return line.split("=", 1)[1].strip()
-    raise RuntimeError("POSTGRES_PASSWORD not found in .docker.env")
-
-
 def _cell(value: Any) -> Any:
     """SQLite-storable form: JSON for dict/list, pass scalars through."""
     if isinstance(value, (dict, list)):
@@ -73,22 +65,61 @@ def _cell(value: Any) -> Any:
     return value
 
 
+def _workspace_schema(strategy: str) -> str:
+    """The ``ws_<id>`` schema *strategy*'s pipeline wrote (DAT-508).
+
+    Each strategy owns a deterministic workspace (``runner.workspace_id_for``, the
+    same uuid5 the runner activates), so the capture discovers the schema exactly
+    the way the calibration tools resolve it — never a hardcoded legacy id.
+    """
+    from dataraum.server.workspace import schema_name_for
+
+    from calibration.runner import workspace_id_for
+
+    return schema_name_for(workspace_id_for(strategy))
+
+
 def capture_pg(sqlite_conn: sqlite3.Connection) -> None:
-    dsn = f"host=localhost port=5432 dbname=dataraum user=dataraum password={_pg_password()}"
+    """Capture each strategy's workspace tables, tagged with a ``strategy`` column.
+
+    Post-DAT-508 every strategy runs in its OWN ``ws_<id>`` schema, so the fixture
+    unions the per-strategy rows (the pre-DAT-508 capture read one shared schema
+    that held every session's rows — consumers still see the union, now labelled).
+    A strategy whose schema is absent is reported and skipped, not an error: the
+    capture works with whatever pipelines have run.
+    """
+    from calibration import stack
+
+    dsn = (
+        f"host={stack.POSTGRES_HOST} port={stack.POSTGRES_PORT} dbname={stack.POSTGRES_DB} "
+        f"user={stack.POSTGRES_USER} password={stack.POSTGRES_PASSWORD}"
+    )
+    for table in PG_TABLES:
+        sqlite_conn.execute(f'DROP TABLE IF EXISTS "{table}"')
+    created: set[str] = set()
     with psycopg.connect(dsn) as pg:
-        for table in PG_TABLES:
-            cur = pg.execute(f'SELECT * FROM {SCHEMA}."{table}"')  # noqa: S608 (fixed names)
-            cols = [d.name for d in cur.description or []]
-            rows = cur.fetchall()
-            coldefs = ", ".join(f'"{c}" TEXT' for c in cols)
-            placeholders = ", ".join("?" for _ in cols)
-            sqlite_conn.execute(f'DROP TABLE IF EXISTS "{table}"')
-            sqlite_conn.execute(f'CREATE TABLE "{table}" ({coldefs})')
-            sqlite_conn.executemany(
-                f'INSERT INTO "{table}" VALUES ({placeholders})',
-                [[_cell(v) for v in r] for r in rows],
-            )
-            print(f"  pg.{table}: {len(rows)} rows ({len(cols)} cols)")
+        for strat in STRATEGIES:
+            schema = _workspace_schema(strat)
+            known = pg.execute(
+                "SELECT 1 FROM information_schema.schemata WHERE schema_name = %s", (schema,)
+            ).fetchone()
+            if known is None:
+                print(f"  !! schema {schema} for '{strat}' missing — run its pipeline first")
+                continue
+            for table in PG_TABLES:
+                cur = pg.execute(f'SELECT * FROM "{schema}"."{table}"')  # noqa: S608 (fixed names)
+                cols = [d.name for d in cur.description or []]
+                rows = cur.fetchall()
+                if table not in created:
+                    coldefs = ", ".join(f'"{c}" TEXT' for c in ["strategy", *cols])
+                    sqlite_conn.execute(f'CREATE TABLE "{table}" ({coldefs})')
+                    created.add(table)
+                placeholders = ", ".join("?" for _ in ["strategy", *cols])
+                sqlite_conn.executemany(
+                    f'INSERT INTO "{table}" VALUES ({placeholders})',
+                    [[strat, *(_cell(v) for v in r)] for r in rows],
+                )
+                print(f"  pg.{table} [{strat}]: {len(rows)} rows ({len(cols)} cols)")
 
 
 # A non-numeric, non-date string column counts as a categorical SLICE KEY only if
