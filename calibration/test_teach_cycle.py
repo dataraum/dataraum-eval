@@ -101,18 +101,28 @@ def _column_rows(rows: list[Any], table_substr: str, column: str) -> list[Any]:
     return [r for r in rows if table_substr in r.target and r.target.endswith("." + column)]
 
 
-def _load_run_or_pipeline(strategy: str) -> runner_mod.CalibrationRun:
-    """The strategy's completed run — sidecar if present, else a fresh pipeline run.
+def _load_run(strategy: str) -> runner_mod.CalibrationRun:
+    """The strategy's completed run — sidecar REQUIRED; an assert pass never
+    drives a pipeline.
 
     Activates the strategy's OWN workspace (DAT-508) so the head-resolved reads
     that follow resolve the right ``ws_<id>`` schema. The teach helpers re-activate
     the same workspace on each rerun, so the whole test stays in one workspace.
+
+    A missing sidecar means the runner (``calibration.run``) has not driven this
+    strategy since the last ``--reset`` → SKIP; the runner will drive it on its own
+    pass. The old fallback ran a FULL pipeline (real LLM) from inside the test:
+    run #2's assert pass silently spent ~4 min of unbudgeted LLM on a foreign
+    strategy and left a two-pass workspace state that masked a recall gap.
     """
     sidecar = runner_mod.sidecar_path(strategy)
-    if sidecar.exists():
-        runner_mod.activate_workspace(strategy)
-        return runner_mod.CalibrationRun.from_json(sidecar.read_text())
-    return runner_mod.run_pipeline(strategy)  # activates the workspace itself
+    if not sidecar.exists():
+        pytest.skip(
+            f"no completed run for {strategy!r}; run "
+            f"`python -m calibration.run -s {strategy}` first — tests never drive pipelines"
+        )
+    runner_mod.activate_workspace(strategy)
+    return runner_mod.CalibrationRun.from_json(sidecar.read_text())
 
 
 # ---------------------------------------------------------------------------
@@ -141,7 +151,7 @@ def _prove_null_value_closure() -> None:
             f"{_NULL_STRATEGY}` first"
         )
 
-    run = _load_run_or_pipeline(_NULL_STRATEGY)
+    run = _load_run(_NULL_STRATEGY)
 
     before = _null_semantics_conflict(_NULL_TABLE, _NULL_COLUMN)
     if before is None:
@@ -244,7 +254,7 @@ def _prove_concept_property_closure() -> None:
             f"no data for {_TB_STRATEGY}; run `python -m calibration.runner {_TB_STRATEGY}` first"
         )
 
-    run = _load_run_or_pipeline(_TB_STRATEGY)
+    run = _load_run(_TB_STRATEGY)
 
     mislabel = _temporal_behavior_mislabel(_TB_TABLE, _TB_COLUMN)
     if mislabel is None or mislabel[0] <= _DROP_MARGIN:
@@ -298,7 +308,7 @@ def _prove_unit_declaration_landing() -> None:
             f"no data for {_UNIT_STRATEGY}; run `python -m calibration.runner {_UNIT_STRATEGY}`"
         )
 
-    run = _load_run_or_pipeline(_UNIT_STRATEGY)
+    run = _load_run(_UNIT_STRATEGY)
 
     before = _unit_entropy_detected_unit(_UNIT_TABLE, _UNIT_COLUMN)
     if before is None:
@@ -626,7 +636,7 @@ def _prove_validation_expected_formula() -> None:
             f"{_DERIVED_STRATEGY}` first"
         )
 
-    run = _load_run_or_pipeline(_DERIVED_STRATEGY)
+    run = _load_run(_DERIVED_STRATEGY)
     already_taught = _expected_formula_declared()
 
     before: float | None = None
@@ -712,7 +722,7 @@ def _prove_slice_conditional_null_closure() -> None:
             f"{_SLICE_STRATEGY}` first"
         )
 
-    run = _load_run_or_pipeline(_SLICE_STRATEGY)
+    run = _load_run(_SLICE_STRATEGY)
 
     before = _slice_conditional_null_score(_SLICE_TABLE, _SLICE_COLUMN)
     if before is None:
@@ -797,24 +807,42 @@ _SKIP_ROWS: dict[str, str] = {
 
 # The teach vocabulary: 9 applier-backed types (engine appliable_teach_types) +
 # the relationship overlay family. Tier-3 rows (docker + Temporal + LLM) are
-# marked ``llm`` per the suite convention; the relationship row reads only
-# persisted state and runs everywhere.
+# marked ``llm`` per the suite convention. Each row names the strategy it rides
+# so the DAT-797 scoping guard below can pin it to that strategy's own pass.
 _ROWS = [
-    pytest.param(_prove_null_value_closure, id="null_value", marks=pytest.mark.llm),
-    pytest.param(_prove_concept_property_closure, id="concept_property", marks=pytest.mark.llm),
-    pytest.param(_prove_unit_declaration_landing, id="unit", marks=pytest.mark.llm),
-    pytest.param(_prove_validation_expected_formula, id="validation", marks=pytest.mark.llm),
+    pytest.param(_NULL_STRATEGY, _prove_null_value_closure, id="null_value", marks=pytest.mark.llm),
     pytest.param(
-        _prove_slice_conditional_null_closure, id="slice_conditional_null", marks=pytest.mark.llm
+        _TB_STRATEGY, _prove_concept_property_closure, id="concept_property", marks=pytest.mark.llm
     ),
-    pytest.param(_prove_relationship_confirm_keep, id="relationship"),
+    pytest.param(_UNIT_STRATEGY, _prove_unit_declaration_landing, id="unit", marks=pytest.mark.llm),
+    pytest.param(
+        _DERIVED_STRATEGY, _prove_validation_expected_formula, id="validation", marks=pytest.mark.llm
+    ),
+    pytest.param(
+        _SLICE_STRATEGY,
+        _prove_slice_conditional_null_closure,
+        id="slice_conditional_null",
+        marks=pytest.mark.llm,
+    ),
+    pytest.param(_REL_STRATEGY, _prove_relationship_confirm_keep, id="relationship"),
 ] + [
-    pytest.param(None, id=teach_type, marks=pytest.mark.skip(reason=reason))
+    pytest.param(None, None, id=teach_type, marks=pytest.mark.skip(reason=reason))
     for teach_type, reason in _SKIP_ROWS.items()
 ]
 
 
-@pytest.mark.parametrize("prove", _ROWS)
-def test_teach_closure(prove: Callable[[], None]) -> None:
-    """One row per teach type — the executable closure map of the teach vocabulary."""
+@pytest.mark.parametrize(("strategy", "prove"), _ROWS)
+def test_teach_closure(strategy: str, prove: Callable[[], None], strategy_name: str) -> None:
+    """One row per teach type — the executable closure map of the teach vocabulary.
+
+    DAT-797 scoping (senior-review finding): each row rides its OWN hardcoded
+    strategy and runs only on that strategy's ``--strategy`` pass. Sidecars
+    persist across runner invocations by design (per-strategy workspaces, no
+    reset between strategies), so without this guard a row whose sidecar exists
+    from an EARLIER batch re-fires its Tier-3 teach re-run (real Temporal + LLM)
+    inside every OTHER strategy's assert pass — the same cross-strategy LLM-leak
+    class as the sidecar fallback this cut removed (run-#2 forensics).
+    """
+    if strategy_name != strategy:
+        pytest.skip(f"row rides {strategy!r} — runs on its own --strategy pass only (DAT-797)")
     prove()

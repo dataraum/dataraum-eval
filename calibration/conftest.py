@@ -1,10 +1,11 @@
 """Calibration test fixtures.
 
 Loads entropy_map.yaml, ground_truth.yaml, and detector scores for
-assertions. Scores come from Postgres via the in-process pipeline:
-``calibration.runner`` runs the pipeline (if no sidecar exists) and
+assertions. Scores come from Postgres, written there by the runner
+(``calibration.run`` drives every pipeline BEFORE invoking pytest);
 ``_load_scores_for_strategy`` reads ``EntropyObjectRecord`` rows back
-through ``measure_entropy()``.
+head-resolved. Tests never drive pipelines — a strategy without a
+completed run SKIPS (see ``_require_pipeline_run``).
 """
 
 from __future__ import annotations
@@ -61,13 +62,16 @@ def _strip_source_prefix(name: str) -> str:
     return name
 
 
-def _ensure_pipeline_run(strategy: str) -> runner_mod.CalibrationRun:
-    """Return identifiers for the pipeline run; produce one if missing.
+def _require_pipeline_run(strategy: str) -> runner_mod.CalibrationRun:
+    """Identifiers for the strategy's completed pipeline run — sidecar REQUIRED.
 
-    Reads the sidecar at ``output/<strategy>/calibration_run.json`` if
-    present; otherwise runs the pipeline and writes a fresh one. The
-    sidecar lets pytest sessions reuse a previously-completed run when
-    the underlying Postgres state is still intact.
+    Reads the sidecar at ``output/<strategy>/calibration_run.json``; a missing
+    sidecar means the runner (``calibration.run``) has not driven this strategy
+    since the last ``--reset`` → SKIP. pytest is the runner's ASSERT pass — the
+    runner writes the sidecar before invoking it — so a fixture that kicked a
+    full pipeline (real LLM) on a missing sidecar spent minutes of unbudgeted
+    LLM outside the runner's accounting (the run-#2 forensics finding on the
+    teach harness; this was the same hazard). Tests never drive pipelines.
 
     Always leaves ``strategy``'s OWN workspace active (DAT-508), so any read that
     follows resolves the right ``ws_<id>`` schema even when several strategies'
@@ -75,17 +79,13 @@ def _ensure_pipeline_run(strategy: str) -> runner_mod.CalibrationRun:
     that sessions are gone — there is no shared workspace to disambiguate).
     """
     sidecar = runner_mod.sidecar_path(strategy)
-    if sidecar.exists():
-        runner_mod.activate_workspace(strategy)
-        return runner_mod.CalibrationRun.from_json(sidecar.read_text())
-
-    data_dir = DATA_DIR / strategy
-    if not data_dir.exists():
+    if not sidecar.exists():
         pytest.skip(
-            f"No test data at {data_dir}. Run: "
-            f"uv run python -m calibration.runner {strategy} --generate-only"
+            f"no completed run for {strategy!r}; run "
+            f"`python -m calibration.run -s {strategy}` first — tests never drive pipelines"
         )
-    return runner_mod.run_pipeline(strategy)  # activates the workspace itself
+    runner_mod.activate_workspace(strategy)
+    return runner_mod.CalibrationRun.from_json(sidecar.read_text())
 
 
 def _head_resolved_entropy_rows(session: Any) -> list[Any]:
@@ -121,7 +121,7 @@ def _load_scores_for_strategy(strategy: str) -> DetectorScores:
     prefix (``column:`` / ``table:`` / ``view:`` / ``relationship:``). For each
     (target, detector) the max score is kept.
     """
-    _ensure_pipeline_run(strategy)  # ensure the pipeline has run (writes the sidecar)
+    _require_pipeline_run(strategy)  # ensure the pipeline has run (writes the sidecar)
 
     runner_mod.bootstrap_engine()
 
@@ -291,7 +291,7 @@ def _assemble_readiness(
     ``column_id → (table_name, column_name)`` for resolving relationship
     endpoints.
     """
-    _ensure_pipeline_run(strategy)  # ensure the pipeline has run (writes the sidecar)
+    _require_pipeline_run(strategy)  # ensure the pipeline has run (writes the sidecar)
     runner_mod.bootstrap_engine()
 
     from dataraum.core.connections import ConnectionConfig, ConnectionManager
