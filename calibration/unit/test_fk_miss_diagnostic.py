@@ -52,6 +52,27 @@ def test_candidate_either_orientation_is_a_decline() -> None:
         assert diag["evidence"] == {"reason": "weak overlap"}
 
 
+def test_declined_tiebreak_is_reproducible() -> None:
+    """Several matching candidate rows: the exact-orientation row's evidence wins
+    over the flipped one, then the higher confidence — independent of SQL row
+    order, so the printed diagnostic is reproducible across runs."""
+    exact = _row(*_PAIR, "candidate", 0.3, evidence={"which": "exact"})
+    flipped = _row(
+        _PAIR[2], _PAIR[3], _PAIR[0], _PAIR[1], "candidate", 0.9, evidence={"which": "flipped"}
+    )
+    for rows in ([exact, flipped], [flipped, exact]):
+        diag = pick_fk_miss_diagnostic(rows, _PAIR)
+        assert diag is not None
+        assert diag["evidence"] == {"which": "exact"}
+
+    hi = _row(*_PAIR, "candidate", 0.8, evidence={"which": "hi"})
+    lo = _row(*_PAIR, "candidate", 0.2, evidence={"which": "lo"})
+    for rows in ([hi, lo], [lo, hi]):
+        diag = pick_fk_miss_diagnostic(rows, _PAIR)
+        assert diag is not None
+        assert diag["evidence"] == {"which": "hi"}
+
+
 def test_no_matching_row_is_a_layer_a_gap() -> None:
     """Nothing about the pair in the run's rows → None (never a candidate)."""
     rows = [

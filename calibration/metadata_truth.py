@@ -324,17 +324,25 @@ def read_structural_patterns(session: Any) -> dict[str, str]:
     event fact (DAT-491): ``per_period`` (a flow) or ``cumulative`` (a stock). This
     is deterministic where it fires — unlike the two name-based witnesses — so it's
     the surface DAT-685 can grade HARD. A measure that didn't reconcile is absent
-    (name-only, LLM-variable → graded soft).
+    (name-only, LLM-variable → graded soft). Reads the head-scoped
+    ``current_measure_aggregation_lineage`` view (``measure_aggregation_lineage``
+    is catalog-grain like ``relationships``) — the raw table accumulates every
+    run's rows, and a stale run's pattern must not leak into HARD grading (the
+    same leak class ``read_defined_relationships`` fixed; senior-review find).
     """
+    from dataraum.storage.read_views import read_schema_name_for
     from sqlalchemy import text
 
     from calibration.tools._runs import short
 
+    read_schema = read_schema_name_for(
+        str(session.execute(text("SELECT current_schema()")).scalar())
+    )
     rows = session.execute(
         text(
             "SELECT t.table_name AS table_name, c.column_name AS column_name, "
             "mal.pattern AS pattern "
-            "FROM measure_aggregation_lineage mal "
+            f'FROM "{read_schema}".current_measure_aggregation_lineage mal '
             "JOIN columns c ON c.column_id = mal.measure_column_id "
             "JOIN tables t ON t.table_id = c.table_id"
         )
@@ -378,46 +386,63 @@ def read_defined_relationships(session: Any) -> set[tuple[str, str, str, str]]:
     return {(short(r.ft), r.fc, short(r.tt), r.tc) for r in rows}
 
 
+_FkEdge = tuple[str, str, str, str]  # (from_table, from_col, to_table, to_col)
+
+
+def fk_edge_satisfies(defined: _FkEdge, true_fk: _FkEdge) -> bool:
+    """One defined edge satisfies one truth edge — the ONE FK matcher.
+
+    Same tables in the same orientation, truth column carried exactly or as a
+    DAT-277 surrogate composite whose column name contains it
+    (``_sk__date__payment_id`` embeds ``payment_id``). Shared by the recall
+    grading (``test_relationships_e2e._satisfies``) and the miss diagnostic
+    (:func:`pick_fk_miss_diagnostic`) so the two can never drift — the
+    diagnostic must explain exactly what the grader graded.
+    """
+    dft, dfc, dtt, dtc = defined
+    tft, tfc, ttt, ttc = true_fk
+    return dft == tft and dtt == ttt and tfc in dfc and ttc in dtc
+
+
 def pick_fk_miss_diagnostic(
-    rows: list[tuple[str, str, str, str, str, Any, Any]],
-    pair: tuple[str, str, str, str],
+    rows: list[tuple[str, str, str, str, str, float, dict[str, Any] | None]],
+    pair: _FkEdge,
 ) -> dict[str, Any] | None:
     """The row that best explains one truth pair's recall miss (pure; Tier-1-able).
 
     ``rows`` are the graded run's relationship rows as ``(from_table, from_col,
     to_table, to_col, detection_method, confidence, evidence)`` with narrow table
-    names; ``pair`` is the missing truth edge. Matching is surrogate-aware exactly
-    like the recall test's ``_satisfies`` (same tables, truth column contained in
-    the row column). Preference order:
+    names; ``pair`` is the missing truth edge. Matching is
+    :func:`fk_edge_satisfies` — the recall grading's own matcher. Preference:
 
     * a CONFIRMED (non-candidate) row in the FLIPPED orientation → ``kind:
       "confirmed_flipped"``. The judge accepted the pair but oriented it against
       the truth; grading is direction-exact so the red stands, but "DECLINED"
       would be a mis-diagnosis (run #2 printed payments↔bank_transactions,
       confirmed 0.95 flipped, as "DECLINED at 1.0").
-    * else a candidate row in either orientation → ``kind: "declined"`` — a real
-      judge decline, auditable via its kept evidence (DAT-699). The judge's
-      orientation is not run-stable, hence direction-insensitive.
+    * else a candidate row → ``kind: "declined"`` — a real judge decline,
+      auditable via its kept evidence (DAT-699). Direction-insensitive (the
+      judge's orientation is not run-stable); among several matching candidate
+      rows the exact-orientation one wins, then the higher confidence, so the
+      printed evidence is reproducible across runs (SQL row order is not).
     * else ``None`` — the pair never became a candidate (a Layer-A gap, not a
       judge decline — a different bug class).
     """
-    tft, tfc, ttt, ttc = pair
-
-    def _matches(row: tuple[str, str, str, str], want: tuple[str, str, str, str]) -> bool:
-        rft, rfc, rtt, rtc = row
-        wft, wfc, wtt, wtc = want
-        return rft == wft and rtt == wtt and wfc in rfc and wtc in rtc
-
-    flipped = (ttt, ttc, tft, tfc)
-    declined: dict[str, Any] | None = None
+    flipped: _FkEdge = (pair[2], pair[3], pair[0], pair[1])
+    declines: list[tuple[bool, float, dict[str, Any] | None]] = []
     for rft, rfc, rtt, rtc, method, confidence, evidence in rows:
-        row = (rft, rfc, rtt, rtc)
+        row: _FkEdge = (rft, rfc, rtt, rtc)
         if method != "candidate":
-            if _matches(row, flipped):
+            if fk_edge_satisfies(row, flipped):
                 return {"kind": "confirmed_flipped", "confidence": confidence, "evidence": evidence}
-        elif declined is None and (_matches(row, pair) or _matches(row, flipped)):
-            declined = {"kind": "declined", "confidence": confidence, "evidence": evidence}
-    return declined
+            continue
+        exact = fk_edge_satisfies(row, pair)
+        if exact or fk_edge_satisfies(row, flipped):
+            declines.append((exact, confidence, evidence))
+    if not declines:
+        return None
+    _, confidence, evidence = max(declines, key=lambda d: (d[0], d[1]))
+    return {"kind": "declined", "confidence": confidence, "evidence": evidence}
 
 
 def read_fk_miss_diagnostic(

@@ -27,6 +27,7 @@ import pytest
 from calibration import runner as runner_mod
 from calibration.metadata_truth import (
     expected_relationships,
+    fk_edge_satisfies,
     read_defined_relationships,
     read_fk_miss_diagnostic,
 )
@@ -53,14 +54,11 @@ def _scoped_run(strategy_name: str) -> None:
 
 
 def _satisfies(true_fk: _Edge, defined: set[_Edge]) -> bool:
-    """A true FK is present iff a defined edge joins the same tables and carries the
-    true columns — exactly, or as a surrogate whose column name contains them (a
-    DAT-277 ``_sk__date__payment_id`` embeds ``payment_id``)."""
-    tft, tfc, ttt, ttc = true_fk
-    return any(
-        dft == tft and dtt == ttt and tfc in dfc and ttc in dtc
-        for (dft, dfc, dtt, dtc) in defined
-    )
+    """A true FK is present iff some defined edge satisfies it — delegated to the
+    shared ``fk_edge_satisfies`` (same tables in the same orientation,
+    surrogate-aware column containment) so grading and the miss diagnostic can
+    never drift apart."""
+    return any(fk_edge_satisfies(d, true_fk) for d in defined)
 
 
 @pytest.mark.llm
