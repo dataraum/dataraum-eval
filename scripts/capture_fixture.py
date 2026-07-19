@@ -85,8 +85,9 @@ def capture_pg(sqlite_conn: sqlite3.Connection) -> None:
     Post-DAT-508 every strategy runs in its OWN ``ws_<id>`` schema, so the fixture
     unions the per-strategy rows (the pre-DAT-508 capture read one shared schema
     that held every session's rows — consumers still see the union, now labelled).
-    A strategy whose schema is absent is reported and skipped, not an error: the
-    capture works with whatever pipelines have run.
+    A strategy whose schema is absent is reported and skipped; capturing NOTHING
+    overall (no schema, or schemas with zero rows) aborts loudly — a silently
+    empty committed fixture would fail every Tier-2 test confusingly later.
     """
     from calibration import stack
 
@@ -97,6 +98,7 @@ def capture_pg(sqlite_conn: sqlite3.Connection) -> None:
     for table in PG_TABLES:
         sqlite_conn.execute(f'DROP TABLE IF EXISTS "{table}"')
     created: set[str] = set()
+    total_rows = 0
     with psycopg.connect(dsn) as pg:
         for strat in STRATEGIES:
             schema = _workspace_schema(strat)
@@ -110,6 +112,7 @@ def capture_pg(sqlite_conn: sqlite3.Connection) -> None:
                 cur = pg.execute(f'SELECT * FROM "{schema}"."{table}"')  # noqa: S608 (fixed names)
                 cols = [d.name for d in cur.description or []]
                 rows = cur.fetchall()
+                total_rows += len(rows)
                 if table not in created:
                     coldefs = ", ".join(f'"{c}" TEXT' for c in ["strategy", *cols])
                     sqlite_conn.execute(f'CREATE TABLE "{table}" ({coldefs})')
@@ -120,6 +123,17 @@ def capture_pg(sqlite_conn: sqlite3.Connection) -> None:
                     [[strat, *(_cell(v) for v in r)] for r in rows],
                 )
                 print(f"  pg.{table} [{strat}]: {len(rows)} rows ({len(cols)} cols)")
+    if not created:
+        raise SystemExit(
+            "capture_pg: NO strategy workspace schema exists — nothing captured; run "
+            f"the pipelines first ({', '.join(STRATEGIES)})"
+        )
+    if total_rows == 0:
+        raise SystemExit(
+            "capture_pg: workspace schemas exist but hold ZERO rows across every "
+            "captured table — the pipelines have not run in these workspaces; "
+            "refusing to write an empty fixture"
+        )
 
 
 # A non-numeric, non-date string column counts as a categorical SLICE KEY only if

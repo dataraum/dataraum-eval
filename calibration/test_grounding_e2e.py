@@ -133,9 +133,20 @@ def test_extract_snippet_parts_parity(strategy_name: str) -> None:
         if len(select) != 1:
             failures.append(f"  {label}: malformed parts.select {select!r}")
             continue
+        entry = select[0] if isinstance(select[0], dict) else {}
+        expr, alias = entry.get("expr"), entry.get("alias")
+        if not expr or alias != "value":
+            # A malformed entry is a per-snippet FAILURE, never a KeyError crash;
+            # the alias is part of the contract (the cockpit drill builder composes
+            # variants from parts, aliasing the scalar `value`) — parity of the
+            # rendered sql alone cannot catch a wrong alias, so check it here.
+            failures.append(
+                f"  {label}: malformed parts.select entry {select[0]!r} (need expr + alias 'value')"
+            )
+            continue
         relations = parts.get("from") or []
         recomposed = compose_extract_sql(
-            str(select[0]["expr"]),
+            str(expr),
             str(relations[0]) if relations else None,
             [str(p) for p in (parts.get("where") or [])],
         )
@@ -289,9 +300,11 @@ def test_reconciles_with_population(metadata_truth: dict[str, Any], strategy_nam
         for concept in {c for c, _ in groundings}
         if len({r for c, r in groundings if c == concept}) >= 2
     }
+    # symmetric predicates are materialized in BOTH directions, so the row count
+    # is 2x the logical reconciliation count — report it as directed rows.
     print(
-        f"\n[reconciles_with] {len(edges)} active edges; multi-grounded concepts in "
-        f"this run: {sorted(multi_grounded)}"
+        f"\n[reconciles_with] {len(edges)} active directed edge rows; multi-grounded "
+        f"concepts in this run: {sorted(multi_grounded)}"
     )
     assert not (multi_grounded and not edges), (
         f"concepts {sorted(multi_grounded)} enumerate >= 2 groundings but ZERO "
@@ -346,6 +359,10 @@ def test_served_context_ap_oracle(metadata_truth: dict[str, Any], strategy_name:
             )
         groundings = read_groundings(session)
         edges = read_reconciles_with(session)
+
+    # The file's own contract applies here too: once the view exists, an empty
+    # batch is a HARD stop-condition — never an xfail that muddies the P9 signal.
+    assert groundings, _EMPTY_BATCH
 
     problems: list[str] = []
     for concept in sorted(ap_class):
