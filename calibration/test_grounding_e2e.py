@@ -300,10 +300,10 @@ def test_reconciles_with_population(metadata_truth: dict[str, Any], strategy_nam
         for concept in {c for c, _ in groundings}
         if len({r for c, r in groundings if c == concept}) >= 2
     }
-    # symmetric predicates are materialized in BOTH directions, so the row count
-    # is 2x the logical reconciliation count — report it as directed rows.
+    # landed P2 shape: ONE active self-loop row per reconciling concept
+    # (from == to; a self-loop is its own reverse — nothing direction-doubled).
     print(
-        f"\n[reconciles_with] {len(edges)} active directed edge rows; multi-grounded "
+        f"\n[reconciles_with] {len(edges)} active self-loop rows; multi-grounded "
         f"concepts in this run: {sorted(multi_grounded)}"
     )
     assert not (multi_grounded and not edges), (

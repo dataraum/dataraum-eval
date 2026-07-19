@@ -124,9 +124,11 @@ def expected_reconciles_with(truth: dict[str, Any]) -> dict[str, Any]:
     """The ``reconciles_with`` truth (DAT-725 P2) — the expected post-P2 edge set.
 
     ``aggregation_lineage``: ``[{measure: "table.column", event_table: str}]`` — the
-    DAT-491 witness reified as a Grounding→Grounding reconciliation. ``multi_grounding``:
+    DAT-491 witness; its verdict lands as the measure's CONCEPT self-loop (resolve
+    measure → concept via ``business_concepts.required``). ``multi_grounding``:
     ``[{concept: str, relations: [str, ...]}]`` — concepts whose required bindings fan
-    into >= 2 relations, whose groundings must reconcile pairwise. Both derived by the
+    into >= 2 relations; the verdict is that concept's self-loop (the groundings'
+    pairwise detail stays graph-derivable, not row-materialized). Both derived by the
     generator per level (empty at ``single``, where every binding collapses into one
     relation).
     """
@@ -171,14 +173,15 @@ def read_view_exists(session: Any, view_name: str) -> bool:
 
 
 def read_groundings(session: Any) -> set[tuple[str, str]]:
-    """Every ``(concept, relation)`` pair in ``current_groundings`` (DAT-725 P2).
+    """Every HEALTHY ``(concept, relation)`` pair in ``current_groundings`` (DAT-725 P2).
 
-    ASSUMED P2 contract — the view does not exist pre-P2 (callers guard with
-    :func:`read_view_exists`): the read view is named ``current_groundings`` (locked
-    by the lane brief) and carries at least the concept NAME as ``concept`` and the
-    served relation name as ``relation``. If P2 lands different column names, this
-    reader is the single seam to adapt. Relations are normalized through
-    :func:`grounding_relation_key` into the truth's fact-table space.
+    The landed P2 view deliberately includes retained failures and pre-parts rows as
+    first-class grounding nodes (``failed`` property / NULL relation). This reader
+    grades ENUMERABLE HEALTHY groundings only — the grain the engine's own
+    >= 2-groundings reconciles_with producer counts — so failed rows can never
+    inflate a multi-grounding count into a false HARD demand for an edge. Relations
+    are normalized through :func:`grounding_relation_key` into the truth's
+    fact-table space.
     """
     from dataraum.storage.read_views import read_schema_name_for
     from sqlalchemy import text
@@ -187,7 +190,10 @@ def read_groundings(session: Any) -> set[tuple[str, str]]:
         str(session.execute(text("SELECT current_schema()")).scalar())
     )
     rows = session.execute(
-        text(f'SELECT concept, relation FROM "{read_schema}".current_groundings')
+        text(
+            f'SELECT concept, relation FROM "{read_schema}".current_groundings '
+            "WHERE NOT failed AND relation IS NOT NULL"
+        )
     ).all()
     return {(str(r.concept), grounding_relation_key(str(r.relation))) for r in rows}
 
@@ -195,11 +201,12 @@ def read_groundings(session: Any) -> set[tuple[str, str]]:
 def read_reconciles_with(session: Any) -> list[dict[str, Any]]:
     """Active ``reconciles_with`` concept edges: ``[{from_concept, to_concept, tolerance}]``.
 
-    Reads the read schema's ``concept_edges`` surface (the predicate vocabulary is
-    ``ConceptEdgePredicate``; ``reconciles_with`` is SYMMETRIC and materialized in
-    both directions). Pre-P2 the only writer is the vocabulary seed, so this returns
-    ``[]``; P2's producers (aggregation-lineage witness reification + the
-    >= 2-groundings rule) populate it.
+    Landed P2 shape (owner-ruled): derived rows are concept-grain SELF-LOOPS —
+    ``from_concept == to_concept``, tolerance NULL, ONE active row per concept (a
+    self-loop is its own reverse; nothing is direction-doubled). The row asserts
+    "this concept's computations must tie out"; the pairing detail stays derivable
+    from the ``grounded_by`` fan-out and the aggregation-lineage witness. Pre-P2 the
+    only writer is the vocabulary seed, so this returns ``[]``.
     """
     from dataraum.storage.read_views import read_schema_name_for
     from sqlalchemy import text
@@ -224,8 +231,10 @@ def read_extract_snippets(session: Any) -> list[dict[str, Any]]:
     """Every persisted EXTRACT snippet: ``[{snippet_id, standard_field, sql, parts}]``.
 
     Reads the workspace's ``sql_snippets`` KB table directly (not run-versioned; the
-    graph agent is the only extract author — cockpit query snippets are
-    ``snippet_type='query'``). ``parts`` is the DAT-671 clause-parts artifact
+    graph agent is the only extract author — cockpit rows are ``snippet_type='query'``
+    AND the engine's grounding surface additionally guards ``source LIKE 'graph:%'``,
+    so query-SOURCED extracts are excluded there too). ``parts`` is the DAT-671
+    clause-parts artifact
     ``{select: [{expr, alias}], from: [relation], where: [...]}`` that
     ``compose_extract_sql`` renders; the parts-parity oracle holds the stored ``sql``
     to exactly that render.
