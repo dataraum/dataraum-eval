@@ -17,6 +17,8 @@ from calibration.metadata_truth import (
     expected_bus_matrix,
     expected_degenerate_ids,
     expected_folded_dimensions,
+    expected_groundings,
+    expected_reconciles_with,
     load_truth,
 )
 
@@ -135,6 +137,73 @@ def test_business_concepts_required_is_well_formed() -> None:
     for col, concept in required.items():
         assert str(col).count(".") == 1, f"business_concept key {col!r} must be 'table.column'"
         assert concept and isinstance(concept, str), f"{col}: concept must be a non-empty string"
+
+
+# --- groundings + reconciles_with (DAT-725 P2) --------------------------------
+
+
+def test_expected_groundings_fan_in_is_well_formed() -> None:
+    """Every concept in the enumeration truth names >= 1 relation; the scorecard's
+    headline fan-ins (account_balance, transaction_amount) are present (DAT-725)."""
+    fan_in = expected_groundings(load_truth())
+    assert fan_in, "business_concepts.required flattened to no grounding fan-in"
+    for concept, relations in fan_in.items():
+        assert concept and relations, f"grounding fan-in {concept!r} -> {relations!r}"
+    assert fan_in["account_balance"] == {"trial_balance", "balance_sheet"}
+    assert fan_in["transaction_amount"] == {"invoices", "payments", "bank_transactions"}
+
+
+def test_reconciles_with_lineage_matches_structural_truth() -> None:
+    """``aggregation_lineage`` is exactly the reconciles_structurally measures vs the
+    event fact, and never a measure reconciling against its own relation (DAT-725)."""
+    truth = load_truth()
+    lineage = expected_reconciles_with(truth)["aggregation_lineage"]
+    assert lineage, "aggregation_lineage is empty at full"
+    assert {e["measure"] for e in lineage} == set(truth["reconciles_structurally"])
+    for entry in lineage:
+        assert str(entry["measure"]).count(".") == 1, entry
+        event = entry["event_table"]
+        assert event and "." not in str(event), entry
+        assert str(entry["measure"]).partition(".")[0] != event, (
+            f"{entry}: a measure cannot reconcile against an aggregation of its own relation"
+        )
+
+
+def test_reconciles_with_multi_grounding_matches_concept_fan_in() -> None:
+    """``multi_grounding`` is exactly the >= 2-relation subset of the grounding
+    fan-in — the deterministic P2 producer's input (DAT-725)."""
+    truth = load_truth()
+    fan_in = expected_groundings(truth)
+    multi = {
+        m["concept"]: set(m["relations"])
+        for m in expected_reconciles_with(truth)["multi_grounding"]
+    }
+    assert multi == {c: rels for c, rels in fan_in.items() if len(rels) >= 2}
+    # The scorecard's AP-class case: account_balance across trial_balance/balance_sheet.
+    assert multi["account_balance"] == {"trial_balance", "balance_sheet"}
+
+
+@pytest.mark.parametrize("level", ["partial", "flat"])
+def test_reconciles_with_survives_merge_levels(level: str) -> None:
+    """At merge levels that keep the fan-in alive, the edge set follows the renamed
+    schema: the event fact is the merged event relation, and transaction_amount's
+    fan-in collapses invoices+payments into invoice_data (DAT-725)."""
+    truth = remap_metadata_truth(canonical_metadata_truth(), level=level)
+    reconciles = expected_reconciles_with(truth)
+    event = {"partial": "journal_data", "flat": "general_ledger"}[level]
+    assert {e["event_table"] for e in reconciles["aggregation_lineage"]} == {event}
+    multi = {m["concept"]: set(m["relations"]) for m in reconciles["multi_grounding"]}
+    assert multi["account_balance"] == {"trial_balance", "balance_sheet"}
+    assert multi["transaction_amount"] == {"invoice_data", "bank_transactions"}
+
+
+def test_reconciles_with_collapses_at_single() -> None:
+    """At ``single`` every binding lands in mega_table: no measure can reconcile
+    against its own relation's aggregation, and no concept multi-grounds."""
+    truth = remap_metadata_truth(canonical_metadata_truth(), level="single")
+    reconciles = expected_reconciles_with(truth)
+    assert reconciles["aggregation_lineage"] == []
+    assert reconciles["multi_grounding"] == []
 
 
 # --- folded dimensions (DAT-757) --------------------------------------------

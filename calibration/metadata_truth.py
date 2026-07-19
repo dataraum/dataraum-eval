@@ -106,6 +106,149 @@ def expected_bus_matrix(truth: dict[str, Any]) -> dict[str, dict[str, dict[str, 
     return dict(truth.get("bus_matrix") or {})
 
 
+def expected_groundings(truth: dict[str, Any]) -> dict[str, set[str]]:
+    """``concept -> distinct relation (table) fan-in`` from ``business_concepts.required``.
+
+    The DAT-725 enumeration truth: once P2 lands, each (concept, relation) pair
+    here must be enumerable as a Grounding node. Includes single-relation concepts
+    (debit, credit) — multi-grounding is the >= 2 subset carried separately in
+    ``reconciles_with.multi_grounding``.
+    """
+    out: dict[str, set[str]] = {}
+    for col, concept in ((truth.get("business_concepts") or {}).get("required") or {}).items():
+        out.setdefault(str(concept), set()).add(str(col).partition(".")[0])
+    return out
+
+
+def expected_reconciles_with(truth: dict[str, Any]) -> dict[str, Any]:
+    """The ``reconciles_with`` truth (DAT-725 P2) — the expected post-P2 edge set.
+
+    ``aggregation_lineage``: ``[{measure: "table.column", event_table: str}]`` — the
+    DAT-491 witness reified as a Grounding→Grounding reconciliation. ``multi_grounding``:
+    ``[{concept: str, relations: [str, ...]}]`` — concepts whose required bindings fan
+    into >= 2 relations, whose groundings must reconcile pairwise. Both derived by the
+    generator per level (empty at ``single``, where every binding collapses into one
+    relation).
+    """
+    block = truth.get("reconciles_with") or {}
+    return {
+        "aggregation_lineage": list(block.get("aggregation_lineage") or []),
+        "multi_grounding": list(block.get("multi_grounding") or []),
+    }
+
+
+def grounding_relation_key(relation: str) -> str:
+    """Normalize a grounding's served-relation name into the truth's table space.
+
+    Strips the ``src_<digest>__`` upload prefix and an ``enriched_`` serving prefix
+    (enriched_views_phase names a fact's serving view ``enriched_<fact>``), so a
+    Grounding on either the typed table or its enriched serving view matches the
+    truth's fact-table names.
+    """
+    from calibration.tools._runs import short
+
+    return short(relation).removeprefix("enriched_")
+
+
+def read_view_exists(session: Any, view_name: str) -> bool:
+    """Whether the read schema exposes ``view_name`` — the pre/post-P2 capability probe."""
+    from dataraum.storage.read_views import read_schema_name_for
+    from sqlalchemy import text
+
+    read_schema = read_schema_name_for(
+        str(session.execute(text("SELECT current_schema()")).scalar())
+    )
+    return (
+        session.execute(
+            text(
+                "SELECT 1 FROM information_schema.views "
+                "WHERE table_schema = :schema AND table_name = :view"
+            ),
+            {"schema": read_schema, "view": view_name},
+        ).first()
+        is not None
+    )
+
+
+def read_groundings(session: Any) -> set[tuple[str, str]]:
+    """Every ``(concept, relation)`` pair in ``current_groundings`` (DAT-725 P2).
+
+    ASSUMED P2 contract — the view does not exist pre-P2 (callers guard with
+    :func:`read_view_exists`): the read view is named ``current_groundings`` (locked
+    by the lane brief) and carries at least the concept NAME as ``concept`` and the
+    served relation name as ``relation``. If P2 lands different column names, this
+    reader is the single seam to adapt. Relations are normalized through
+    :func:`grounding_relation_key` into the truth's fact-table space.
+    """
+    from dataraum.storage.read_views import read_schema_name_for
+    from sqlalchemy import text
+
+    read_schema = read_schema_name_for(
+        str(session.execute(text("SELECT current_schema()")).scalar())
+    )
+    rows = session.execute(
+        text(f'SELECT concept, relation FROM "{read_schema}".current_groundings')
+    ).all()
+    return {(str(r.concept), grounding_relation_key(str(r.relation))) for r in rows}
+
+
+def read_reconciles_with(session: Any) -> list[dict[str, Any]]:
+    """Active ``reconciles_with`` concept edges: ``[{from_concept, to_concept, tolerance}]``.
+
+    Reads the read schema's ``concept_edges`` surface (the predicate vocabulary is
+    ``ConceptEdgePredicate``; ``reconciles_with`` is SYMMETRIC and materialized in
+    both directions). Pre-P2 the only writer is the vocabulary seed, so this returns
+    ``[]``; P2's producers (aggregation-lineage witness reification + the
+    >= 2-groundings rule) populate it.
+    """
+    from dataraum.storage.read_views import read_schema_name_for
+    from sqlalchemy import text
+
+    read_schema = read_schema_name_for(
+        str(session.execute(text("SELECT current_schema()")).scalar())
+    )
+    rows = session.execute(
+        text(
+            "SELECT from_concept, to_concept, tolerance "
+            f'FROM "{read_schema}".concept_edges '
+            "WHERE predicate = 'reconciles_with' AND superseded_at IS NULL"
+        )
+    ).all()
+    return [
+        {"from_concept": r.from_concept, "to_concept": r.to_concept, "tolerance": r.tolerance}
+        for r in rows
+    ]
+
+
+def read_extract_snippets(session: Any) -> list[dict[str, Any]]:
+    """Every persisted EXTRACT snippet: ``[{snippet_id, standard_field, sql, parts}]``.
+
+    Reads the workspace's ``sql_snippets`` KB table directly (not run-versioned; the
+    graph agent is the only extract author — cockpit query snippets are
+    ``snippet_type='query'``). ``parts`` is the DAT-671 clause-parts artifact
+    ``{select: [{expr, alias}], from: [relation], where: [...]}`` that
+    ``compose_extract_sql`` renders; the parts-parity oracle holds the stored ``sql``
+    to exactly that render.
+    """
+    from sqlalchemy import text
+
+    rows = session.execute(
+        text(
+            "SELECT snippet_id, standard_field, sql, parts FROM sql_snippets "
+            "WHERE snippet_type = 'extract'"
+        )
+    ).all()
+    return [
+        {
+            "snippet_id": r.snippet_id,
+            "standard_field": r.standard_field,
+            "sql": r.sql,
+            "parts": r.parts,
+        }
+        for r in rows
+    ]
+
+
 def read_temporal_behavior(session: Any) -> dict[str, str]:
     """``current_column_concepts.temporal_behavior`` keyed ``"table.column"`` (narrow names).
 
