@@ -347,19 +347,27 @@ def read_defined_relationships(session: Any) -> set[tuple[str, str, str, str]]:
     edge ``(from_table, from_col, to_table, to_col)`` with narrow table names.
 
     The judge-confirmed FK catalog DAT-684 grades — recall (every true FK present)
-    and precision (no spurious FKs). Reads the run's ``relationships`` table directly
-    (relationships have no ``current_*`` read view), so it reflects exactly what the
-    downstream consumers (lineage, cycles, enriched_views, …) treat as "the FKs".
+    and precision (no spurious FKs). Reads ``current_relationships`` — the
+    promoted-catalog-head view (the same scoping ``current_bus_matrix`` rides) —
+    never the raw ``relationships`` table: multiple runs' rows coexist there (a
+    teach re-run, a prior pass of the same workspace), and a stale run's confirmed
+    row inflates recall with an edge the graded run never produced (run #2's false
+    8/9). Name joins stay on the raw ``columns``/``tables`` — ``column_id`` is
+    unique, so name resolution needs no head scoping.
     """
+    from dataraum.storage.read_views import read_schema_name_for
     from sqlalchemy import text
 
     from calibration.tools._runs import short
 
+    read_schema = read_schema_name_for(
+        str(session.execute(text("SELECT current_schema()")).scalar())
+    )
     rows = session.execute(
         text(
             "SELECT ft.table_name AS ft, fc.column_name AS fc, "
             "tt.table_name AS tt, tc.column_name AS tc "
-            "FROM relationships r "
+            f'FROM "{read_schema}".current_relationships r '
             "JOIN columns fc ON fc.column_id = r.from_column_id "
             "JOIN tables ft ON ft.table_id = fc.table_id "
             "JOIN columns tc ON tc.column_id = r.to_column_id "
@@ -370,40 +378,83 @@ def read_defined_relationships(session: Any) -> set[tuple[str, str, str, str]]:
     return {(short(r.ft), r.fc, short(r.tt), r.tc) for r in rows}
 
 
-def read_candidate_relationship(
+def pick_fk_miss_diagnostic(
+    rows: list[tuple[str, str, str, str, str, Any, Any]],
+    pair: tuple[str, str, str, str],
+) -> dict[str, Any] | None:
+    """The row that best explains one truth pair's recall miss (pure; Tier-1-able).
+
+    ``rows`` are the graded run's relationship rows as ``(from_table, from_col,
+    to_table, to_col, detection_method, confidence, evidence)`` with narrow table
+    names; ``pair`` is the missing truth edge. Matching is surrogate-aware exactly
+    like the recall test's ``_satisfies`` (same tables, truth column contained in
+    the row column). Preference order:
+
+    * a CONFIRMED (non-candidate) row in the FLIPPED orientation → ``kind:
+      "confirmed_flipped"``. The judge accepted the pair but oriented it against
+      the truth; grading is direction-exact so the red stands, but "DECLINED"
+      would be a mis-diagnosis (run #2 printed payments↔bank_transactions,
+      confirmed 0.95 flipped, as "DECLINED at 1.0").
+    * else a candidate row in either orientation → ``kind: "declined"`` — a real
+      judge decline, auditable via its kept evidence (DAT-699). The judge's
+      orientation is not run-stable, hence direction-insensitive.
+    * else ``None`` — the pair never became a candidate (a Layer-A gap, not a
+      judge decline — a different bug class).
+    """
+    tft, tfc, ttt, ttc = pair
+
+    def _matches(row: tuple[str, str, str, str], want: tuple[str, str, str, str]) -> bool:
+        rft, rfc, rtt, rtc = row
+        wft, wfc, wtt, wtc = want
+        return rft == wft and rtt == wtt and wfc in rfc and wtc in rtc
+
+    flipped = (ttt, ttc, tft, tfc)
+    declined: dict[str, Any] | None = None
+    for rft, rfc, rtt, rtc, method, confidence, evidence in rows:
+        row = (rft, rfc, rtt, rtc)
+        if method != "candidate":
+            if _matches(row, flipped):
+                return {"kind": "confirmed_flipped", "confidence": confidence, "evidence": evidence}
+        elif declined is None and (_matches(row, pair) or _matches(row, flipped)):
+            declined = {"kind": "declined", "confidence": confidence, "evidence": evidence}
+    return declined
+
+
+def read_fk_miss_diagnostic(
     session: Any, from_table: str, from_col: str, to_table: str, to_col: str
 ) -> dict[str, Any] | None:
-    """The judge-DECLINED row for one pair, if any: ``{confidence, evidence}``.
+    """Why one truth FK is missing, explained from the graded run's own rows.
 
-    Diagnostic for a recall miss: since DAT-699 a declined pair persists as
-    ``detection_method='candidate'`` with the judge's evidence/reasoning kept — so
-    a flaked decline is auditable in the failing run itself. Narrow table names;
-    direction-insensitive (the judge's orientation is not run-stable). Returns
-    None when the pair never became a candidate (a Layer-A gap, not a judge
-    decline — a different bug class).
+    Reads ALL of ``current_relationships`` (confirmed + candidate) — head-scoped
+    like :func:`read_defined_relationships`, so the explanation describes THIS
+    run, never a stale one — and delegates the choice to
+    :func:`pick_fk_miss_diagnostic` (see there for the kinds and preference).
     """
+    from dataraum.storage.read_views import read_schema_name_for
     from sqlalchemy import text
 
     from calibration.tools._runs import short
 
+    read_schema = read_schema_name_for(
+        str(session.execute(text("SELECT current_schema()")).scalar())
+    )
     rows = session.execute(
         text(
             "SELECT ft.table_name AS ft, fc.column_name AS fc, "
             "tt.table_name AS tt, tc.column_name AS tc, "
+            "r.detection_method AS method, "
             "r.confidence AS confidence, r.evidence AS evidence "
-            "FROM relationships r "
+            f'FROM "{read_schema}".current_relationships r '
             "JOIN columns fc ON fc.column_id = r.from_column_id "
             "JOIN tables ft ON ft.table_id = fc.table_id "
             "JOIN columns tc ON tc.column_id = r.to_column_id "
-            "JOIN tables tt ON tt.table_id = tc.table_id "
-            "WHERE r.detection_method = 'candidate'"
+            "JOIN tables tt ON tt.table_id = tc.table_id"
         )
     ).all()
-    want = {(from_table, from_col, to_table, to_col), (to_table, to_col, from_table, from_col)}
-    for r in rows:
-        if (short(r.ft), r.fc, short(r.tt), r.tc) in want:
-            return {"confidence": r.confidence, "evidence": r.evidence}
-    return None
+    return pick_fk_miss_diagnostic(
+        [(short(r.ft), r.fc, short(r.tt), r.tc, r.method, r.confidence, r.evidence) for r in rows],
+        (from_table, from_col, to_table, to_col),
+    )
 
 
 def expected_relationships(truth: dict[str, Any]) -> dict[tuple[str, str, str, str], bool]:

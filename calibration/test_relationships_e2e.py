@@ -27,8 +27,8 @@ import pytest
 from calibration import runner as runner_mod
 from calibration.metadata_truth import (
     expected_relationships,
-    read_candidate_relationship,
     read_defined_relationships,
+    read_fk_miss_diagnostic,
 )
 from calibration.tools._runs import workspace_session
 
@@ -85,16 +85,21 @@ def test_relationship_recall(metadata_truth: dict[str, Any]) -> None:
         ]
         print(f"\n[relationship recall] {len(true_fks) - len(missing)}/{len(true_fks)} true FKs confirmed")
         for t in missing:
-            # Self-documenting miss (learned 2026-07-15, DAT-763 follow-up): a
-            # declined pair persists as 'candidate' with the judge's evidence, so
-            # print WHY before the workspace is reset — decline-with-reasoning is
-            # a judge/prompt issue, no candidate at all is a Layer-A gap.
-            cand = read_candidate_relationship(session, *t)
-            verdict = (
-                f"judge DECLINED at confidence {cand['confidence']}: {cand['evidence']!r}"
-                if cand
-                else "never a candidate (Layer-A gap)"
-            )
+            # Self-documenting miss (learned 2026-07-15, DAT-763 follow-up): print
+            # WHY before the workspace is reset. Three distinct bug classes — a
+            # flipped confirm is an orientation issue (the judge ACCEPTED the
+            # pair), a decline-with-reasoning is a judge/prompt issue, and no
+            # candidate at all is a Layer-A gap.
+            diag = read_fk_miss_diagnostic(session, *t)
+            if diag is None:
+                verdict = "never a candidate (Layer-A gap)"
+            elif diag["kind"] == "confirmed_flipped":
+                verdict = (
+                    f"CONFIRMED IN FLIPPED ORIENTATION (conf {diag['confidence']}) "
+                    "— truth is direction-exact"
+                )
+            else:
+                verdict = f"judge DECLINED at confidence {diag['confidence']}: {diag['evidence']!r}"
             print(f"  MISSING: {t[0]}.{t[1]} -> {t[2]}.{t[3]} — {verdict}")
     assert not missing, (
         "true FKs (generator topology) absent from the judge-confirmed catalog — a "
