@@ -286,6 +286,24 @@ business_concepts:
     invoices.amount: transaction_amount
     payments.amount: transaction_amount
     bank_transactions.amount: transaction_amount
+reconciles_with:
+  aggregation_lineage:
+  - measure: trial_balance.debit_balance
+    event_table: journal_lines
+  - measure: trial_balance.credit_balance
+    event_table: journal_lines
+  - measure: balance_sheet.ending_balance
+    event_table: journal_lines
+  multi_grounding:
+  - concept: account_balance
+    relations:
+    - balance_sheet
+    - trial_balance
+  - concept: transaction_amount
+    relations:
+    - bank_transactions
+    - invoices
+    - payments
 cycles:
 - canonical_type: journal_entry_cycle
   key_tables:
