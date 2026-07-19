@@ -9,8 +9,15 @@ the fixture would otherwise only surface in a 10-minute run.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
-from testdata.metadata_truth import canonical_metadata_truth, remap_metadata_truth
+import yaml
+from testdata.metadata_truth import (
+    canonical_metadata_truth,
+    export_metadata_truth,
+    remap_metadata_truth,
+)
 
 from calibration.metadata_truth import (
     expected_additivity,
@@ -195,6 +202,32 @@ def test_reconciles_with_survives_merge_levels(level: str) -> None:
     multi = {m["concept"]: set(m["relations"]) for m in reconciles["multi_grounding"]}
     assert multi["account_balance"] == {"trial_balance", "balance_sheet"}
     assert multi["transaction_amount"] == {"invoice_data", "bank_transactions"}
+
+
+@pytest.mark.parametrize("level", ["full", "partial", "flat", "single"])
+def test_per_run_export_sections_cover_canonical(level: str, tmp_path: Path) -> None:
+    """The per-run export carries every SECTION the canonical fixture does — its
+    top-level keys are a superset, at every normalization level.
+
+    The conftest ``metadata_truth`` fixture PREFERS ``data/<strategy>/
+    metadata_truth.yaml`` (the per-run export) over the canonical fixture, and
+    the oracles read absent sections as "this corpus shape has no such concept"
+    (silent skip). Run #2: the export predated ``reconciles_with``, so the
+    multi-grounding oracles skipped everywhere the canonical truth declared
+    account_balance across trial_balance/balance_sheet — a section missing from
+    the export silently vanishes from grading. Pin the REAL writer
+    (``export_metadata_truth`` → YAML → read back), not the in-memory dict, so a
+    future section can never fall out of the export unnoticed. Section CONTENT
+    may legitimately empty per level (e.g. reconciles_with at ``single``) — only
+    the keys are pinned.
+    """
+    export_metadata_truth(tmp_path, level=level)
+    exported = yaml.safe_load((tmp_path / "metadata_truth.yaml").read_text())
+    missing = set(load_truth()) - set(exported)
+    assert not missing, (
+        f"per-run export at level={level!r} lost section(s) {sorted(missing)} — "
+        "the conftest fixture prefers the export, so these silently vanish from grading"
+    )
 
 
 def test_reconciles_with_collapses_at_single() -> None:
