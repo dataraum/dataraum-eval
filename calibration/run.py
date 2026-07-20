@@ -32,6 +32,7 @@ import json
 import subprocess
 import sys
 from dataclasses import dataclass, field
+from typing import Any
 
 from calibration import runner, stack
 
@@ -54,10 +55,11 @@ class Outcome:
     ran: bool = False
     asserted: bool | None = None  # None = skipped, True = green, False = failed
     error: str = ""
-    coverage: dict = field(default_factory=dict)  # oracle_coverage.json, written by conftest
+    # oracle_coverage.json, written by conftest.pytest_terminal_summary
+    coverage: dict[str, Any] = field(default_factory=dict)
 
 
-def _read_coverage(strategy: str) -> dict:
+def _read_coverage(strategy: str) -> dict[str, Any]:
     """What the assert pass actually graded (see conftest.pytest_terminal_summary)."""
     path = runner.OUTPUT_DIR / strategy / "oracle_coverage.json"
     if not path.exists():
