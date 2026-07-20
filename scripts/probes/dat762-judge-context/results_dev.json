@@ -1,0 +1,3469 @@
+{
+ "A1:C1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "reason": "bidirectional pair-count g3 + significant"
+ },
+ "A1:N:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "colour_group_code and colour_group_name are code/name pairs identifying the same colour group attribute."
+ },
+ "A1:N:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "colour_group_code and colour_group_name are code/name pairs representing the same colour group entity."
+ },
+ "A1:N:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Colour group code and name are code/label pairs identifying the same colour group entity."
+ },
+ "A1:V:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Same cardinality and 1:1 correspondence indicate code and name are the same colour-group identity."
+ },
+ "A1:V:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Code and name have identical cardinality and a 1:1 mapping representing the same colour group identity."
+ },
+ "A1:V:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Code and name have identical cardinality and one-to-one correspondence, representing the same colour group entity."
+ },
+ "A1:VR:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "colour_group_code and colour_group_name are a 1:1 code/name pair for the same attribute, both with 49 distinct values and perfect functional dependency both ways."
+ },
+ "A1:VR:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Code and name have identical distinct counts and a perfect one-to-one mapping, making them the same colour-group identity."
+ },
+ "A1:VR:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Code and name are 1:1 identical identifiers for the same colour group attribute."
+ },
+ "A1:VH:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Code and name are two encodings of the same colour group identity, in a 1:1 bijection."
+ },
+ "A1:VH:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "code and name are two encodings of the same colour-group identity, bijective with 49 matching distinct values."
+ },
+ "A1:VH:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Code and name are two bijective encodings of the same colour-group identity."
+ },
+ "A2:C1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "reason": "bidirectional pair-count g3 + significant"
+ },
+ "A2:N:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "index_code and index_name are code/name pairs identifying the same index attribute of an article, so they should conform into one dimension."
+ },
+ "A2:N:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "index_code and index_name are code/label pairs for the same index attribute of an article, so they should conform into one dimension."
+ },
+ "A2:N:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "index_code and index_name are code/name pairs representing the same attribute of the article dimension."
+ },
+ "A2:V:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "article__index_code and article__index_name are a 1:1 code/name pair for the same index entity, both with 10 distinct values in matching frequency."
+ },
+ "A2:V:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "index_code and index_name are code/name pairs with identical cardinality and matching value distributions, representing the same entity."
+ },
+ "A2:V:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "article__index_code and article__index_name are code/name pairs with identical cardinality and matching frequencies, representing the same entity."
+ },
+ "A2:VR:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "article__index_code and article__index_name are a bijective code/label pair for the same attribute, both with 10 distinct values and perfect functional dependency in both directions."
+ },
+ "A2:VR:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "article__index_code and article__index_name are a 1:1 code/name pair for the same attribute, both with matching 10 distinct values and zero disagreement rate."
+ },
+ "A2:VR:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "article__index_code and article__index_name are code/name pairs with identical cardinality and a perfect 1:1 mapping, representing the same entity."
+ },
+ "A2:VH:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "index_code and index_name are code/label encodings of the same index identity, in perfect 1:1 correspondence."
+ },
+ "A2:VH:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "article__index_code and article__index_name are code/name encodings of the same index entity, in 1:1 bijection."
+ },
+ "A2:VH:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "index_code and index_name are code/name encodings of the same index entity with a perfect 1:1 bijection."
+ },
+ "A3:C1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "reason": "bidirectional pair-count g3 + significant"
+ },
+ "A3:N:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "garment_group_no and garment_group_name are code and name for the same garment group entity, so they should conform into one dimension."
+ },
+ "A3:N:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "garment_group_no and garment_group_name are code/name pairs identifying the same garment group entity."
+ },
+ "A3:N:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "garment_group_no and garment_group_name are code and label for the same garment group entity."
+ },
+ "A3:V:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "garment_group_no and garment_group_name are code and label for the same 21-value attribute, a 1:1 mapping."
+ },
+ "A3:V:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "garment_group_no and garment_group_name are code/name pairs with identical cardinality representing the same garment group identity."
+ },
+ "A3:V:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "garment_group_no and garment_group_name are code and label for the same attribute with identical cardinality and matching value distributions."
+ },
+ "A3:VR:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Code and name have identical cardinality and a perfect 1:1 mapping, representing the same garment group identity."
+ },
+ "A3:VR:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Code and name have identical cardinality and a perfect 1:1 mapping, representing the same garment group identity."
+ },
+ "A3:VR:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "garment_group_no and garment_group_name are code/label pairs with identical cardinality and a perfect one-to-one mapping, representing the same entity."
+ },
+ "A3:VH:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Code and name are a 1:1 bijection representing the same garment-group identity, just two encodings."
+ },
+ "A3:VH:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Code and name form a 1:1 bijection representing the same garment group identity."
+ },
+ "A3:VH:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Code and name are a 1:1 bijective pair naming the same garment-group entity, so they should conform into one dimension."
+ },
+ "A4:C1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "reason": "bidirectional pair-count g3 + significant"
+ },
+ "A4:N:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "section_no and section_name are code and name identifiers for the same section entity."
+ },
+ "A4:N:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "section_no and section_name are code and name attributes of the same section entity, so they should conform into a single dimension."
+ },
+ "A4:N:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "section_no and section_name are code and name representations of the same section entity."
+ },
+ "A4:V:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "section_no and section_name have identical cardinality and are code/label pairs for the same section entity."
+ },
+ "A4:V:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "section_no and section_name have identical cardinality and are code/label pairs for the same section entity."
+ },
+ "A4:V:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both columns have identical cardinality (55 distinct values) and a 1:1 correspondence, representing code and name of the same section entity."
+ },
+ "A4:VR:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "article__section_no and article__section_name have identical cardinality (55) and a perfect bijective mapping, representing code and name of the same section entity."
+ },
+ "A4:VR:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "article__section_no and article__section_name are code/name pairs with identical cardinality and a perfect bidirectional functional dependency, representing the same entity."
+ },
+ "A4:VR:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "section_no and section_name are code/name pairs with identical cardinality and a perfect bijective mapping, representing the same entity."
+ },
+ "A4:VH:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "section_no and section_name are code and name encodings of the same section entity, in exact bijection."
+ },
+ "A4:VH:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "section_no and section_name are code/name encodings of the same section entity, in perfect bijection."
+ },
+ "A4:VH:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "section_no and section_name are code/name pairs identifying the same section entity with a perfect bijection."
+ },
+ "A5:C1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "reason": "bidirectional pair-count g3 + significant"
+ },
+ "A5:N:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are unique identifiers/labels for the same constructor entity, just different code and name representations."
+ },
+ "A5:N:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "constructor__constructorRef and constructor__name are alternate code/name identifiers for the same constructor entity."
+ },
+ "A5:N:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are unique identifiers/labels for the same constructor entity, just code vs full name."
+ },
+ "A5:V:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "constructor__constructorRef and constructor__name are code/name pairs for the same constructor entity with identical cardinality and matching counts."
+ },
+ "A5:V:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "constructorRef and name have identical cardinality and one-to-one correspondence, representing the same constructor identity in code vs display form."
+ },
+ "A5:V:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "constructorRef and name have identical cardinality and one-to-one correspondence, representing the same constructor identity as code vs display name."
+ },
+ "A5:VR:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "constructorRef and name are 1:1 codes/labels for the same constructor entity, both with 210 distinct values and perfect functional dependency in both directions."
+ },
+ "A5:VR:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "constructorRef and name are 1:1 code/label pairs identifying the same constructor entity."
+ },
+ "A5:VR:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "constructorRef and name are 1:1 code/label pairs for the same constructor entity."
+ },
+ "A5:VH:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "constructorRef and constructor__name are just slug and display-name encodings of the same constructor identity, in 1:1 bijection."
+ },
+ "A5:VH:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "constructorRef and constructor__name are just code and display-name encodings of the same constructor entity, in 1:1 bijection."
+ },
+ "A5:VH:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "constructorRef and constructor name are just code and label for the same constructor entity, in 1:1 bijection."
+ },
+ "A6:C1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "reason": "bidirectional pair-count g3 + significant"
+ },
+ "A6:N:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "race__circuitId is the circuit's identifier that determines the circuit's name, a coarser attribute lookup."
+ },
+ "A6:N:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "circuit__circuitId uniquely determines circuit__name, a key-to-attribute relationship within the circuit dimension."
+ },
+ "A6:N:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "race__circuitId is the circuit's key that determines its descriptive name circuit__name, forming a groupable hierarchy."
+ },
+ "A6:V:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "race__circuitId and circuit__name are the code and name of the same circuit entity, with identical cardinality and matching value distributions."
+ },
+ "A6:V:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "race__circuitId and circuit__name have identical cardinality and a 1:1 correspondence, representing the same circuit entity as code vs name."
+ },
+ "A6:V:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "race__circuitId and circuit__name are the code and name of the same circuit entity, with identical cardinality and matching value counts."
+ },
+ "A6:VR:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "race__circuitId and circuit__name are both 1:1 surrogate/natural keys identifying the same circuit entity."
+ },
+ "A6:VR:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "race__circuitId and circuit__name have identical cardinality and a bijective mapping, representing the same circuit entity as code and name."
+ },
+ "A6:VR:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "race__circuitId and circuit__name are a 1:1 key-to-name mapping identifying the same circuit entity."
+ },
+ "A6:VH:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "race__circuitId and circuit__name are code/name encodings of the same circuit entity, forming a 1:1 bijection."
+ },
+ "A6:VH:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "race__circuitId and circuit__name are the id and name encodings of the same circuit entity, forming a bijection."
+ },
+ "A6:VH:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "race__circuitId and circuit__name are a 1:1 bijection representing the same circuit identity, just coded vs named."
+ },
+ "B1:C1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "reason": "bidirectional pair-count g3 + significant"
+ },
+ "B1:N:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "product_type_no and product_type_name are code and name representations of the same product type attribute."
+ },
+ "B1:N:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "product_type_no and product_type_name are code and label for the same product type attribute, so they should conform into one identity."
+ },
+ "B1:N:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "product_type_no and product_type_name are code and name representations of the same product type attribute."
+ },
+ "B1:V:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "product_type_no and product_type_name are code/label pairs for the same product type attribute with matching cardinality."
+ },
+ "B1:V:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "product_type_no and product_type_name are code/label pairs for the same product type attribute with matching cardinalities."
+ },
+ "B1:V:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "product_type_no and product_type_name are code/label pairs for the same product type entity with matching cardinalities."
+ },
+ "B1:VR:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "product_type_no and product_type_name are code/name pairs with near-perfect 1:1 mapping (114 vs 115 distinct, near-zero FD violations) representing the same entity."
+ },
+ "B1:VR:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "product_type_no and product_type_name are code/name pairs for the same attribute with a near-bijective mapping."
+ },
+ "B1:VR:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "product_type_no and product_type_name are code and name for the same product type entity with near-perfect 1:1 correspondence."
+ },
+ "B1:VH:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "product_type_no and product_type_name are code/name encodings of the same product-type entity in a 1:1 bijection."
+ },
+ "B1:VH:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "product_type_no and product_type_name are code and label for the same product-type entity, in a 1:1 bijection."
+ },
+ "B1:VH:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "product_type_no and product_type_name are code/name encodings of the same product-type identity, in a near-perfect bijection."
+ },
+ "B2:C1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "reason": "bidirectional pair-count g3 + significant"
+ },
+ "B2:N:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "Both columns represent the same race date, duplicated across the denormalized table."
+ },
+ "B2:N:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both columns represent the same race date, duplicated across the denormalized table."
+ },
+ "B2:N:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both columns represent the same race date, duplicated across the denormalized table."
+ },
+ "B2:V:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both columns represent the same race date with identical distributions, just duplicated across the denormalized join."
+ },
+ "B2:V:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both columns represent the same race date duplicated at the result and race grain, identical distinct counts and value distributions."
+ },
+ "B2:V:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both columns represent the same race date with identical distinct counts and value distributions, just duplicated across the denormalized join."
+ },
+ "B2:VR:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "date and race__date are identical duplicated columns representing the same race date."
+ },
+ "B2:VR:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "date and race__date are identical duplicate columns representing the same race date."
+ },
+ "B2:VR:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "date and race__date are duplicate copies of the same race date value with identical distributions and zero disagreement."
+ },
+ "B2:VH:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "date is a copied duplicate of race__date, identical on 100% of rows with the same distinct-value cardinality."
+ },
+ "B2:VH:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "date is a copied/duplicated value of race__date, identical on every row with matching cardinality."
+ },
+ "B2:VH:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "date is a copied denormalized value of race__date, identical on 100% of rows."
+ },
+ "P1:C1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "reason": "bidirectional pair-count g3 + significant"
+ },
+ "P1:N:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each raceId corresponds to a single race date, making date an attribute determined by raceId."
+ },
+ "P1:N:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "raceId uniquely determines the race's date, making date a groupable attribute of the race dimension."
+ },
+ "P1:N:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each raceId corresponds to a single race date, so raceId determines date as a coarser-to-finer groupable attribute."
+ },
+ "P1:V:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "raceId and date have identical cardinality and are 1:1 aliases of the same race event, with date acting as a natural key for raceId."
+ },
+ "P1:V:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "raceId is the race identifier that determines the fixed race date, a coarser attribute of the race dimension."
+ },
+ "P1:V:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "raceId and date have identical cardinality and both uniquely identify the same race event, making date a redundant natural key for raceId."
+ },
+ "P1:VR:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "raceId functionally determines the race date, acting as a groupable attribute of the race dimension."
+ },
+ "P1:VR:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "raceId and date are 1:1 identifiers of the same race event (same distinct counts and mutual functional determination)."
+ },
+ "P1:VR:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "raceId and date are a 1:1 bijective key-attribute pair identifying the same race event, so they should conform into a single race identity."
+ },
+ "P1:VH:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "raceId is the race's surrogate identity while date is a descriptive attribute (the race's date), so raceId determines date but date is not the identity."
+ },
+ "P1:VH:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "date is a race attribute that happens to be a proxy timestamp key co-varying 1:1 with raceId, not a groupable coarser dimension level."
+ },
+ "P1:VH:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "date is a proxy timestamp attribute of the race entity keyed by raceId, not a groupable dimensional level distinct from the race identity itself."
+ },
+ "P2:C1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "reason": "bidirectional pair-count g3 + significant"
+ },
+ "P2:N:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "CREATIONTIMESTAMP is a proxy timestamp attribute, not a dimensional attribute or grouping level of the sales document identifier."
+ },
+ "P2:N:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "CREATIONTIMESTAMP is a proxy timestamp attribute, not a groupable dimensional attribute of the sales document identifier."
+ },
+ "P2:N:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "CREATIONTIMESTAMP is a proxy timestamp attribute, not a groupable dimensional attribute derived from or hierarchically related to SALESDOCUMENT."
+ },
+ "P2:V:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "CREATIONTIMESTAMP is a proxy timestamp attribute of the document, not a groupable dimensional level relative to SALESDOCUMENT."
+ },
+ "P2:V:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "CREATIONTIMESTAMP is a proxy timestamp tightly correlated with document creation, not a groupable dimensional attribute of SALESDOCUMENT."
+ },
+ "P2:V:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "CREATIONTIMESTAMP is a proxy timestamp attribute of the document, not a groupable dimensional level."
+ },
+ "P2:VR:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "CREATIONTIMESTAMP is a proxy timestamp correlated with document creation order, not a groupable dimensional attribute of SALESDOCUMENT."
+ },
+ "P2:VR:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "CREATIONTIMESTAMP is a proxy timestamp key correlated 1:1 with the document identifier, not a groupable dimensional attribute."
+ },
+ "P2:VR:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "CREATIONTIMESTAMP is a proxy timestamp for document creation, not a groupable attribute of SALESDOCUMENT."
+ },
+ "P2:VH:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "CREATIONTIMESTAMP is a proxy/audit key that happens to be bijective with SALESDOCUMENT but is not a groupable dimensional attribute of it."
+ },
+ "P2:VH:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "CREATIONTIMESTAMP is a proxy timestamp that happens to be minted in lockstep with the document id, not a groupable dimensional attribute."
+ },
+ "P2:VH:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "CREATIONTIMESTAMP is a proxy/timestamp key that happens to align 1:1 with SALESDOCUMENT by minting order, not a meaningful dimensional attribute."
+ },
+ "C1:C1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "reason": "T1 membership-systematic vs SALESDOCUMENTITEM"
+ },
+ "C1:N:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to party and payer party are distinct partner roles in the order that may share the same value but represent different business functions and must be kept separate."
+ },
+ "C1:N:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are party-role references on the sales document but represent distinct business roles (invoice recipient vs. payer) that must be kept separate."
+ },
+ "C1:N:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to and payer parties are distinct business partner roles on the sales document that, though related, must be kept separate for accurate role-based analysis."
+ },
+ "C1:V:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to and payer parties are distinct partner roles in sales documents that often coincide but must remain separately identifiable."
+ },
+ "C1:V:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to and payer parties are distinct business roles that often coincide but must remain separate partner functions in the sales document."
+ },
+ "C1:V:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to and payer parties are distinct business roles in the sales document partner set, though often the same value, and must remain separate for role-specific analysis."
+ },
+ "C1:VR:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to and payer parties are nearly identical but distinct business roles that occasionally diverge (1.6% disagreement), so they must be kept as separate role-specific dimensions rather than merged."
+ },
+ "C1:VR:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to and payer parties are nearly always the same party but represent distinct business roles that occasionally diverge, so they should be kept as separate role dimensions."
+ },
+ "C1:VR:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to and payer parties are nearly identical but disagree in ~1.6% of rows, reflecting distinct business roles that must remain separately addressable."
+ },
+ "C1:VH:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "BillToParty and PayerParty are distinct business roles (invoice recipient vs. payer) that coincide most of the time but are deliberately separate party fields with systematic exceptions."
+ },
+ "C1:VH:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to and payer party are distinct business roles that usually coincide but can systematically diverge (e.g. third-party payment arrangements), so they must be kept as separate role dimensions rather than merged."
+ },
+ "C1:VH:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "BillToParty and PayerParty are distinct business roles (billing recipient vs. actual payer) that usually coincide but are deliberately allowed to differ."
+ },
+ "C2:C1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "reason": "T1 membership-systematic vs SALESDOCUMENTITEM"
+ },
+ "C2:N:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are country attributes tied to distinct party roles (sold-to vs bill-to) and must remain separate dimensions rather than merged."
+ },
+ "C2:N:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both represent country attributes but for distinct party roles (sold-to vs bill-to) that must remain separate for analysis."
+ },
+ "C2:N:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are country attributes tied to distinct party roles (sold-to vs bill-to) that must remain separate for accurate role-based analysis."
+ },
+ "C2:V:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are country attributes of distinct party roles (sold-to vs bill-to) that can differ per transaction and must remain separate dimensions."
+ },
+ "C2:V:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both represent country attributes of distinct party roles (sold-to vs bill-to) that must be kept separate despite similar distributions."
+ },
+ "C2:V:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both represent country of address but for distinct party roles (sold-to vs bill-to) that must be kept separate despite similar distributions."
+ },
+ "C2:VR:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Sold-to and bill-to countries are distinct party roles that frequently but not always coincide, so they must remain separate role dimensions rather than merge."
+ },
+ "C2:VR:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Sold-to and bill-to are distinct party roles whose country attributes frequently diverge (~3.5% disagreement), so they must be kept as separate role-specific dimensions rather than merged or hierarchically nested."
+ },
+ "C2:VR:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Sold-to and bill-to are distinct party roles whose countries frequently differ (~3.5% disagreement, imperfect FD), so they must be kept as separate role-specific dimensions rather than merged."
+ },
+ "C2:VH:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Sold-to and bill-to countries represent deliberately distinct party roles that usually coincide but systematically differ for cross-border billing arrangements."
+ },
+ "C2:VH:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Sold-to and bill-to are distinct party roles whose countries mostly coincide but systematically differ for cross-border billing arrangements, so they must be kept separate rather than merged."
+ },
+ "C2:VH:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Sold-to and bill-to are distinct party roles whose countries usually match but systematically differ for cross-border billing arrangements, so they must be kept separate rather than merged."
+ },
+ "C3:C1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "reason": "T1 membership-systematic vs SALESDOCUMENTITEM"
+ },
+ "C3:N:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both represent regional address attributes but correspond to distinct party roles (bill-to vs payer) that must be kept separate for accurate partner analysis."
+ },
+ "C3:N:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are regional attributes of addresses but tied to distinct party roles (bill-to vs payer) that must remain separate dimensions."
+ },
+ "C3:N:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both represent address regions but for distinct business partner roles (bill-to vs payer) that must remain separate for analysis."
+ },
+ "C3:V:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both represent region attributes of distinct party roles (bill-to vs payer) that should remain separate despite similar distributions."
+ },
+ "C3:V:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are region attributes of distinct party roles (bill-to vs payer) that can diverge per transaction and should remain separate dimensions."
+ },
+ "C3:V:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both represent region attributes of party addresses but correspond to distinct business roles (bill-to vs payer) that must be kept separate despite frequently matching."
+ },
+ "C3:VR:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to and payer regions are highly correlated but represent distinct party roles that occasionally diverge, so they must be kept as separate dimensions."
+ },
+ "C3:VR:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to and payer addresses are distinct party roles that happen to often coincide, so their regions should remain separate dimensions rather than merged."
+ },
+ "C3:VR:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to and payer regions are nearly identical but represent distinct party roles that should remain separate dimensions rather than merged."
+ },
+ "C3:VH:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to and payer are distinct party roles whose addresses usually coincide but legitimately differ for specific transactions, so they should be kept separate rather than merged."
+ },
+ "C3:VH:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to and payer are deliberately distinct party roles whose regions coincide in most orders but legitimately differ when payer and bill-to parties diverge."
+ },
+ "C3:VH:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to and payer are distinct party roles that usually coincide but can legitimately differ (e.g. third-party payer), so they should stay separate dimensions rather than merge."
+ },
+ "C4:C1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "reason": "T1 membership-systematic vs SALESDOCUMENTITEM"
+ },
+ "C4:N:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Item-level Incoterms classification can override the header-level value, so they represent the same concept at different document levels kept deliberately distinct."
+ },
+ "C4:N:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Item-level incoterms classification is a deliberate override instance of the header-level incoterms, so they should be kept distinct rather than merged."
+ },
+ "C4:N:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Item-level incoterms classification is a deliberate override of the header-level incoterms, so they represent related but distinct instances rather than one merged concept."
+ },
+ "C4:V:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Item-level incoterms classification is a deliberate override of the header-level value for that line item, so they must be kept distinct despite sharing the same domain."
+ },
+ "C4:V:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Item-level Incoterms classification is a per-line override of the header-level Incoterms value, so they represent the same concept at different override levels that should remain distinct."
+ },
+ "C4:V:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Item-level incoterms classification can override the header-level value for specific line items, so they represent the same concept at different override scopes and must be kept distinct."
+ },
+ "C4:VR:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Item-level Incoterms classification is an override of the header-level value for the same document, matching almost always but kept as distinct item vs header attributes."
+ },
+ "C4:VR:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Item-level Incoterms classification usually mirrors the header value but can be overridden per line, making them related-but-distinct role instances rather than a mergeable or hierarchical pair."
+ },
+ "C4:VR:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Item-level Incoterms almost always matches the header value but is a deliberate item-level override, so both must be kept distinct rather than merged or treated as a hierarchy."
+ },
+ "C4:VH:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Item-level Incoterms classification can deliberately override the document header value, so the rare disagreements reflect intentional item-level overrides rather than noise."
+ },
+ "C4:VH:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Item-level Incoterms classification can deliberately override the header-level default, so the rare disagreements reflect legitimate item-specific exceptions rather than duplication."
+ },
+ "C4:VH:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Item-level incoterms can override the document header value, so the rare disagreements reflect deliberate item-level overrides rather than noise, making these distinct roles not one identity."
+ },
+ "C5:C1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "reason": "no screen passed"
+ },
+ "C5:N:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Grid (starting position) and position (finishing result) are correlated race outcomes, not a dimensional hierarchy or same entity."
+ },
+ "C5:N:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "grid (starting position) and position (finishing position) are distinct race outcome measures, not a dimensional hierarchy or merge."
+ },
+ "C5:N:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Grid (starting position) and position (finishing result) are correlated race outcomes, not a dimensional hierarchy or same-entity relationship."
+ },
+ "C5:V:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Grid (starting position) and position (finishing result) are distinct race-stage instances of the same rank concept and must be kept separate, not merged or hierarchical."
+ },
+ "C5:V:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Grid (starting position) and position (finishing result) are related race-position concepts but represent distinct roles that must be kept separate for analysis."
+ },
+ "C5:V:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "grid records starting position and position records finishing result, distinct race-event roles that must not be merged or treated as hierarchy."
+ },
+ "C5:VR:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Grid (starting position) and position (finishing result) are related race-outcome metrics but represent distinct roles that must be kept separate for analysis, not merged or hierarchical."
+ },
+ "C5:VR:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Grid (starting position) and position (finishing result) are the same concept family but represent distinct race stages that must be kept separate, not merged or hierarchical."
+ },
+ "C5:VR:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "grid (starting position) and position (finishing result) are the same concept family but represent distinct race stages that must be kept separate."
+ },
+ "C5:VH:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "grid (starting position) and position (finishing position) are the same concept family but distinct, non-derivable instances that must be kept separate."
+ },
+ "C5:VH:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Grid (starting position) and position (finishing result) are the same conceptual scale but represent distinct race stages that must be kept separate for analysis."
+ },
+ "C5:VH:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "grid (starting position) and position (finishing result) are related race-position concepts but represent distinct roles that must be kept separate, not merged or hierarchical."
+ },
+ "D1:C1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "reason": "row-g3 + lambda + perm-p"
+ },
+ "D1:N:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are independent attributes of the driver entity, not a dimensional hierarchy or merge relationship between themselves."
+ },
+ "D1:N:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are independent attributes of the driver entity with no dimensional determination between date of birth and surname."
+ },
+ "D1:N:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are independent attributes of the driver entity with no determinacy relationship between date of birth and surname."
+ },
+ "D1:V:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are distinct attributes identifying a driver (birthdate vs surname) but neither determines or generalizes the other, so they are separate driver attributes rather than a mergeable or hierarchical pair."
+ },
+ "D1:V:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are attributes of the same driver entity but represent distinct facets (birth date vs name) rather than one determining the other."
+ },
+ "D1:V:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are attributes of the driver entity (identified by driverId) but neither determines the other; they are independent attributes, not a groupable dimensional edge."
+ },
+ "D1:VR:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are attributes of the driver entity but neither determines the other (surname is shared across many distinct birthdates and vice versa), so this is a non-hierarchical, non-groupable pairing rather than a real dimensional edge."
+ },
+ "D1:VR:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are attributes of the driver entity but neither determines the other; dob is not a groupable attribute of surname (same surname can have different dobs and vice versa)."
+ },
+ "D1:VR:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are attributes of the driver entity (identified by driverId), not a dimensional relationship between each other, and neither reliably determines the other (surnames repeat across different birthdates)."
+ },
+ "D1:VH:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "driver__dob is a per-individual attribute akin to an identifier, not a groupable hierarchy level over surname; it's a coincidental functional dependency between two attributes of the same driver entity rather than a dimensional hierarchy."
+ },
+ "D1:VH:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "driver__dob is a per-driver identifier proxy (near-unique birthdate), not a groupable dimension level for surname; both are just attributes of the driver entity."
+ },
+ "D1:VH:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "driver__dob is a per-driver quasi-identifier (birthdate), not a groupable dimension level, so this is a proxy-key artifact rather than a real hierarchy tied to surname."
+ },
+ "D2:C1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "reason": "row-g3 + lambda + perm-p"
+ },
+ "D2:N:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Driver date of birth and nationality are independent attributes of the driver with no dimensional hierarchy or identity relationship between them."
+ },
+ "D2:N:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Driver date of birth and nationality are independent attributes of the driver with no groupable dimensional dependency between them."
+ },
+ "D2:N:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are separate attributes of the driver entity with no dimensional dependency between date of birth and nationality."
+ },
+ "D2:V:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are independent attributes of the driver entity with no determinacy or hierarchy between birth date and nationality."
+ },
+ "D2:V:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are attributes of the driver entity but neither determines or coarsens the other; they're independent driver attributes, not a groupable hierarchy."
+ },
+ "D2:V:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are attributes of the driver entity but neither determines the other; they're independent dimensions with no groupable hierarchy."
+ },
+ "D2:VR:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Birthdate and nationality are independent driver attributes with no functional or hierarchical grouping relationship between them."
+ },
+ "D2:VR:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Birth date and nationality are independent attributes of a driver with no groupable determination between them."
+ },
+ "D2:VR:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Birth date and nationality are independent attributes of the driver with no functional or hierarchical grouping relationship between them."
+ },
+ "D2:VH:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "driver__dob functionally pins nationality only because it's nearly a per-driver key, not a meaningful groupable hierarchy\u2014dob is a proxy identifier, not a dimension level of nationality."
+ },
+ "D2:VH:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "driver__dob is a per-person identifier-like attribute (birthdate) that happens to co-determine nationality but is not something one groups by; the real dimension attribute is driver__nationality itself, not a hierarchy from dob."
+ },
+ "D2:VH:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "driver__dob functionally determines nationality only because dob is nearly a per-driver identifier, not a meaningful grouping attribute; nationality is a driver-level attribute better linked via driverId, not date of birth."
+ },
+ "D3:C1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "reason": "row-g3 + lambda + perm-p"
+ },
+ "D3:N:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Postal code and club membership status are independent customer attributes with no determinative or hierarchical relationship."
+ },
+ "D3:N:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Postal code and club membership status are independent customer attributes with no determinative or hierarchical relationship."
+ },
+ "D3:N:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Postal code and club member status are independent customer attributes with no functional or hierarchical relationship."
+ },
+ "D3:V:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Postal code and club member status are independent customer attributes with no functional or hierarchical relationship."
+ },
+ "D3:V:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Postal code and club member status are independent customer attributes with no groupable determination between them."
+ },
+ "D3:V:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Postal code and club membership status are independent customer attributes with no functional or hierarchical relationship."
+ },
+ "D3:VR:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Postal code (customer location) and club member status are independent customer attributes with no groupable dimensional relationship, just a shared parent entity."
+ },
+ "D3:VR:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Postal code is a customer location attribute unrelated to club membership status, with no meaningful functional or hierarchical link between them."
+ },
+ "D3:VR:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Postal code and club membership status are independent customer attributes with no groupable determination between them."
+ },
+ "D3:VH:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "customer__postal_code is a near-unique quasi-identifier (hashed, 50k+ distinct values) that trivially determines the near-constant club_member_status, not a meaningful groupable hierarchy."
+ },
+ "D3:VH:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "postal_code is a high-cardinality quasi-identifier whose apparent determination of club_member_status is a near-key/skew artifact, not a groupable hierarchy."
+ },
+ "D3:VH:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "postal_code is a high-cardinality quasi-identifier and club_member_status is overwhelmingly skewed to one value, so the functional determination is a near-key/skew artifact rather than a meaningful groupable hierarchy."
+ },
+ "D4:C1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "reason": "row-g3 + lambda + perm-p"
+ },
+ "D4:N:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Surname is a free-text identifier attribute of a driver, not a groupable determinant of nationality."
+ },
+ "D4:N:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Surname is a personal identifier attribute, not a dimensional level of nationality; many drivers share nationality independently of surname."
+ },
+ "D4:N:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Surname is an individual identifier attribute, not hierarchically related to nationality; many drivers share a nationality with no groupable dependency between them."
+ },
+ "D4:V:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each driver surname corresponds to a single driver with a fixed nationality, making nationality a coarser attribute of the driver identified by surname."
+ },
+ "D4:V:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each driver surname (identifying a driver) has a fixed nationality, making nationality a coarser attribute of the driver."
+ },
+ "D4:V:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each driver surname (identifying a driver) maps to a single nationality, making nationality a coarser attribute of driver."
+ },
+ "D4:VR:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "medium",
+  "reason": "Each surname (driver) maps almost deterministically to a single nationality, making nationality a coarser groupable attribute of the driver identified by surname."
+ },
+ "D4:VR:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "medium",
+  "reason": "Driver surname mostly determines nationality (an attribute of the driver entity), making nationality a coarser groupable attribute of the driver, though surname isn't a strict unique key."
+ },
+ "D4:VR:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "medium",
+  "reason": "Each driver surname maps almost deterministically to a single nationality, making nationality a coarser attribute groupable from surname (though surname is really a proxy for the driver entity)."
+ },
+ "D4:VH:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "driver__surname is a near-unique free-text label for the driver entity (proxy for driverId), not a groupable dimension level above nationality."
+ },
+ "D4:VH:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "driver__surname is a person-identifying free-text label (near-key-ish, coincidentally correlated with nationality) rather than a groupable attribute of it; the real hierarchy is driverId/driverRef -> nationality, not surname."
+ },
+ "D4:VH:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "driver__surname is a proxy/quasi-identifier for the individual driver, not a groupable attribute, and it's actually driverId/driverRef that determines nationality."
+ },
+ "E1:C1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "reason": "row-g3 + lambda + perm-p"
+ },
+ "E1:N:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "detail_desc is free-text description of an article, not a groupable determinant or dependent of garment_group_name."
+ },
+ "E1:N:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "detail_desc is free-text description without a consistent functional dependency to garment group, so no groupable dimensional edge exists."
+ },
+ "E1:N:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "article__detail_desc is free-text product description, not a groupable attribute related hierarchically to garment group."
+ },
+ "E1:V:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "article__detail_desc is a free-text description, not a groupable attribute that hierarchically rolls up to garment_group_name."
+ },
+ "E1:V:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "detail_desc is free-text product description, not a groupable attribute directly tied to garment_group_name as a dimension level."
+ },
+ "E1:V:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "detail_desc is high-cardinality free text description, not a groupable attribute that rolls up to garment_group_name."
+ },
+ "E1:VR:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "detail_desc is free-text description, not a groupable dimension attribute despite loosely correlating with garment group."
+ },
+ "E1:VR:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "article__detail_desc is free-text description, not a groupable dimension level despite loosely correlating with garment group."
+ },
+ "E1:VR:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "detail_desc is free-text product description, not a groupable dimension attribute related to garment_group_name."
+ },
+ "E1:VH:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "article__detail_desc is a free-text description field, so despite technically determining garment_group_name it's not a groupable dimension attribute."
+ },
+ "E1:VH:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "article__detail_desc is a free-text description field, not a groupable dimension attribute, even though it statistically determines garment_group_name."
+ },
+ "E1:VH:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "article__detail_desc is a free-text description field, so despite the statistical determination it's a proxy determinant not something to group or drill on."
+ },
+ "E2:C1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "reason": "row-g3 + lambda + perm-p"
+ },
+ "E2:N:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "detail_desc is free-text description of an article, not a groupable dimension attribute related to index_group_name."
+ },
+ "E2:N:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "detail_desc is free-text description unique per article, not a groupable attribute related to index_group_name."
+ },
+ "E2:N:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "detail_desc is free-text description per article, not a groupable attribute determining or determined by the coarse index_group_name category."
+ },
+ "E2:V:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "article__detail_desc is free-text product description, not a groupable dimension attribute related to index_group_name."
+ },
+ "E2:V:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "detail_desc is free-text description, not a groupable dimension attribute related to the coarse index_group_name category."
+ },
+ "E2:V:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "detail_desc is free-text description, not a groupable attribute functionally tied to index_group_name."
+ },
+ "E2:VR:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "article__detail_desc is free-text product description, not a groupable dimension level relative to index_group_name."
+ },
+ "E2:VR:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "article__detail_desc is free-text product description, not a groupable dimension level relative to index_group_name."
+ },
+ "E2:VR:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "article__detail_desc is free-text product description, not a groupable dimension level related to index_group_name."
+ },
+ "E2:VH:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "article__detail_desc is a free-text description field, not a groupable dimension, so despite the statistical determination it is a proxy determinant rather than a real hierarchy edge."
+ },
+ "E2:VH:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "article__detail_desc is a free-text product description, so despite statistical determination it is not a groupable dimension attribute for index_group_name."
+ },
+ "E2:VH:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "article__detail_desc is a free-text description field, not a groupable dimension attribute, even though it statistically determines the coarser index_group_name."
+ },
+ "F1:C1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "reason": "row-g3 + lambda + perm-p"
+ },
+ "F1:N:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "product_code identifies a specific product (style) while product_type_name is a separate categorical attribute (e.g., garment type) not functionally determined by the product code hierarchy."
+ },
+ "F1:N:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "product_code identifies a specific product/article variant while product_type_name is a shared category attribute of product_type_no, not directly determined by or determining product_code."
+ },
+ "F1:N:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "product_code identifies a specific product (article variant) while product_type_name is a separate categorical attribute, not a level derived from product_code."
+ },
+ "F1:V:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "product_code identifies a specific product which belongs to one product_type_name, a coarser grouping level."
+ },
+ "F1:V:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each product_code maps to a single product_type_name, making product_type_name a coarser grouping level of product_code."
+ },
+ "F1:V:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each product_code maps to a single product_type_name, making type_name a coarser groupable attribute of the more granular product_code."
+ },
+ "F1:VR:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "product_code nearly always determines a single product_type_name (high lambda a->b), reflecting a finer-to-coarser product classification."
+ },
+ "F1:VR:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "product_code nearly always determines a single product_type_name (high lambda a->b), so product_type_name is a coarser attribute of product_code."
+ },
+ "F1:VR:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "product_code nearly always determines a single product_type_name (g3 a->b ~0.008), while product_type_name maps to many product codes, showing a coarser category attribute of the finer product code."
+ },
+ "F1:VH:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "product_code identifies a specific article which has one product type, so product_type_name is a coarser, groupable attribute of product_code."
+ },
+ "F1:VH:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "product_code identifies a specific article/product which consistently maps to one product_type_name, a coarser groupable category."
+ },
+ "F1:VH:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "product_code identifies a specific article which rolls up cleanly into a coarser, groupable product_type_name category."
+ },
+ "F2:C1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "reason": "row-g3 + lambda + perm-p"
+ },
+ "F2:N:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Product code and department name are independent classification attributes of an article, not a hierarchical or identity relationship since one article code doesn't determine a single department."
+ },
+ "F2:N:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Product code and department name are independent classification attributes of an article (not a functional determination or code/name pair), so no direct dimensional edge exists between them."
+ },
+ "F2:N:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Product code and department are independent classification attributes of an article (many-to-many across products and departments), not a determinative hierarchy."
+ },
+ "F2:V:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "medium",
+  "reason": "Each product_code maps to a specific department, so department_name is a coarser grouping attribute of product_code."
+ },
+ "F2:V:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "medium",
+  "reason": "Each product_code maps to a specific department, so department_name is a coarser attribute grouping many product codes."
+ },
+ "F2:V:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each product_code maps to a single department_name, making department_name a coarser grouping attribute of the finer product_code."
+ },
+ "F2:VR:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each product_code maps almost deterministically to a single department_name (g3 a->b ~0.006), making department_name a coarser grouping level of product_code."
+ },
+ "F2:VR:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each product_code maps almost deterministically to a single department_name, making department_name a coarser grouping attribute of product_code."
+ },
+ "F2:VR:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "product_code nearly functionally determines department_name (g3 a->b ~0.006), reflecting a coarser categorical grouping of finer product codes."
+ },
+ "F2:VH:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "product_code identifies a specific product which belongs to exactly one department, so department_name is a coarser groupable attribute of product_code."
+ },
+ "F2:VH:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Product code determines department name at high consistency with low near-key risk and strong lambda, reflecting a real product-to-department grouping."
+ },
+ "F2:VH:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "product_code identifies a specific product which belongs to exactly one department, a valid groupable attribute hierarchy."
+ },
+ "F3:C1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "reason": "row-g3 + lambda + perm-p"
+ },
+ "F3:N:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are separate article classification attributes at similar granularity with no determinacy between them, representing different classification hierarchies rather than one dimension edge."
+ },
+ "F3:N:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are separate classification attributes of the article (department vs garment group) with no determination between them, representing independent hierarchies rather than one derived from the other."
+ },
+ "F3:N:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are attributes of the article at different, non-nested classification schemes (department vs garment group) rather than one determining the other in a hierarchy."
+ },
+ "F3:V:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "Both are article-level categorical groupings but classify products along independent, non-nested taxonomies (department vs garment group) rather than one being a strict roll-up of the other."
+ },
+ "F3:V:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "Both are article classification attributes at similar granularity but represent independent taxonomies (department vs garment group) rather than a strict hierarchy or duplicate concept."
+ },
+ "F3:V:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "Both are article classification attributes at similar granularity (department vs garment group) representing different, independently-defined categorization schemes rather than a strict hierarchy or duplicate."
+ },
+ "F3:VR:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "medium",
+  "reason": "Department name almost functionally determines garment group (row_g3_a_to_b\u22480.0005, \u03bb\u22480.999), making garment group the coarser grouping level."
+ },
+ "F3:VR:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "Both are article classification attributes at different, non-nested taxonomies (department is finer merchandising grouping, garment group is production/style grouping) so neither cleanly determines the other despite partial correlation."
+ },
+ "F3:VR:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "Both are article classification attributes at similar granularity (236 vs 21 categories) but department does not cleanly roll up into garment group (high row_g3_b_to_a violation), so they represent parallel, independently-assigned classification schemes rather than a strict hierarchy."
+ },
+ "F3:VH:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "article__department_name is a finer-grained, groupable attribute that consistently rolls up into the coarser article__garment_group_name category."
+ },
+ "F3:VH:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "department_name (236 values) rolls up cleanly into the coarser garment_group_name (21 values), a genuine groupable product hierarchy."
+ },
+ "F3:VH:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "article__department_name (236 values) determines article__garment_group_name (21 values) with near-zero violation, forming a valid coarser grouping level for garment group merchandising."
+ },
+ "F4:C1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "reason": "row-g3 + lambda + perm-p"
+ },
+ "F4:N:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "Plant is the manufacturing/stocking location for the item while shipping point is the logistics dispatch point, related but distinct entities that shouldn't be merged or treated as a strict hierarchy."
+ },
+ "F4:N:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "Both are logistics/location identifiers but represent distinct roles\u2014plant is the producing/storage location while shipping point is the dispatching location\u2014so they must be kept separate rather than merged or nested."
+ },
+ "F4:N:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are logistics/location codes but represent distinct roles\u2014plant is the producing/supplying location while shipping point is the dispatching location\u2014so they must be kept separate rather than merged or treated as a hierarchy."
+ },
+ "F4:V:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "Plant and shipping point are related logistics locations but represent distinct roles (manufacturing/storage location vs. dispatch point) that can differ for the same order line."
+ },
+ "F4:V:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "Plant (production/storage location) and shipping point (logistics dispatch location) are related but distinct logistics entities that should be kept separate rather than merged or nested."
+ },
+ "F4:V:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "Both are location codes but represent distinct roles\u2014plant is the manufacturing/stocking location while shipping point is the logistics dispatch point\u2014so they should remain separate dimensions rather than merged or hierarchically nested."
+ },
+ "F4:VR:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Shipping point and plant are related logistics attributes but represent distinct entities (dispatch location vs manufacturing/storage location) that frequently differ and shouldn't be merged or treated as a strict hierarchy."
+ },
+ "F4:VR:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Shipping point and plant are related logistics entities but represent distinct facilities (dispatch location vs. manufacturing/storage location) with high value disagreement and weak functional dependency in either direction."
+ },
+ "F4:VR:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Shipping point and plant are related logistics entities but each varies independently for a given item (neither functionally determines the other), reflecting distinct roles (shipping location vs. manufacturing/stocking plant) rather than a hierarchy or merge."
+ },
+ "F4:VH:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Shipping point is a logistics grouping that reliably maps to a single plant, giving a real groupable hierarchy edge."
+ },
+ "F4:VH:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Shipping point is an operational shipping location that consistently maps to a single plant, making plant a groupable coarser attribute of shipping point."
+ },
+ "F4:VH:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "SHIPPINGPOINT is a distinct logistics dimension that reliably maps to a single PLANT, giving a real groupable hierarchy edge with high lambda and no near-key artifact."
+ },
+ "F5:C1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "reason": "row-g3 + lambda + perm-p"
+ },
+ "F5:N:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "medium",
+  "reason": "Circuit location (city/venue) determines a fixed altitude, making altitude a groupable attribute of the location."
+ },
+ "F5:N:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "medium",
+  "reason": "Circuit location (city/place) determines a fixed altitude, making altitude an attribute grouped under location."
+ },
+ "F5:N:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "medium",
+  "reason": "Circuit location (city/venue) determines its altitude, making location the coarser groupable attribute over the finer numeric altitude value."
+ },
+ "F5:V:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "circuit__location (city) determines circuit__alt (altitude), an attribute of that circuit location."
+ },
+ "F5:V:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "circuit__location determines the circuit's altitude, making location the coarser groupable attribute driving altitude."
+ },
+ "F5:V:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Circuit location determines a fixed altitude attribute for that circuit, making altitude a groupable attribute of location."
+ },
+ "F5:VR:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "circuit__location (city) determines circuit__alt (altitude) almost deterministically, as expected for a location attribute."
+ },
+ "F5:VR:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "circuit__location determines circuit__alt (altitude), with near-functional dependency from location to altitude."
+ },
+ "F5:VR:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "circuit__location determines circuit__alt (altitude is a fixed attribute of each circuit's location) with near-perfect functional dependency."
+ },
+ "F5:VH:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "circuit__location (city) determines circuit__alt (altitude) as a descriptive attribute of the circuit, both groupable geographic dimensions."
+ },
+ "F5:VH:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "circuit__location (city) determines circuit__alt (altitude) as a descriptive attribute of the circuit, both groupable and non-trivial."
+ },
+ "F5:VH:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "circuit__location (city) determines circuit__alt (altitude) as a descriptive attribute of the circuit, both meaningful groupable dimension levels."
+ },
+ "G1:C1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "reason": "row-g3 + lambda + perm-p"
+ },
+ "G1:N:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each sales document has one bill-to party assigned at header level, so SALESDOCUMENT determines BILLTOPARTY."
+ },
+ "G1:N:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "medium",
+  "reason": "SALESDOCUMENT (the sales order) determines a single BILLTOPARTY value at the header level, making party a groupable attribute of the document."
+ },
+ "G1:N:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "medium",
+  "reason": "Each sales document has one bill-to party assigned at header level, so SALESDOCUMENT determines BILLTOPARTY."
+ },
+ "G1:V:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each sales document has a single bill-to party, so SALESDOCUMENT determines BILLTOPARTY as a header-level attribute."
+ },
+ "G1:V:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each sales document has a single bill-to party, so SALESDOCUMENT determines BILLTOPARTY as a coarser grouping attribute of the document."
+ },
+ "G1:V:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each sales document has a single bill-to party, so SALESDOCUMENT determines BILLTOPARTY as a coarser grouping attribute."
+ },
+ "G1:VR:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each sales document is associated with a single bill-to party (SALESDOCUMENT determines BILLTOPARTY), making BILLTOPARTY a groupable attribute of the sales document."
+ },
+ "G1:VR:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each SALESDOCUMENT nearly always maps to a single BILLTOPARTY, making bill-to party a groupable attribute of the sales document."
+ },
+ "G1:VR:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "medium",
+  "reason": "Each sales document is nearly always tied to a single bill-to party, so document determines billing party as a coarser grouping attribute."
+ },
+ "G1:VH:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each sales document header consistently maps to one bill-to party, making BILLTOPARTY a groupable attribute of the SALESDOCUMENT header."
+ },
+ "G1:VH:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each sales document has one bill-to party, a genuine header-level attribute suitable for grouping/drilling."
+ },
+ "G1:VH:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each sales document header fixes a single bill-to party, so BILLTOPARTY is a groupable attribute of SALESDOCUMENT."
+ },
+ "G2:C1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "reason": "row-g3 + lambda + perm-p"
+ },
+ "G2:N:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "PLANT is an item-level attribute of the sales document, not a determined nor coincidental value; SALESDOCUMENT doesn't functionally determine PLANT (varies by item) and they aren't the same entity, so no clean dimensional edge applies."
+ },
+ "G2:N:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "PLANT is an item-level attribute of the sales document, not a determined or determining dimension level of the document identifier itself, and a sales document can span multiple plants."
+ },
+ "G2:N:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Plant is an item-level attribute independent of the sales document identifier, with no functional determination between them."
+ },
+ "G2:V:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "PLANT varies by item within a SALESDOCUMENT rather than being a header-level attribute determined by the sales document, so no clean groupable hierarchy exists."
+ },
+ "G2:V:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "PLANT is an item-level attribute that can vary across items within the same sales document, so it's not a functional dimension of the document ID but rather a coincidental correlation."
+ },
+ "G2:V:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "PLANT varies at the item level within a single SALESDOCUMENT, so it's not a functional attribute of the document but rather an item-level detail, making this a non-groupable coincidental link."
+ },
+ "G2:VR:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "PLANT varies within a single SALESDOCUMENT (multiple line items can ship from different plants), so this is an item-level attribute rather than a groupable dimensional hierarchy of the document."
+ },
+ "G2:VR:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "PLANT varies across items within the same sales document (multiple plants per order), so this is an item-level attribute not a functional dimensional hierarchy of the document."
+ },
+ "G2:VR:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "PLANT varies within a single SALESDOCUMENT (line-item level shipping plant), so it's not a stable header attribute or hierarchy of the sales document, just a coincidental item-level field."
+ },
+ "G2:VH:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each sales document is fulfilled from one plant, so PLANT is a groupable attribute determined by SALESDOCUMENT, with distinct-ratio and lambda both supporting a real, non-vacuous edge."
+ },
+ "G2:VH:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "SALESDOCUMENT is a meaningful order-level grouping key that determines a single PLANT per document, with high lambda and no near-key vacuity."
+ },
+ "G2:VH:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "SALESDOCUMENT is a meaningful order-level grouping key that reliably determines a single PLANT per order, and the determination substantially beats baseline skew (lambda\u22480.999), making PLANT a valid groupable attribute of the sales document."
+ },
+ "G3:C1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "reason": "row-g3 + lambda + perm-p"
+ },
+ "G3:N:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Creation timestamp is a proxy/time key unrelated dimensionally to sales group, no functional determination exists between them."
+ },
+ "G3:N:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "A creation timestamp is a proxy key unrelated dimensionally to the sales group attribute."
+ },
+ "G3:N:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "A timestamp proxy key has no dimensional relationship with the sales group attribute."
+ },
+ "G3:V:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Creation timestamp is a proxy key/event time with no dimensional determination relationship to sales group."
+ },
+ "G3:V:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "CREATIONTIMESTAMP is a proxy timestamp key unrelated to the sales group dimension."
+ },
+ "G3:V:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Creation timestamp is a proxy key/event time with no dimensional determination relationship to sales group."
+ },
+ "G3:VR:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Creation timestamp is a proxy key with near-unique values and has no meaningful dimensional relationship to sales group."
+ },
+ "G3:VR:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Creation timestamp is a proxy key/event time with no meaningful functional or hierarchical relationship to sales group."
+ },
+ "G3:VR:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "CREATIONTIMESTAMP is a proxy timestamp with no meaningful dimensional relationship to SALESGROUP."
+ },
+ "G3:VH:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "doc__CREATIONTIMESTAMP is a timestamp proxy key, not a groupable dimension, despite functionally determining SALESGROUP."
+ },
+ "G3:VH:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "CREATIONTIMESTAMP is a fine-grained proxy timestamp, not a groupable dimension, so its determination of SALESGROUP is a coincidental artifact rather than a real hierarchy."
+ },
+ "G3:VH:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "CREATIONTIMESTAMP is a fine-grained proxy timestamp, not a groupable dimension, despite technically determining SALESGROUP."
+ },
+ "H1:C1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "reason": "row-g3 + lambda + perm-p"
+ },
+ "H1:N:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "SOLDTOPARTY (customer) and doc__SALESOFFICE (internal sales org unit) are independent attributes of the document with no functional dependency between them."
+ },
+ "H1:N:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "SOLDTOPARTY (customer) and SALESOFFICE (internal sales org unit) are independent dimensions with no functional or hierarchical dependency between them."
+ },
+ "H1:N:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "SOLDTOPARTY (customer) and doc__SALESOFFICE (internal sales org unit) are independent dimensions with no functional determination between them."
+ },
+ "H1:V:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "SOLDTOPARTY is a customer identifier while doc__SALESOFFICE is a sales organization attribute of the document, with no functional or hierarchical dependency between them (dominated by a single default value)."
+ },
+ "H1:V:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Sold-to party (customer) and sales office (internal org unit) are independent attributes of the document, not a groupable hierarchy or the same entity."
+ },
+ "H1:V:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "SALESOFFICE is a document-level org attribute unrelated to the customer party, with no functional determination between them."
+ },
+ "H1:VR:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Sales office is an organizational sales-org attribute of the document, not a functional or hierarchical attribute of the customer (SOLDTOPARTY maps to many offices and vice versa)."
+ },
+ "H1:VR:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Sales office is an organizational attribute of the sales document, not a functional attribute of the customer (SOLDTOPARTY maps to many offices), so no groupable dimension edge exists between them."
+ },
+ "H1:VR:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "SOLDTOPARTY (customer) and SALESOFFICE (sales org unit) are independent business entities with no functional or groupable dependency, evidenced by near-zero FD strength and dominance of a single office value."
+ },
+ "H1:VH:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "medium",
+  "reason": "SOLDTOPARTY (customer) determines SALESOFFICE with a meaningful lambda reduction, suggesting customers are consistently served by a sales office, though the dominant-office skew limits practical grouping value."
+ },
+ "H1:VH:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "medium",
+  "reason": "Each customer (SOLDTOPARTY) maps almost exclusively to one sales office, and despite heavy skew the lambda of 0.663 shows a real, groupable reduction beyond the dominant-value baseline."
+ },
+ "H1:VH:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "medium",
+  "reason": "SOLDTOPARTY nearly always maps to a single sales office and is a meaningful groupable customer attribute, despite the strong skew toward office '0'."
+ },
+ "H2:C1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "reason": "row-g3 + lambda + perm-p"
+ },
+ "H2:N:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "Plant (logistics/shipping location) and sales organization (commercial org unit) are related but independently assigned facets of a sales document, not a strict hierarchy or duplicate."
+ },
+ "H2:N:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "Plant reflects the shipping/production location while sales organization reflects the selling organizational unit, two distinct dimensions that happen to co-occur on a sales item rather than one determining the other."
+ },
+ "H2:N:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "Plant (logistics/shipping location) and sales organization (commercial/sales structure) are related but independently assigned business entities that shouldn't be collapsed or treated as a strict hierarchy."
+ },
+ "H2:V:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "Plant (logistics/shipping location) and sales organization (commercial org unit) are correlated but represent distinct business dimensions that should be kept separate rather than merged or hierarchically nested.",
+  "_thinking": false
+ },
+ "H2:V:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "Plant (logistics/shipping location) and sales organization (commercial org unit) are correlated but represent distinct business entities that should remain separate dimensions rather than merge or strictly hierarchically determine each other."
+ },
+ "H2:V:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Plant (logistics/shipping location) and sales organization (commercial org unit) are correlated but represent distinct organizational dimensions, not a strict hierarchy or merge.",
+  "_thinking": false
+ },
+ "H2:VR:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Plant almost functionally determines sales organization (near-1 lambda both ways but plant is the finer operational grain that rolls up to sales org), forming a valid groupable hierarchy."
+ },
+ "H2:VR:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Plant almost deterministically maps to a sales organization (near-functional dependency), making sales org a coarser grouping level of plant."
+ },
+ "H2:VR:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "PLANT nearly functionally determines SALESORGANIZATION (high lambda both ways but plant is the finer operational unit rolling up to a sales org), matching counts show plant-to-salesorg mapping is near-deterministic and groupable."
+ },
+ "H2:VH:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "medium",
+  "reason": "Plant and sales organization co-vary almost 1:1 in this dataset, but they are distinct business entities (a physical plant belongs to a sales org) so plant is the finer-grained attribute that rolls up to sales organization."
+ },
+ "H2:VH:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "medium",
+  "reason": "Plant is a physical logistics site that maps almost deterministically to a sales organization, so PLANT determines doc__SALESORGANIZATION as a coarser organizational grouping rather than being the same identity."
+ },
+ "H2:VH:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "medium",
+  "reason": "Plant and sales organization co-occur nearly 1:1 but are distinct concepts (physical plant vs. sales org), with plant being the finer-grained operational entity that determines its parent sales organization."
+ },
+ "I1:C1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "reason": "no screen passed"
+ },
+ "I1:N:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "SALESDOCUMENTITEM is a line-item sequence identifier unrelated to the header-level distribution channel attribute, with no dimensional determination between them."
+ },
+ "I1:N:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "SALESDOCUMENTITEM is an item line-number identifier, not dimensionally related to the header-level distribution channel attribute."
+ },
+ "I1:N:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Item line number is a positional identifier within a document and has no dimensional determination relationship with the header-level distribution channel."
+ },
+ "I1:V:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "SALESDOCUMENTITEM is a line-item sequence number within a document, unrelated to the header-level distribution channel attribute."
+ },
+ "I1:V:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "SALESDOCUMENTITEM is a line-item sequence number with no dimensional relationship to the document-level distribution channel attribute."
+ },
+ "I1:V:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "SALESDOCUMENTITEM is a line-item sequence number within an order, unrelated to the header-level distribution channel attribute."
+ },
+ "I1:VR:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "SALESDOCUMENTITEM is a line-item sequence number with no meaningful relationship to distribution channel, which is a header-level attribute independent of item numbering."
+ },
+ "I1:VR:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "SALESDOCUMENTITEM is a line-item sequence number with no meaningful dimensional relationship to distribution channel, a header-level attribute of the sales organization."
+ },
+ "I1:VR:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "SALESDOCUMENTITEM is a line-item sequence number with no meaningful dimensional relation to the document's distribution channel, a header-level attribute of the document itself."
+ },
+ "I1:VH:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "The apparent determination is a vacuous skew (lambda=0) driven by distribution channel's near-constant value, not a meaningful hierarchy between line-item number and distribution channel."
+ },
+ "I1:VH:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "The apparent determination is a vacuous skew artifact (lambda\u22480) since distribution channel is 99.36% one value, not a meaningful hierarchy from line-item number."
+ },
+ "I1:VH:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "The apparent determination is a vacuous skew (lambda=0) driven by distribution channel's dominant value, not a real hierarchy from line-item number."
+ },
+ "I2:C1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "reason": "no screen passed"
+ },
+ "I2:N:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "PLANT (a shipping/production facility) and DISTRIBUTIONCHANNEL (a sales channel) are independent classification attributes with no functional or hierarchical dependency between them."
+ },
+ "I2:N:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "Plant (logistics/shipping site) and distribution channel (sales channel) are independent organizational dimensions with no functional determination between them."
+ },
+ "I2:N:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "PLANT and distribution channel are independent classification attributes of the sales document with no functional dependency between them."
+ },
+ "I2:V:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Plant (physical shipping/production location) and distribution channel (sales organizational attribute) are independent classification schemes with no functional dependency between them."
+ },
+ "I2:V:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "PLANT (item-level shipping/production plant) and DISTRIBUTIONCHANNEL (header sales channel) are independent classification attributes with no functional or hierarchical dependency between them."
+ },
+ "I2:V:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "PLANT (item-level shipping/production facility) and doc__DISTRIBUTIONCHANNEL (header-level sales channel) are independent classification attributes with no functional determination between them."
+ },
+ "I2:VR:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "PLANT (item-level physical plant) and doc__DISTRIBUTIONCHANNEL (header sales channel) are independent classification attributes with no functional or hierarchical dependency between them."
+ },
+ "I2:VR:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Plant (item-level shipping location) and distribution channel (header-level sales channel) are independent attributes with no functional or hierarchical determination between them."
+ },
+ "I2:VR:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Plant (item-level shipping location) and distribution channel (header-level sales channel) are independent classification attributes with no functional or hierarchical determination between them."
+ },
+ "I2:VH:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "doc__DISTRIBUTIONCHANNEL is dominated by a single value (99.36%), so the apparent determinism is vacuous skew with lambda ~0, not a real groupable hierarchy."
+ },
+ "I2:VH:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "doc__DISTRIBUTIONCHANNEL is dominated by a single value (99.36%) so the determination has Goodman-Kruskal lambda ~0, a vacuous skew artifact rather than a meaningful hierarchy."
+ },
+ "I2:VH:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Distribution channel is 99.36% one value so the determination is a vacuous skew artifact (lambda\u22480), not a meaningful groupable hierarchy."
+ },
+ "I3:C1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "reason": "no screen passed"
+ },
+ "I3:N:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to address country and sales office are independent organizational/geographic attributes with no functional dependency between them."
+ },
+ "I3:N:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to country and sales office are independent organizational/geographic attributes with no functional or hierarchical dependency."
+ },
+ "I3:N:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to country and sales office are independent attributes with no functional or hierarchical dependency between them."
+ },
+ "I3:V:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to country and sales office are independent attributes with no functional or hierarchical dependency, mostly coincidental co-occurrence."
+ },
+ "I3:V:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to country and sales office are independent attributes with no functional or hierarchical dependency between them."
+ },
+ "I3:V:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to country and sales office are independent attributes with no functional or hierarchical relationship, and sales office is almost constant here."
+ },
+ "I3:VR:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to country and sales office are independent attributes with no functional or hierarchical relationship in the data."
+ },
+ "I3:VR:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to country and sales office are unrelated organizational/geographic attributes with no functional dependency (low lambda both directions)."
+ },
+ "I3:VR:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Bill-to country and sales office are unrelated attributes with no meaningful functional or hierarchical dependency between them."
+ },
+ "I3:VH:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "doc__SALESOFFICE is dominated by a single value (99.7%) so the apparent determination is a vacuous skew with lambda well below the floor."
+ },
+ "I3:VH:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "doc__SALESOFFICE is dominated by a single value (99.7%) so the apparent determination is a vacuous skew with lambda well below the floor."
+ },
+ "I3:VH:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "doc__SALESOFFICE is dominated by a single value (99.7%) so the apparent determination is a vacuous skew with lambda=0.081, well below a meaningful reduction."
+ },
+ "J1:C1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "reason": "row-g3 + lambda + perm-p"
+ },
+ "J1:N:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "raceId uniquely identifies a race which determines its year, a coarser groupable attribute."
+ },
+ "J1:N:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "raceId uniquely identifies a race, which determines its year, a coarser groupable attribute."
+ },
+ "J1:N:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "raceId uniquely identifies a race which determines its year, a coarser groupable attribute."
+ },
+ "J1:V:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "raceId uniquely identifies a race, which determines its year, making year a coarser groupable attribute of raceId."
+ },
+ "J1:V:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "raceId uniquely determines the race and hence its year, so race__year is a coarser attribute of raceId."
+ },
+ "J1:V:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "raceId uniquely determines race__year since each race occurs in exactly one year, making year a coarser groupable attribute."
+ },
+ "J1:VR:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each raceId maps to exactly one race__year, making year a coarser attribute of the race identifier."
+ },
+ "J1:VR:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "raceId functionally determines race__year, making year a coarser grouping level of the race identifier."
+ },
+ "J1:VR:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "raceId determines race__year since each race occurs in exactly one year, forming a valid coarser grouping level."
+ },
+ "J1:VH:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "raceId is a groupable race identifier that determines race__year, a coarser calendar attribute suitable for drill-up/grouping."
+ },
+ "J1:VH:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "raceId is a groupable dimension key that determines the coarser race__year attribute, useful for drill-up analysis."
+ },
+ "J1:VH:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "raceId is a groupable race identifier that determines race__year, a coarser attribute suitable for grouping/drilling."
+ },
+ "J2:C1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "reason": "row-g3 + lambda + perm-p"
+ },
+ "J2:N:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "driverId uniquely identifies a driver whose nationality is a fixed attribute, making nationality a coarser groupable level of driverId."
+ },
+ "J2:N:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "driverId uniquely identifies a driver whose nationality is a fixed attribute, so driverId determines driver__nationality."
+ },
+ "J2:N:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "driverId uniquely identifies a driver, whose nationality is a fixed attribute, so driverId determines driver__nationality."
+ },
+ "J2:V:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "driverId uniquely determines driver__nationality, a coarser attribute of the driver entity."
+ },
+ "J2:V:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each driverId maps to a single fixed nationality, making nationality a coarser attribute of the driver dimension."
+ },
+ "J2:V:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "driverId uniquely determines the driver's nationality, a coarser attribute of the driver dimension."
+ },
+ "J2:VR:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "driverId functionally determines driver__nationality, an attribute of the driver entity, making it a valid drill-up level."
+ },
+ "J2:VR:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "driverId functionally determines driver__nationality, a coarser attribute of the driver entity."
+ },
+ "J2:VR:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each driverId maps to a single nationality attribute, a coarser groupable level of the driver dimension."
+ },
+ "J2:VH:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "driverId is a groupable entity key that functionally determines the driver's nationality, a coarser descriptive attribute."
+ },
+ "J2:VH:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "driverId is a stable driver identifier that determines the driver's nationality, a legitimate groupable attribute of the driver dimension."
+ },
+ "J2:VH:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "driverId is a meaningful entity key that determines a genuine descriptive attribute, nationality, which is a valid groupable dimension level."
+ },
+ "J3:C1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "reason": "row-g3 + lambda + perm-p"
+ },
+ "J3:N:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "A circuit's location (city/locality) determines its country, making location a finer-grained attribute that rolls up to country."
+ },
+ "J3:N:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "A circuit's location (city) determines its country, making country a coarser grouping level."
+ },
+ "J3:N:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "A circuit's location (city) determines its country, forming a groupable geographic hierarchy."
+ },
+ "J3:V:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "circuit__location (city) rolls up into circuit__country, a coarser geographic level."
+ },
+ "J3:V:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "circuit location (city) rolls up into circuit country, a natural geographic hierarchy."
+ },
+ "J3:V:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Circuit location (city) rolls up into circuit country, a coarser groupable level."
+ },
+ "J3:VR:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each circuit location maps cleanly to a single country (row_g3_a_to_b=0), making location a finer-grained level that rolls up to country."
+ },
+ "J3:VR:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each circuit location maps to exactly one country (row_g3_a_to_b=0), making location a finer-grained attribute that rolls up to country."
+ },
+ "J3:VR:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each circuit location maps to exactly one country (location->country FD holds), making country a coarser grouping level."
+ },
+ "J3:VH:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "circuit__location (city) is a low-cardinality groupable attribute that uniquely determines circuit__country, forming a valid geographic hierarchy."
+ },
+ "J3:VH:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "circuit__location (city) uniquely determines circuit__country and is a natural, groupable finer level of the country attribute."
+ },
+ "J3:VH:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "circuit__location (city) uniquely determines circuit__country and is a natural, groupable finer-grained level within country."
+ },
+ "J4:C1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "reason": "row-g3 + lambda + perm-p"
+ },
+ "J4:N:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "article_id uniquely identifies a product whose product_group_name is a coarser categorical attribute, so article determines product group."
+ },
+ "J4:N:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "article_id uniquely identifies a specific article, which belongs to a coarser product group category."
+ },
+ "J4:N:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "article_id uniquely determines its product group name, a coarser categorical attribute, making it a groupable hierarchy level."
+ },
+ "J4:V:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each article_id maps to exactly one product_group_name, a coarser categorical grouping of articles."
+ },
+ "J4:V:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "article_id is a fine-grained product identifier that rolls up into the coarser product_group_name category."
+ },
+ "J4:V:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each article_id maps to exactly one product group, a coarser categorical attribute of the article."
+ },
+ "J4:VR:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "article_id functionally determines product_group_name, a coarser grouping attribute of the article dimension."
+ },
+ "J4:VR:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "article_id functionally determines product_group_name, a coarse groupable attribute of the article dimension."
+ },
+ "J4:VR:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "article_id functionally determines product_group_name, a coarse attribute grouping many articles into 17 categories."
+ },
+ "J4:VH:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "article_id is a groupable product identifier that rolls up cleanly into the coarser product_group_name category."
+ },
+ "J4:VH:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "article_id is a groupable product identifier that rolls up cleanly into the coarser product_group_name attribute."
+ },
+ "J4:VH:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "article_id is a legitimate product identifier that rolls up cleanly into the coarser product_group_name attribute, a natural groupable dimension level."
+ },
+ "J5:C1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "reason": "row-g3 + lambda + perm-p"
+ },
+ "J5:N:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each sales document belongs to exactly one sales organization, so SALESDOCUMENT determines doc__SALESORGANIZATION as a coarser grouping attribute."
+ },
+ "J5:N:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each sales document header has one sales organization, so SALESDOCUMENT determines doc__SALESORGANIZATION as a coarser grouping attribute."
+ },
+ "J5:N:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each sales document belongs to exactly one sales organization, so document determines the coarser organizational grouping."
+ },
+ "J5:V:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each sales document belongs to exactly one sales organization, making SALESORGANIZATION a coarser attribute grouping many SALESDOCUMENT values."
+ },
+ "J5:V:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each SALESDOCUMENT belongs to exactly one sales organization, so SALESDOCUMENT determines doc__SALESORGANIZATION as a coarser grouping attribute."
+ },
+ "J5:V:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each sales document belongs to exactly one sales organization, making SALESORGANIZATION a coarser attribute of SALESDOCUMENT."
+ },
+ "J5:VR:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each sales document nearly always maps to a single sales organization, making SALESORGANIZATION a coarser attribute of SALESDOCUMENT."
+ },
+ "J5:VR:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each sales document consistently maps to a single sales organization, making SALESORGANIZATION a coarser attribute of SALESDOCUMENT."
+ },
+ "J5:VR:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each SALESDOCUMENT nearly always maps to a single SALESORGANIZATION, making sales org a coarser, groupable attribute of the sales document."
+ },
+ "J5:VH:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Sales document header determines sales organization, a coarser groupable attribute, with strong lambda and no near-key artifact."
+ },
+ "J5:VH:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each sales document belongs to exactly one sales organization, making SALESORGANIZATION a valid coarser grouping attribute of SALESDOCUMENT with strong lambda reduction and a non-near-key determinant."
+ },
+ "J5:VH:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "a->b",
+  "confidence": "high",
+  "reason": "Each sales document belongs to exactly one sales organization, making SALESORGANIZATION a valid coarser grouping attribute of SALESDOCUMENT."
+ },
+ "M1:C1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "reason": "no screen passed"
+ },
+ "M1:N:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Points is a measure derived from race outcome/position via scoring rules, not a groupable dimensional attribute of position."
+ },
+ "M1:N:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Points is a measure derived from race finishing position, not a groupable dimensional attribute."
+ },
+ "M1:N:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Points are a measure computed from race position/results, not a dimensional attribute relationship."
+ },
+ "M1:V:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Points is a measure computed from finishing position via a scoring rule, not a groupable dimensional attribute."
+ },
+ "M1:V:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Points is a derived measure computed from finishing position via scoring rules, not a groupable dimensional attribute."
+ },
+ "M1:V:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Points is a measure derived from finishing position via scoring rules, not a groupable dimensional attribute."
+ },
+ "M1:VR:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Points is a measure computed from finishing position via the scoring rules, not a groupable dimensional attribute."
+ },
+ "M1:VR:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Points is a scoring measure derived from finishing position under race rules, not a groupable dimensional attribute of it."
+ },
+ "M1:VR:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Points is a measure computed from finishing position under the scoring rules, not a groupable dimensional attribute."
+ },
+ "M1:VH:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "points is a scoring measure derived from finishing position, not a groupable dimensional attribute, and neither determines the other cleanly."
+ },
+ "M1:VH:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Points is a scoring measure derived from finishing position via a nonstrict, era-dependent mapping, not a groupable dimensional attribute or a valid hierarchy/merge relationship."
+ },
+ "M1:VH:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Points is a computed/derived measure from finishing position (via scoring rules), not a groupable dimensional attribute, and the data shows no clean functional determination either way."
+ },
+ "K1:C1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "reason": "cross-view: no joint statistics exist"
+ },
+ "K1:N:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "Both columns represent the same regional dimension captured independently by two source systems and should be conformed into a single identity."
+ },
+ "K1:N:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "Both columns represent the same 'region' concept from different source systems and should be conformed into a single dimension."
+ },
+ "K1:N:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "Both columns represent the same regional dimension from the same business captured in separate source systems and should conform into a single region identity."
+ },
+ "K1:V:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "The region codes come from disjoint country-specific coding schemes (DE numeric codes vs PL alphanumeric codes) with near-zero value overlap, so they don't represent a groupable shared or hierarchical dimension."
+ },
+ "K1:V:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "The two 'region' columns come from different countries with disjoint, non-overlapping code sets (Jaccard ~0.05), so they represent country-specific coding schemes rather than a shared or hierarchical dimension."
+ },
+ "K1:V:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "The 'region' codes are country-specific and non-overlapping (DE numeric codes vs PL alphanumeric codes), so they represent different local encodings rather than a common conformable dimension."
+ },
+ "K1:VR:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "The two 'region' columns come from different countries with disjoint, incompatible code sets (numeric German codes vs. Polish voivodeship abbreviations), so they represent different local classification schemes rather than a shared or hierarchical dimension."
+ },
+ "K1:VR:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "The two 'region' columns come from disjoint country-specific coding schemes (numeric DE codes vs mixed PL codes) with near-zero value overlap, so they don't represent a conformable shared dimension."
+ },
+ "K1:VR:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Region codes differ entirely between country-specific views (disjoint value sets, different coding schemes and cardinalities), so no valid merge, hierarchy, or role relationship can be asserted."
+ },
+ "K1:VH:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "The two columns come from disjoint country-specific datasets with non-overlapping region codes (Jaccard ~0.05), so they represent different, incompatible regional coding schemes rather than a mergeable or hierarchical dimension."
+ },
+ "K1:VH:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "The two 'region' columns come from different countries with disjoint, incompatible code sets (numeric German region codes vs Polish alphanumeric codes) and share almost no overlap, so they represent different local coding schemes rather than a common dimension to merge, roll up, or role-differentiate."
+ },
+ "K1:VH:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "The two columns represent region codes from disjoint country-specific coding schemes (DE numeric codes vs PL alphanumeric codes) with near-zero value overlap, so they cannot be merged, hierarchically related, or treated as consistent role variants."
+ },
+ "K2:C1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "reason": "cross-view: no joint statistics exist"
+ },
+ "K2:N:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Driver nationality and circuit country are distinct, unrelated entities (person origin vs. race location) with no functional or hierarchical dependency."
+ },
+ "K2:N:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Driver nationality and circuit country are conceptually unrelated attributes of different entities (person vs. location) with no dimensional hierarchy or identity between them."
+ },
+ "K2:N:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Driver nationality and circuit country are distinct real-world concepts (person's origin vs race location) with no functional or hierarchical dependency between them."
+ },
+ "K2:V:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Driver nationality and circuit country are distinct entities (person vs. race location) that happen to correlate but represent separate dimensions to keep apart."
+ },
+ "K2:V:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Driver nationality and circuit country are distinct entity attributes (person vs location) that happen to correlate but represent different roles, not a mergeable or hierarchical pair."
+ },
+ "K2:V:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Driver nationality and circuit country are distinct entity attributes (person vs location) that happen to be correlated but represent different roles, not a hierarchy or merge."
+ },
+ "K2:VR:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Driver nationality and circuit country are distinct entities (person vs. race location) that happen to share similar value domains but represent different roles, not a merge or hierarchy."
+ },
+ "K2:VR:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Driver nationality and circuit country are distinct entities (person vs. race location) that only coincidentally co-occur, not a groupable dimensional hierarchy or same-identity merge."
+ },
+ "K2:VR:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Driver nationality and circuit country are distinct entity attributes (person vs. race location) that happen to correlate but must remain separate dimensions."
+ },
+ "K2:VH:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Driver nationality and circuit country are distinct entity attributes (person vs. race location) that happen to share a country-like domain but represent separate roles, not a hierarchy or merge."
+ },
+ "K2:VH:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Driver nationality and circuit country are distinct entity attributes (person vs. location) that happen to correlate but represent different roles, not a merge or hierarchy."
+ },
+ "K2:VH:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Driver nationality and circuit country are distinct dimensions (person origin vs race location) that happen to share similar categorical spread but represent different entities, not a hierarchy or merge."
+ },
+ "L1:C1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "reason": "no screen passed"
+ },
+ "L1:N:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "b->a",
+  "confidence": "medium",
+  "reason": "A sales group typically rolls up into a single sales office, making sales office the coarser grouping level."
+ },
+ "L1:N:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "b->a",
+  "confidence": "medium",
+  "reason": "A sales group is typically assigned to a single sales office, making sales office the coarser grouping level."
+ },
+ "L1:N:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "b->a",
+  "confidence": "medium",
+  "reason": "A sales group typically rolls up into a sales office, making sales office the coarser grouping level determined by sales group assignment."
+ },
+ "L1:V:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "b->a",
+  "confidence": "medium",
+  "reason": "Sales group is a finer-grained organizational unit that typically rolls up into a sales office, consistent with far higher cardinality of doc__SALESGROUP."
+ },
+ "L1:V:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "b->a",
+  "confidence": "medium",
+  "reason": "Sales group is a finer organizational unit typically nested within a sales office, so sales group determines sales office."
+ },
+ "L1:V:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "b->a",
+  "confidence": "medium",
+  "reason": "Sales group is a finer-grained organizational unit that typically rolls up into a sales office, with far more distinct values than sales office."
+ },
+ "L1:VR:r1": {
+  "verdict": "HIERARCHY",
+  "direction": "b->a",
+  "confidence": "low",
+  "reason": "Sales group mostly determines sales office (low violation in b->a direction) despite weak overall association, suggesting group is the finer org unit rolling up to office."
+ },
+ "L1:VR:r2": {
+  "verdict": "HIERARCHY",
+  "direction": "b->a",
+  "confidence": "low",
+  "reason": "Sales group values largely map to a single sales office (98% consistency b->a) suggesting sales group is a finer grouping under sales office, though the dominant '0' office value weakens confidence."
+ },
+ "L1:VR:r3": {
+  "verdict": "HIERARCHY",
+  "direction": "b->a",
+  "confidence": "low",
+  "reason": "Sales group mostly determines sales office (low violation b->a) suggesting group rolls up to office, but weak lambda and skewed office distribution limit confidence in a clean groupable hierarchy."
+ },
+ "L1:VH:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "SALESOFFICE is dominated by a single value (99.7%) so the determination by SALESGROUP is a vacuous skew with lambda\u22480, giving no real groupable signal."
+ },
+ "L1:VH:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "SALESOFFICE is dominated by a single value (99.69%) so the determination by SALESGROUP is a vacuous skew with lambda\u22480, giving no real groupable reduction in error."
+ },
+ "L1:VH:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "SALESOFFICE is dominated by a single value (99.69%), so the determination gives near-zero lambda and is a vacuous skew rather than a meaningful hierarchy."
+ },
+ "L2:C1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "reason": "constant column"
+ },
+ "L2:N:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are separate customer flag attributes (fashion-news opt-in vs active status) that represent distinct concepts, not a hierarchy or duplicate."
+ },
+ "L2:N:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are independent customer flags (news subscription vs active status) with no dimensional or hierarchical relationship between them."
+ },
+ "L2:N:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are independent boolean/flag attributes of the customer with no dimensional or hierarchical relationship between them."
+ },
+ "L2:V:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "Both are separate binary flag attributes of a customer (fashion-news subscription vs active status) with no determinative or hierarchical relationship, just correlated boolean indicators."
+ },
+ "L2:V:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are separate binary customer flags (fashion-news opt-in vs active status) with no dimensional or hierarchical relationship, just correlated boolean indicators."
+ },
+ "L2:V:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "Both are separate binary flag attributes (fashion news subscription vs active status) with no dimensional hierarchy or identity relationship, just correlated boolean indicators."
+ },
+ "L2:VR:r1": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "FN (fashion-news flag) and Active are distinct customer status flags that happen to correlate strongly but represent separate concepts, not a single identity or hierarchy."
+ },
+ "L2:VR:r2": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Both are separate binary flags (FN newsletter subscription vs Active status) that are highly correlated but conceptually distinct customer attributes, not a single identity or hierarchy."
+ },
+ "L2:VR:r3": {
+  "verdict": "ROLE",
+  "direction": null,
+  "confidence": "medium",
+  "reason": "FN (fashion news flag) and Active are distinct customer status attributes that happen to correlate strongly but represent separate boolean flags, not a hierarchy or duplicate."
+ },
+ "L2:VH:r1": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "customer__FN and customer__Active are near-identical binary flags that co-occur on 99.4% of rows, indicating they encode the same underlying customer status/identity rather than distinct concepts."
+ },
+ "L2:VH:r2": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "FN and Active are near-identical binary flags (99.4% equal, same value domain), indicating duplicated/redundant signals of essentially one customer attribute rather than distinct dimensions."
+ },
+ "L2:VH:r3": {
+  "verdict": "MERGE",
+  "direction": null,
+  "confidence": "high",
+  "reason": "FN and Active are near-identical flag columns (same value domain, 99.4% agreement) representing the same customer status concept, effectively duplicated data."
+ },
+ "L3:C1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "reason": "no screen passed"
+ },
+ "L3:N:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Car number and starting grid position are unrelated racing attributes with no dimensional determination between them."
+ },
+ "L3:N:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Car number and starting grid position are independent race attributes with no dimensional determination between them."
+ },
+ "L3:N:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Car number and starting grid position are independent attributes of a race result with no dimensional determination between them."
+ },
+ "L3:V:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Car number is a driver identifier while grid is the starting position for a race, so they are unrelated concepts with no dimensional hierarchy."
+ },
+ "L3:V:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Car number and starting grid position are unrelated attributes with no dimensional dependency between them."
+ },
+ "L3:V:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Car number and starting grid position are independent race attributes with no dimensional determination between them."
+ },
+ "L3:VR:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "number is the driver's car number while grid is the starting race position, two unrelated identifiers with no functional or hierarchical link."
+ },
+ "L3:VR:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "number (car's permanent racing number) and grid (starting grid position for a race) are unrelated concepts with no functional dependency, just coincidental overlap in small integer ranges."
+ },
+ "L3:VR:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "number is the driver's permanent car number while grid is the starting position for that race, distinct concepts with no dimensional derivation despite superficial numeric similarity."
+ },
+ "L3:VH:r1": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Car number and starting grid position are independent race attributes with no functional or hierarchical relationship, just coincidental numeric overlap."
+ },
+ "L3:VH:r2": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "car number and starting grid position are independent race attributes with no functional or hierarchical relationship between them."
+ },
+ "L3:VH:r3": {
+  "verdict": "REJECT",
+  "direction": null,
+  "confidence": "high",
+  "reason": "Car number and starting grid position are independent race attributes with no functional or hierarchical relationship, just coincidental numeric overlap."
+ }
+}

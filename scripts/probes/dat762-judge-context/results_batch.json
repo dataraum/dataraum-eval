@@ -1,0 +1,1216 @@
+{
+ "adult.csv#0": {
+  "education->education-num": {
+   "meaningful": true,
+   "confidence": 0.98
+  },
+  "education-num->education": {
+   "meaningful": true,
+   "confidence": 0.98
+  }
+ },
+ "claims.csv#0": {
+  "AirportCode->AirportName": {
+   "meaningful": true,
+   "confidence": 0.97
+  },
+  "AirportName->AirportCode": {
+   "meaningful": true,
+   "confidence": 0.95
+  }
+ },
+ "dblp10k.csv#0": {
+  "author1->p1series": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "author1->p2series": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "author2->p1series": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "author2->p2series": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "key1->p1type": {
+   "meaningful": true,
+   "confidence": 0.95
+  },
+  "key1->p1author": {
+   "meaningful": true,
+   "confidence": 0.95
+  },
+  "key1->p1title": {
+   "meaningful": true,
+   "confidence": 0.95
+  },
+  "key1->p1booktitle": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "key1->p1booktitlefull": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "key1->p1year": {
+   "meaningful": true,
+   "confidence": 0.95
+  },
+  "key1->p1journal": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "key1->p1journalfull": {
+   "meaningful": true,
+   "confidence": 0.85
+  }
+ },
+ "dblp10k.csv#12": {
+  "key1->p1publisher": {
+   "meaningful": true,
+   "confidence": 0.75
+  },
+  "key1->p1series": {
+   "meaningful": true,
+   "confidence": 0.55
+  },
+  "key1->p1id": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "key1->p1key": {
+   "meaningful": true,
+   "confidence": 0.95
+  },
+  "key1->p2publisher": {
+   "meaningful": false,
+   "confidence": 0.8
+  },
+  "key1->p2series": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "key2->p1journalfull": {
+   "meaningful": false,
+   "confidence": 0.75
+  },
+  "key2->p1publisher": {
+   "meaningful": false,
+   "confidence": 0.75
+  },
+  "key2->p1series": {
+   "meaningful": false,
+   "confidence": 0.8
+  },
+  "key2->p2type": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "key2->p2author": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "key2->p2title": {
+   "meaningful": true,
+   "confidence": 0.9
+  }
+ },
+ "dblp10k.csv#24": {
+  "key2->p2booktitle": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "key2->p2booktitlefull": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "key2->p2year": {
+   "meaningful": true,
+   "confidence": 0.85
+  },
+  "key2->p2journal": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "key2->p2journalfull": {
+   "meaningful": true,
+   "confidence": 0.85
+  },
+  "key2->p2publisher": {
+   "meaningful": true,
+   "confidence": 0.55
+  },
+  "key2->p2series": {
+   "meaningful": true,
+   "confidence": 0.45
+  },
+  "key2->p2id": {
+   "meaningful": true,
+   "confidence": 0.85
+  },
+  "key2->p2key": {
+   "meaningful": true,
+   "confidence": 0.85
+  },
+  "p1author->p1journalfull": {
+   "meaningful": false,
+   "confidence": 0.75
+  },
+  "p1author->p1series": {
+   "meaningful": false,
+   "confidence": 0.8
+  },
+  "p1author->p2publisher": {
+   "meaningful": false,
+   "confidence": 0.75
+  }
+ },
+ "dblp10k.csv#36": {
+  "p1author->p2series": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p1title->p1booktitle": {
+   "meaningful": true,
+   "confidence": 0.92
+  },
+  "p1title->p1booktitlefull": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "p1title->p1journalfull": {
+   "meaningful": true,
+   "confidence": 0.85
+  },
+  "p1title->p1publisher": {
+   "meaningful": true,
+   "confidence": 0.6
+  },
+  "p1title->p1series": {
+   "meaningful": false,
+   "confidence": 0.75
+  },
+  "p1title->p2publisher": {
+   "meaningful": false,
+   "confidence": 0.75
+  },
+  "p1title->p2series": {
+   "meaningful": false,
+   "confidence": 0.8
+  },
+  "p1booktitle->p1type": {
+   "meaningful": true,
+   "confidence": 0.88
+  },
+  "p1booktitle->p1booktitlefull": {
+   "meaningful": true,
+   "confidence": 0.93
+  },
+  "p1booktitle->p1publisher": {
+   "meaningful": false,
+   "confidence": 0.5
+  },
+  "p1booktitle->p1series": {
+   "meaningful": false,
+   "confidence": 0.5
+  }
+ },
+ "dblp10k.csv#48": {
+  "p1booktitle->p2publisher": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p1booktitle->p2series": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p1booktitlefull->p1type": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "p1booktitlefull->p2publisher": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p1booktitlefull->p2series": {
+   "meaningful": false,
+   "confidence": 0.9
+  },
+  "p1year->p1publisher": {
+   "meaningful": false,
+   "confidence": 0.6
+  },
+  "p1year->p1series": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p1year->p2series": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p1journal->p1type": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "p1journal->p1journalfull": {
+   "meaningful": true,
+   "confidence": 0.92
+  },
+  "p1journal->p1publisher": {
+   "meaningful": false,
+   "confidence": 0.5
+  },
+  "p1journal->p2publisher": {
+   "meaningful": false,
+   "confidence": 0.75
+  }
+ },
+ "dblp10k.csv#60": {
+  "p1journal->p2series": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p1journalfull->p1type": {
+   "meaningful": false,
+   "confidence": 0.8
+  },
+  "p1journalfull->p1journal": {
+   "meaningful": true,
+   "confidence": 0.95
+  },
+  "p1journalfull->p2journalfull": {
+   "meaningful": false,
+   "confidence": 0.3
+  },
+  "p1publisher->samename": {
+   "meaningful": false,
+   "confidence": 0.75
+  },
+  "p1publisher->p1type": {
+   "meaningful": true,
+   "confidence": 0.7
+  },
+  "p1publisher->p1booktitle": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p1publisher->p1series": {
+   "meaningful": true,
+   "confidence": 0.6
+  },
+  "p1id->key1": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "p1id->p1type": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p1id->p1author": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p1id->p1title": {
+   "meaningful": false,
+   "confidence": 0.85
+  }
+ },
+ "dblp10k.csv#72": {
+  "p1id->p1booktitle": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "p1id->p1booktitlefull": {
+   "meaningful": true,
+   "confidence": 0.88
+  },
+  "p1id->p1year": {
+   "meaningful": true,
+   "confidence": 0.92
+  },
+  "p1id->p1journal": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "p1id->p1journalfull": {
+   "meaningful": true,
+   "confidence": 0.8
+  },
+  "p1id->p1publisher": {
+   "meaningful": true,
+   "confidence": 0.65
+  },
+  "p1id->p1series": {
+   "meaningful": true,
+   "confidence": 0.4
+  },
+  "p1id->p1key": {
+   "meaningful": true,
+   "confidence": 0.95
+  },
+  "p1id->p2publisher": {
+   "meaningful": false,
+   "confidence": 0.7
+  },
+  "p1id->p2series": {
+   "meaningful": false,
+   "confidence": 0.75
+  },
+  "p1key->key1": {
+   "meaningful": true,
+   "confidence": 0.95
+  },
+  "p1key->p1type": {
+   "meaningful": true,
+   "confidence": 0.9
+  }
+ },
+ "dblp10k.csv#84": {
+  "p1key->p1author": {
+   "meaningful": true,
+   "confidence": 0.93
+  },
+  "p1key->p1title": {
+   "meaningful": true,
+   "confidence": 0.93
+  },
+  "p1key->p1booktitle": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "p1key->p1booktitlefull": {
+   "meaningful": true,
+   "confidence": 0.85
+  },
+  "p1key->p1year": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "p1key->p1journal": {
+   "meaningful": true,
+   "confidence": 0.85
+  },
+  "p1key->p1journalfull": {
+   "meaningful": true,
+   "confidence": 0.75
+  },
+  "p1key->p1publisher": {
+   "meaningful": true,
+   "confidence": 0.55
+  },
+  "p1key->p1series": {
+   "meaningful": true,
+   "confidence": 0.4
+  },
+  "p1key->p1id": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "p1key->p2publisher": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p1key->p2series": {
+   "meaningful": false,
+   "confidence": 0.85
+  }
+ },
+ "dblp10k.csv#96": {
+  "p2author->p1journalfull": {
+   "meaningful": false,
+   "confidence": 0.9
+  },
+  "p2author->p1series": {
+   "meaningful": false,
+   "confidence": 0.92
+  },
+  "p2author->p2journalfull": {
+   "meaningful": false,
+   "confidence": 0.55
+  },
+  "p2author->p2series": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p2title->p1journalfull": {
+   "meaningful": false,
+   "confidence": 0.9
+  },
+  "p2title->p1publisher": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p2title->p1series": {
+   "meaningful": false,
+   "confidence": 0.9
+  },
+  "p2title->p2booktitlefull": {
+   "meaningful": true,
+   "confidence": 0.75
+  },
+  "p2title->p2journalfull": {
+   "meaningful": true,
+   "confidence": 0.7
+  },
+  "p2title->p2publisher": {
+   "meaningful": false,
+   "confidence": 0.35
+  },
+  "p2title->p2series": {
+   "meaningful": false,
+   "confidence": 0.3
+  },
+  "p2booktitle->p1publisher": {
+   "meaningful": false,
+   "confidence": 0.85
+  }
+ },
+ "dblp10k.csv#108": {
+  "p2booktitle->p1series": {
+   "meaningful": false,
+   "confidence": 0.15
+  },
+  "p2booktitle->p2type": {
+   "meaningful": true,
+   "confidence": 0.85
+  },
+  "p2booktitle->p2booktitlefull": {
+   "meaningful": true,
+   "confidence": 0.95
+  },
+  "p2booktitle->p2publisher": {
+   "meaningful": false,
+   "confidence": 0.3
+  },
+  "p2booktitle->p2series": {
+   "meaningful": false,
+   "confidence": 0.3
+  },
+  "p2booktitlefull->p1publisher": {
+   "meaningful": false,
+   "confidence": 0.15
+  },
+  "p2booktitlefull->p2type": {
+   "meaningful": true,
+   "confidence": 0.75
+  },
+  "p2year->p1series": {
+   "meaningful": false,
+   "confidence": 0.15
+  },
+  "p2year->p2series": {
+   "meaningful": false,
+   "confidence": 0.2
+  },
+  "p2journal->p1publisher": {
+   "meaningful": false,
+   "confidence": 0.15
+  },
+  "p2journal->p2type": {
+   "meaningful": true,
+   "confidence": 0.8
+  },
+  "p2journal->p2journalfull": {
+   "meaningful": true,
+   "confidence": 0.95
+  }
+ },
+ "dblp10k.csv#120": {
+  "p2journal->p2publisher": {
+   "meaningful": true,
+   "confidence": 0.5
+  },
+  "p2journalfull->p1journalfull": {
+   "meaningful": false,
+   "confidence": 0.75
+  },
+  "p2journalfull->p2type": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "p2journalfull->p2journal": {
+   "meaningful": true,
+   "confidence": 0.95
+  },
+  "p2publisher->sameentity": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p2publisher->p1booktitle": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p2publisher->p1booktitlefull": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p2publisher->p1journal": {
+   "meaningful": false,
+   "confidence": 0.8
+  },
+  "p2publisher->p2type": {
+   "meaningful": true,
+   "confidence": 0.6
+  },
+  "p2publisher->p2journal": {
+   "meaningful": true,
+   "confidence": 0.55
+  },
+  "p2series->sameentity": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p2series->samename": {
+   "meaningful": false,
+   "confidence": 0.85
+  }
+ },
+ "dblp10k.csv#132": {
+  "p2series->author1": {
+   "meaningful": false,
+   "confidence": 0.9
+  },
+  "p2series->author2": {
+   "meaningful": false,
+   "confidence": 0.9
+  },
+  "p2series->key1": {
+   "meaningful": false,
+   "confidence": 0.9
+  },
+  "p2series->key2": {
+   "meaningful": false,
+   "confidence": 0.9
+  },
+  "p2series->p1type": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p2series->p1author": {
+   "meaningful": false,
+   "confidence": 0.9
+  },
+  "p2series->p1title": {
+   "meaningful": false,
+   "confidence": 0.9
+  },
+  "p2series->p1booktitle": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p2series->p1booktitlefull": {
+   "meaningful": false,
+   "confidence": 0.9
+  },
+  "p2series->p1year": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p2series->p1journal": {
+   "meaningful": false,
+   "confidence": 0.9
+  },
+  "p2series->p1id": {
+   "meaningful": false,
+   "confidence": 0.9
+  }
+ },
+ "dblp10k.csv#144": {
+  "p2series->p1key": {
+   "meaningful": false,
+   "confidence": 0.9
+  },
+  "p2series->p2type": {
+   "meaningful": true,
+   "confidence": 0.85
+  },
+  "p2series->p2author": {
+   "meaningful": false,
+   "confidence": 0.75
+  },
+  "p2series->p2title": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p2series->p2booktitle": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p2series->p2year": {
+   "meaningful": false,
+   "confidence": 0.8
+  },
+  "p2series->p2publisher": {
+   "meaningful": true,
+   "confidence": 0.6
+  },
+  "p2series->p2id": {
+   "meaningful": false,
+   "confidence": 0.9
+  },
+  "p2series->p2key": {
+   "meaningful": false,
+   "confidence": 0.9
+  },
+  "p2id->key2": {
+   "meaningful": true,
+   "confidence": 0.75
+  },
+  "p2id->p1journalfull": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p2id->p1publisher": {
+   "meaningful": false,
+   "confidence": 0.8
+  }
+ },
+ "dblp10k.csv#156": {
+  "p2id->p1series": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "p2id->p2type": {
+   "meaningful": true,
+   "confidence": 0.95
+  },
+  "p2id->p2author": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "p2id->p2title": {
+   "meaningful": true,
+   "confidence": 0.95
+  },
+  "p2id->p2booktitle": {
+   "meaningful": true,
+   "confidence": 0.85
+  },
+  "p2id->p2booktitlefull": {
+   "meaningful": true,
+   "confidence": 0.8
+  },
+  "p2id->p2year": {
+   "meaningful": true,
+   "confidence": 0.95
+  },
+  "p2id->p2journal": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "p2id->p2journalfull": {
+   "meaningful": true,
+   "confidence": 0.75
+  },
+  "p2id->p2publisher": {
+   "meaningful": true,
+   "confidence": 0.6
+  },
+  "p2id->p2series": {
+   "meaningful": true,
+   "confidence": 0.55
+  },
+  "p2id->p2key": {
+   "meaningful": true,
+   "confidence": 0.95
+  }
+ },
+ "dblp10k.csv#168": {
+  "p2key->key2": {
+   "meaningful": true,
+   "confidence": 0.85
+  },
+  "p2key->p1journalfull": {
+   "meaningful": false,
+   "confidence": 0.2
+  },
+  "p2key->p1publisher": {
+   "meaningful": false,
+   "confidence": 0.15
+  },
+  "p2key->p1series": {
+   "meaningful": false,
+   "confidence": 0.05
+  },
+  "p2key->p2type": {
+   "meaningful": true,
+   "confidence": 0.95
+  },
+  "p2key->p2author": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "p2key->p2title": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "p2key->p2booktitle": {
+   "meaningful": true,
+   "confidence": 0.85
+  },
+  "p2key->p2booktitlefull": {
+   "meaningful": true,
+   "confidence": 0.85
+  },
+  "p2key->p2year": {
+   "meaningful": true,
+   "confidence": 0.8
+  },
+  "p2key->p2journal": {
+   "meaningful": true,
+   "confidence": 0.85
+  },
+  "p2key->p2journalfull": {
+   "meaningful": true,
+   "confidence": 0.8
+  }
+ },
+ "dblp10k.csv#180": {
+  "p2key->p2publisher": {
+   "meaningful": true,
+   "confidence": 0.75
+  },
+  "p2key->p2series": {
+   "meaningful": true,
+   "confidence": 0.7
+  },
+  "p2key->p2id": {
+   "meaningful": true,
+   "confidence": 0.9
+  }
+ },
+ "hospital.csv#0": {
+  "ProviderNumberString->HospitalNameString": {
+   "meaningful": true,
+   "confidence": 0.95
+  },
+  "ProviderNumberString->CityString": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "ProviderNumberString->StateString": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "ProviderNumberString->ZIPCodeString": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "ProviderNumberString->CountyNameString": {
+   "meaningful": true,
+   "confidence": 0.85
+  },
+  "ProviderNumberString->PhoneNumberString": {
+   "meaningful": true,
+   "confidence": 0.8
+  },
+  "ProviderNumberString->HospitalTypeString": {
+   "meaningful": true,
+   "confidence": 0.85
+  },
+  "ProviderNumberString->HospitalOwnerString": {
+   "meaningful": true,
+   "confidence": 0.85
+  },
+  "ProviderNumberString->EmergencyServiceString": {
+   "meaningful": true,
+   "confidence": 0.75
+  },
+  "ZIPCodeString->CityString": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "ZIPCodeString->StateString": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "PhoneNumberString->CityString": {
+   "meaningful": true,
+   "confidence": 0.7
+  }
+ },
+ "hospital.csv#12": {
+  "PhoneNumberString->StateString": {
+   "meaningful": false,
+   "confidence": 0.75
+  },
+  "PhoneNumberString->ZIPCodeString": {
+   "meaningful": false,
+   "confidence": 0.75
+  },
+  "MeasureCodeString->ConditionString": {
+   "meaningful": true,
+   "confidence": 0.95
+  },
+  "MeasureCodeString->MeasureNameString": {
+   "meaningful": true,
+   "confidence": 0.97
+  },
+  "MeasureNameString->ConditionString": {
+   "meaningful": true,
+   "confidence": 0.93
+  },
+  "MeasureNameString->MeasureCodeString": {
+   "meaningful": true,
+   "confidence": 0.95
+  },
+  "StateAvgString->StateString": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "StateAvgString->ConditionString": {
+   "meaningful": true,
+   "confidence": 0.85
+  },
+  "StateAvgString->MeasureCodeString": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "StateAvgString->MeasureNameString": {
+   "meaningful": true,
+   "confidence": 0.85
+  }
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv#0": {
+  "AgentText->_datasetguid": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "AgentText->PersonFullName": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "AgentText->PersonInheritedName": {
+   "meaningful": true,
+   "confidence": 0.88
+  },
+  "AgentText->PersonGivenNames": {
+   "meaningful": true,
+   "confidence": 0.8
+  },
+  "AgentText->PrimaryCollector": {
+   "meaningful": false,
+   "confidence": 0.95
+  },
+  "PersonFullName->PersonPrefix": {
+   "meaningful": false,
+   "confidence": 0.6
+  },
+  "PersonFullName->PersonGivenNames": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "PersonFullName->PrimaryCollector": {
+   "meaningful": false,
+   "confidence": 0.95
+  },
+  "PersonInheritedName->PersonPrefix": {
+   "meaningful": false,
+   "confidence": 0.6
+  },
+  "PersonInheritedName->PrimaryCollector": {
+   "meaningful": false,
+   "confidence": 0.95
+  },
+  "PersonGivenNames->PersonPrefix": {
+   "meaningful": false,
+   "confidence": 0.6
+  },
+  "PersonGivenNames->PrimaryCollector": {
+   "meaningful": false,
+   "confidence": 0.95
+  }
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv#0": {
+  "_datasetguid->AreaClass_Language": {
+   "meaningful": false,
+   "confidence": 0.9
+  },
+  "_datasetguid->AreaName_Language": {
+   "meaningful": false,
+   "confidence": 0.9
+  },
+  "_unitguid->_datasetguid": {
+   "meaningful": true,
+   "confidence": 0.85
+  },
+  "_unitguid->AreaClass_Language": {
+   "meaningful": false,
+   "confidence": 0.9
+  },
+  "_unitguid->AreaName_Language": {
+   "meaningful": false,
+   "confidence": 0.9
+  },
+  "AreaCode->_datasetguid": {
+   "meaningful": false,
+   "confidence": 0.3
+  },
+  "AreaCode->Sequence": {
+   "meaningful": true,
+   "confidence": 0.65
+  },
+  "AreaCode->AreaClass": {
+   "meaningful": true,
+   "confidence": 0.8
+  },
+  "AreaCode->AreaClass_Language": {
+   "meaningful": false,
+   "confidence": 0.9
+  },
+  "AreaCode->AreaName": {
+   "meaningful": true,
+   "confidence": 0.95
+  },
+  "AreaCode->AreaName_Language": {
+   "meaningful": false,
+   "confidence": 0.9
+  },
+  "AreaName->AreaClass_Language": {
+   "meaningful": false,
+   "confidence": 0.9
+  }
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv#12": {
+  "AreaName->AreaName_Language": {
+   "meaningful": false,
+   "confidence": 0.85
+  }
+ },
+ "t_biocase_gathering_r90992_c35.csv#0": {
+  "_datasetguid->Gath_Altid_Parameter": {
+   "meaningful": false,
+   "confidence": 0.05
+  },
+  "_datasetguid->Gath_Country_Name_Language": {
+   "meaningful": false,
+   "confidence": 0.05
+  },
+  "_datasetguid->Gath_Depth_Parameter": {
+   "meaningful": false,
+   "confidence": 0.05
+  },
+  "Gath_AreaDetail->Gath_Altid_Parameter": {
+   "meaningful": false,
+   "confidence": 0.05
+  },
+  "Gath_AreaDetail->Gath_Country_Name_Language": {
+   "meaningful": false,
+   "confidence": 0.05
+  },
+  "Gath_AreaDetail->Gath_Depth_Parameter": {
+   "meaningful": false,
+   "confidence": 0.05
+  },
+  "Gath_AreaDetail->Gath_Notes": {
+   "meaningful": false,
+   "confidence": 0.15
+  },
+  "Gath_Country_Name->Gath_Altid_Parameter": {
+   "meaningful": false,
+   "confidence": 0.05
+  },
+  "Gath_Country_Name->Gath_Country_Name_Language": {
+   "meaningful": false,
+   "confidence": 0.05
+  },
+  "Gath_Country_Name->Gath_Depth_Parameter": {
+   "meaningful": false,
+   "confidence": 0.05
+  },
+  "Gath_DateTime_Text->_datasetguid": {
+   "meaningful": false,
+   "confidence": 0.3
+  },
+  "Gath_DateTime_Text->Gath_Altid_Parameter": {
+   "meaningful": false,
+   "confidence": 0.05
+  }
+ },
+ "t_biocase_gathering_r90992_c35.csv#12": {
+  "Gath_DateTime_Text->Gath_Country_Name_Language": {
+   "meaningful": false,
+   "confidence": 0.95
+  },
+  "Gath_DateTime_Text->Gath_Depth_Parameter": {
+   "meaningful": false,
+   "confidence": 0.95
+  },
+  "Gath_DateTime_Begin->Gath_Altid_Parameter": {
+   "meaningful": false,
+   "confidence": 0.95
+  },
+  "Gath_DateTime_Begin->Gath_Country_Name_Language": {
+   "meaningful": false,
+   "confidence": 0.95
+  },
+  "Gath_DateTime_Begin->Gath_Depth_Parameter": {
+   "meaningful": false,
+   "confidence": 0.95
+  },
+  "Gath_DateTime_Begin->Gath_Notes": {
+   "meaningful": false,
+   "confidence": 0.3
+  },
+  "Gath_DateTime_End->Gath_Altid_Parameter": {
+   "meaningful": false,
+   "confidence": 0.95
+  },
+  "Gath_DateTime_End->Gath_Country_Name_Language": {
+   "meaningful": false,
+   "confidence": 0.95
+  },
+  "Gath_DateTime_End->Gath_Depth_Parameter": {
+   "meaningful": false,
+   "confidence": 0.95
+  },
+  "Gath_DateTime_End->Gath_Notes": {
+   "meaningful": false,
+   "confidence": 0.3
+  },
+  "Gath_Notes->_datasetguid": {
+   "meaningful": false,
+   "confidence": 0.9
+  },
+  "Gath_Notes->Gath_Altid_Parameter": {
+   "meaningful": false,
+   "confidence": 0.9
+  }
+ },
+ "t_biocase_gathering_r90992_c35.csv#24": {
+  "Gath_Notes->Gath_Country_Name": {
+   "meaningful": false,
+   "confidence": 0.75
+  },
+  "Gath_Notes->Gath_Country_Name_Language": {
+   "meaningful": false,
+   "confidence": 0.92
+  },
+  "Gath_Notes->Gath_DateTime_End": {
+   "meaningful": false,
+   "confidence": 0.7
+  },
+  "Gath_Notes->Gath_Depth_Parameter": {
+   "meaningful": false,
+   "confidence": 0.92
+  }
+ },
+ "t_biocase_identification_r91800_c38.csv#0": {
+  "ScientificName->FullScientificNameString": {
+   "meaningful": true,
+   "confidence": 0.95
+  },
+  "ScientificName->GenusOrMonomial": {
+   "meaningful": true,
+   "confidence": 0.95
+  },
+  "ScientificName->Subgenus": {
+   "meaningful": true,
+   "confidence": 0.8
+  },
+  "ScientificName->SpeciesEpithet": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "ScientificName->SubspeciesEpithet": {
+   "meaningful": true,
+   "confidence": 0.88
+  },
+  "ScientificName->AuthorTeamOriginalAndYear": {
+   "meaningful": true,
+   "confidence": 0.75
+  },
+  "ScientificName->AuthorTeamParenthesisAndYear": {
+   "meaningful": true,
+   "confidence": 0.75
+  },
+  "ScientificName->Notes": {
+   "meaningful": false,
+   "confidence": 0.75
+  },
+  "FullScientificNameString->ScientificName": {
+   "meaningful": true,
+   "confidence": 0.95
+  },
+  "FullScientificNameString->GenusOrMonomial": {
+   "meaningful": true,
+   "confidence": 0.95
+  },
+  "FullScientificNameString->Subgenus": {
+   "meaningful": true,
+   "confidence": 0.8
+  },
+  "FullScientificNameString->SpeciesEpithet": {
+   "meaningful": true,
+   "confidence": 0.9
+  }
+ },
+ "t_biocase_identification_r91800_c38.csv#12": {
+  "FullScientificNameString->SubspeciesEpithet": {
+   "meaningful": true,
+   "confidence": 0.85
+  },
+  "FullScientificNameString->AuthorTeamOriginalAndYear": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "FullScientificNameString->AuthorTeamParenthesisAndYear": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "FullScientificNameString->Notes": {
+   "meaningful": false,
+   "confidence": 0.85
+  },
+  "Subgenus->_timestamp": {
+   "meaningful": false,
+   "confidence": 0.95
+  },
+  "Subgenus->GenusOrMonomial": {
+   "meaningful": true,
+   "confidence": 0.9
+  },
+  "Subgenus->PreferredFlag": {
+   "meaningful": false,
+   "confidence": 0.95
+  },
+  "Subgenus->Notes": {
+   "meaningful": false,
+   "confidence": 0.8
+  },
+  "SubspeciesEpithet->Notes": {
+   "meaningful": false,
+   "confidence": 0.8
+  },
+  "Notes->_timestamp": {
+   "meaningful": false,
+   "confidence": 0.95
+  },
+  "Notes->PreferredFlag": {
+   "meaningful": false,
+   "confidence": 0.95
+  }
+ },
+ "tax.csv#0": {
+  "FNameString->GenderString": {
+   "meaningful": false,
+   "confidence": 0.95
+  },
+  "AreaCodeString->StateString": {
+   "meaningful": true,
+   "confidence": 0.92
+  },
+  "ZipString->CityString": {
+   "meaningful": true,
+   "confidence": 0.93
+  },
+  "ZipString->StateString": {
+   "meaningful": true,
+   "confidence": 0.95
+  }
+ }
+}

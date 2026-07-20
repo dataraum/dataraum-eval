@@ -669,3 +669,21 @@ def read_detected_cycles(session: Any) -> list[dict[str, Any]]:
         }
         for r in rows
     ]
+
+
+def is_wild(truth: dict[str, Any]) -> bool:
+    """Is this a Tier-B (wild) corpus — declared structure only?
+
+    Tier B carries an external corpus's OWN declared truth: foreign keys, types,
+    time columns. It declares no measures, no business concepts, no metrics —
+    those would be our reading of someone else's schema, not their statement about
+    it (``entropy_eval_architecture.md``, the corpus policy).
+
+    So an oracle whose truth section is absent on a wild corpus must STAND DOWN,
+    not fail: there is nothing to be right or wrong about. That is the opposite of
+    Tier A, where an absent section IS a defect (the DAT-725 "absence falls loud"
+    invariant) because the generator always authors it. The flag is written by
+    ``scripts/stage_wild_corpus.py``; a corpus with no ``tier`` is Tier A, so the
+    loud-by-default behaviour is unchanged for every existing strategy.
+    """
+    return str(truth.get("tier") or "").lower() == "wild"

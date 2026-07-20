@@ -55,6 +55,13 @@ def derive_truth(schema: dict[str, Any], *, vertical: str) -> dict[str, Any]:
     relationships: list[dict[str, Any]] = []
     timestamps: list[str] = []
 
+    # Case-fold to match the engine's typed catalog. RelBench declares camelCase
+    # (`circuitId`); the engine normalizes column names to lowercase at typing, so
+    # truth authored verbatim mismatches every edge and reads as total recall
+    # failure. Measured: 0/13 before, 13/13 after, on identical run data.
+    def norm(name: str) -> str:
+        return name.lower()
+
     for table, spec in sorted(schema.items()):
         for fk_col, ref_table in sorted((spec.get("fkeys") or {}).items()):
             ref_pkey = (schema.get(ref_table) or {}).get("pkey")
@@ -63,11 +70,12 @@ def derive_truth(schema: dict[str, Any], *, vertical: str) -> dict[str, Any]:
                 # edge — skip it rather than invent the target column.
                 continue
             relationships.append(
-                {"from": f"{table}.{fk_col}", "to": f"{ref_table}.{ref_pkey}",
+                {"from": f"{norm(table)}.{norm(fk_col)}",
+                 "to": f"{norm(ref_table)}.{norm(ref_pkey)}",
                  "direction_reliable": True}
             )
         if spec.get("time_col"):
-            timestamps.append(f"{table}.{spec['time_col']}")
+            timestamps.append(f"{norm(table)}.{norm(spec['time_col'])}")
 
     return {
         "vertical": vertical,

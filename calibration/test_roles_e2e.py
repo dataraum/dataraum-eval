@@ -25,6 +25,7 @@ import pytest
 
 from calibration.conftest import require_pipeline_run
 from calibration.metadata_truth import (
+    is_wild,
     read_column_meanings,
     read_semantic_roles,
     read_table_entities,
@@ -93,6 +94,8 @@ def test_measure_role_recall_and_precision(metadata_truth: dict[str, Any]) -> No
         roles = read_semantic_roles(session)
 
     expected = set(metadata_truth.get("semantic_roles", {}).get("measure") or [])
+    if not expected and is_wild(metadata_truth):
+        pytest.skip("Tier-B corpus declares no measure roles — structural truth only")
     assert expected, "no measure ground truth declared"
     actual = {col for col, r in roles.items() if r == "measure"}
 

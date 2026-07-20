@@ -45,6 +45,7 @@ from calibration.conftest import require_pipeline_run
 from calibration.metadata_truth import (
     expected_groundings,
     expected_reconciles_with,
+    is_wild,
     read_extract_snippets,
     read_groundings,
     read_reconciles_with,
@@ -161,7 +162,9 @@ def test_extract_snippet_parts_parity(strategy_name: str) -> None:
 
 @pytest.mark.llm
 @pytest.mark.parametrize("element", sorted(_P2_MATCH_SHAPES))
-def test_p2_element_instantiates_in_match(element: str, strategy_name: str) -> None:
+def test_p2_element_instantiates_in_match(
+    element: str, strategy_name: str, metadata_truth: dict[str, Any]
+) -> None:
     """A present P2 element view has rows AND those rows instantiate in a PGQ MATCH.
 
     View absent -> skip (pre-P2 engine). View present but empty on the finance
@@ -178,6 +181,12 @@ def test_p2_element_instantiates_in_match(element: str, strategy_name: str) -> N
         direct = session.execute(
             text(f'SELECT count(*) FROM "{read_schema}".{element}')  # noqa: S608 (fixed names)
         ).scalar()
+        # The defect this catches is a DANGLING BINDING — rows present, MATCH empty.
+        # That is only testable where rows exist. A Tier-B corpus declares no concepts
+        # to ground, so an empty substrate there is the corpus, not a defect; Tier A
+        # keeps falling loud (the generator always authors groundable concepts).
+        if not direct and is_wild(metadata_truth):
+            pytest.skip(f"{element} empty on a Tier-B corpus — no declared concepts to ground")
         assert direct, (
             f"{element} exists but has ZERO rows on the finance corpus — an empty "
             "grounding substrate is a stop-condition (absence falls loud), never a green run"
@@ -210,6 +219,8 @@ def test_grounding_enumeration_oracle(metadata_truth: dict[str, Any], strategy_n
             pytest.skip("current_groundings absent — pre-P2 engine")
         actual = read_groundings(session)
 
+    if is_wild(metadata_truth) and not expected_groundings(metadata_truth):
+        pytest.skip("Tier-B corpus declares no concept groundings — structural truth only")
     assert actual, _EMPTY_BATCH
 
     expected_pairs = {
@@ -249,6 +260,8 @@ def test_multi_grounding_enumeration(metadata_truth: dict[str, Any], strategy_na
             pytest.skip("current_groundings absent — pre-P2 engine")
         actual = read_groundings(session)
 
+    if is_wild(metadata_truth) and not expected_groundings(metadata_truth):
+        pytest.skip("Tier-B corpus declares no concept groundings — structural truth only")
     assert actual, _EMPTY_BATCH
 
     shortfalls: list[str] = []
@@ -287,6 +300,8 @@ def test_reconciles_with_population(metadata_truth: dict[str, Any], strategy_nam
         groundings = read_groundings(session)
         edges = read_reconciles_with(session)
 
+    if is_wild(metadata_truth) and not expected_groundings(metadata_truth):
+        pytest.skip("Tier-B corpus declares no concept groundings — structural truth only")
     assert groundings, _EMPTY_BATCH
 
     multi_grounded = {
@@ -356,6 +371,8 @@ def test_served_context_ap_oracle(metadata_truth: dict[str, Any], strategy_name:
 
     # The file's own contract applies here too: once the view exists, an empty
     # batch is a HARD stop-condition — never an xfail that muddies the P9 signal.
+    if is_wild(metadata_truth) and not expected_groundings(metadata_truth):
+        pytest.skip("Tier-B corpus declares no concept groundings — structural truth only")
     assert groundings, _EMPTY_BATCH
 
     problems: list[str] = []

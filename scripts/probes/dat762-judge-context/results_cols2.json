@@ -1,0 +1,1157 @@
+{
+ "adult.csv:education:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Education is a categorical demographic attribute commonly used to group, filter, or drill into records."
+ },
+ "adult.csv:education:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Education is a categorical demographic attribute with few distinct values, commonly used to group or filter records."
+ },
+ "adult.csv:education:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Education is a categorical demographic attribute with few distinct values, commonly used to group or filter records."
+ },
+ "adult.csv:education-num:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "It encodes education level as a small set of discrete categories, useful for grouping/filtering despite being numeric-coded."
+ },
+ "adult.csv:education-num:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "It's a numeric encoding of education level with few distinct values, commonly used to group or filter by education attainment."
+ },
+ "adult.csv:education-num:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "It's a numeric encoding of education level with only 16 distinct values, commonly used to group or filter by education attainment."
+ },
+ "claims.csv:AirportCode:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "AirportCode is a low-cardinality categorical dimension representing location, commonly used to group or filter claims by airport."
+ },
+ "claims.csv:AirportCode:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "AirportCode represents a categorical dimension (airport location) commonly used to group or filter claims data."
+ },
+ "claims.csv:AirportCode:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "AirportCode represents a categorical dimension (airport location) that users would filter or group claims by."
+ },
+ "claims.csv:AirportName:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "AirportName is a categorical dimension representing the airport of the claim, useful for grouping/filtering claims by location."
+ },
+ "claims.csv:AirportName:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "AirportName is a categorical dimension representing the airport location, commonly used to group or filter claims by airport."
+ },
+ "claims.csv:AirportName:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "AirportName is a categorical dimension representing where claims occurred, useful for grouping/filtering claims by airport."
+ },
+ "claims.csv:ClaimNumber:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "ClaimNumber is a unique identifier for each claim record, not a business dimension for grouping or filtering."
+ },
+ "claims.csv:ClaimNumber:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "ClaimNumber is a unique identifier for each claim, not a categorical dimension for analysis."
+ },
+ "claims.csv:ClaimNumber:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "ClaimNumber is a unique identifier per claim, not a business dimension for grouping or filtering."
+ },
+ "dblp10k.csv:author1:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Author1 represents a named individual dimension that could be filtered or grouped on to analyze publications by author."
+ },
+ "dblp10k.csv:author1:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Author names are a natural dimension for filtering or grouping publication records by author."
+ },
+ "dblp10k.csv:author1:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Author names are a natural dimension for filtering or grouping publication records by author."
+ },
+ "dblp10k.csv:author2:0": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "author2 represents a named author entity that users could filter or group by, despite high cardinality typical of author names."
+ },
+ "dblp10k.csv:author2:1": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "Author2 represents a person entity that could be filtered or grouped on to analyze publications by co-author, despite high cardinality."
+ },
+ "dblp10k.csv:author2:2": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "author2 represents a named author entity that users could filter or group by despite high cardinality, similar to a category of contributor."
+ },
+ "dblp10k.csv:key1:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "key1 is a unique publication identifier, not a business dimension for grouping or filtering."
+ },
+ "dblp10k.csv:key1:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "key1 is a near-unique record identifier for a publication entry, not a business dimension."
+ },
+ "dblp10k.csv:key1:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "key1 is a near-unique record identifier (publication key) rather than a categorical business dimension."
+ },
+ "dblp10k.csv:key2:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "key2 is a high-cardinality unique record identifier (bibliographic key), not a business dimension."
+ },
+ "dblp10k.csv:key2:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "key2 is a unique record identifier (publication key) rather than a categorical business dimension."
+ },
+ "dblp10k.csv:key2:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "key2 is a unique publication identifier/key used for record matching, not a business dimension."
+ },
+ "dblp10k.csv:p1author:0": {
+  "groupable": false,
+  "confidence": "medium",
+  "reason": "This is a near-unique free-form list of author names for a specific record, more like an identifying attribute than a reporting dimension."
+ },
+ "dblp10k.csv:p1author:1": {
+  "groupable": false,
+  "confidence": "medium",
+  "reason": "This is a high-cardinality free-form author list acting as record metadata rather than a business dimension for grouping/filtering."
+ },
+ "dblp10k.csv:p1author:2": {
+  "groupable": false,
+  "confidence": "medium",
+  "reason": "This is a high-cardinality free-text list of author names for a specific record comparison, more like an identifying attribute than a reporting dimension."
+ },
+ "dblp10k.csv:p1booktitle:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Booktitle represents a conference/venue category that users could filter or group publications by."
+ },
+ "dblp10k.csv:p1booktitle:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Conference/venue name (booktitle) is a categorical dimension users would filter or group publications by."
+ },
+ "dblp10k.csv:p1booktitle:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Booktitle represents a publication venue/conference that users could filter or group by to analyze publication patterns."
+ },
+ "dblp10k.csv:p1booktitlefull:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "It represents the full conference/publication venue name, a natural dimension to filter or group publications by."
+ },
+ "dblp10k.csv:p1booktitlefull:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "It contains venue/conference names that users would filter or group publications by."
+ },
+ "dblp10k.csv:p1booktitlefull:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "It represents the full conference/booktitle name, a meaningful category users could filter or group publications by."
+ },
+ "dblp10k.csv:p1id:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "p1id is a unique record identifier for a publication, not a business dimension for grouping or filtering."
+ },
+ "dblp10k.csv:p1id:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "p1id is a unique record identifier for a publication, not a business dimension to group or filter on."
+ },
+ "dblp10k.csv:p1id:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "p1id is a near-unique technical identifier for a record, not a business dimension."
+ },
+ "dblp10k.csv:p1journal:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Journal name is a categorical dimension users would filter or group publications by."
+ },
+ "dblp10k.csv:p1journal:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Journal name is a categorical attribute of a publication that users would filter or group by to analyze publication venues."
+ },
+ "dblp10k.csv:p1journal:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Journal name is a categorical dimension that users would filter or group publications by."
+ },
+ "dblp10k.csv:p1journalfull:0": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "It represents the full journal name, a categorical attribute users might filter or group publications by."
+ },
+ "dblp10k.csv:p1journalfull:1": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "Represents the full journal name, a categorical attribute users could filter or group publications by."
+ },
+ "dblp10k.csv:p1journalfull:2": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "It contains journal names, a categorical attribute users could filter or group publications by, though sparsely populated."
+ },
+ "dblp10k.csv:p1key:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "p1key is a near-unique technical record identifier (publication key) rather than a business dimension."
+ },
+ "dblp10k.csv:p1key:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "p1key is a unique identifier/key referencing a specific publication record, not a business dimension."
+ },
+ "dblp10k.csv:p1key:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "p1key is a unique record identifier for a publication, not a business dimension."
+ },
+ "dblp10k.csv:p1publisher:0": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "Publisher name is a categorical attribute users could filter or group publications by, though it's sparsely populated here."
+ },
+ "dblp10k.csv:p1publisher:1": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "Publisher names are a categorical attribute users might filter or group publications by, though sparse data limits usefulness."
+ },
+ "dblp10k.csv:p1publisher:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Publisher name is a categorical attribute users could filter or group publications by, despite sparse population."
+ },
+ "dblp10k.csv:p1series:0": {
+  "groupable": true,
+  "confidence": "low",
+  "reason": "It represents a publication series name, a potential categorical dimension, but only 2 non-null values exist so its analytical usefulness is unclear."
+ },
+ "dblp10k.csv:p1series:1": {
+  "groupable": true,
+  "confidence": "low",
+  "reason": "It represents a publication series category, but with only 2 non-null values in the dataset it offers little practical grouping value."
+ },
+ "dblp10k.csv:p1series:2": {
+  "groupable": true,
+  "confidence": "low",
+  "reason": "It represents a publication series category, but with only 2 non-null values it's too sparse to be a reliable analysis dimension."
+ },
+ "dblp10k.csv:p1title:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "p1title is a free-form publication title, nearly unique per record, not a categorical dimension for grouping or filtering."
+ },
+ "dblp10k.csv:p1title:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "p1title is a free-form publication title, unique per record, not a categorical dimension for grouping or filtering."
+ },
+ "dblp10k.csv:p1title:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "p1title is a free-form publication title, nearly unique per record, not a categorical dimension for grouping."
+ },
+ "dblp10k.csv:p1year:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Publication year is a natural dimension for filtering or grouping records over time."
+ },
+ "dblp10k.csv:p1year:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "p1year represents publication year, a natural dimension for filtering or grouping records over time."
+ },
+ "dblp10k.csv:p1year:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "p1year is a publication year field with low cardinality, ideal for filtering or grouping by time period."
+ },
+ "dblp10k.csv:p2author:0": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "Lists co-author names for a paper, which could be used to filter or drill into publications by author, though its high uniqueness limits typical grouping."
+ },
+ "dblp10k.csv:p2author:1": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "p2author lists co-authors of a publication, a categorical attribute that could be filtered or grouped on to analyze authorship patterns, though its high cardinality and free-form list nature limit typical business reporting use."
+ },
+ "dblp10k.csv:p2author:2": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "Represents the author list of a compared publication, which analysts could group or filter by to study authorship patterns, though high uniqueness limits its practicality."
+ },
+ "dblp10k.csv:p2booktitle:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "p2booktitle contains conference/venue names that users would filter or group publications by."
+ },
+ "dblp10k.csv:p2booktitle:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Represents the conference/publication venue of the second record, a natural category for grouping or filtering."
+ },
+ "dblp10k.csv:p2booktitle:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "p2booktitle contains conference/venue names that users would filter or group by to analyze publications by venue."
+ },
+ "dblp10k.csv:p2booktitlefull:0": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "It represents the venue/publication title of a paper, which could be used to filter or group records by conference or book series."
+ },
+ "dblp10k.csv:p2booktitlefull:1": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "It represents the full conference/venue title for a publication, which users could filter or group by to analyze publication venues."
+ },
+ "dblp10k.csv:p2booktitlefull:2": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "It represents a publication venue name that users could filter or group by to analyze publication trends."
+ },
+ "dblp10k.csv:p2id:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "p2id is a near-unique technical identifier for a record, not a business dimension."
+ },
+ "dblp10k.csv:p2id:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "p2id is a unique record identifier for a publication, not a business dimension."
+ },
+ "dblp10k.csv:p2id:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "p2id is a unique record identifier for a publication, not a business dimension for grouping or filtering."
+ },
+ "dblp10k.csv:p2journal:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Journal name is a categorical attribute users would filter or group by to analyze publications by venue."
+ },
+ "dblp10k.csv:p2journal:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Journal name is a categorical dimension users would filter or group publications by."
+ },
+ "dblp10k.csv:p2journal:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Journal name is a categorical dimension useful for filtering or grouping publication records."
+ },
+ "dblp10k.csv:p2journalfull:0": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "It contains journal names that could be used to filter or group publication records by venue."
+ },
+ "dblp10k.csv:p2journalfull:1": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "It contains journal names that could be used to filter or group publication records by venue."
+ },
+ "dblp10k.csv:p2journalfull:2": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "It contains journal names, a categorical attribute users could filter or group by, though sparsely populated."
+ },
+ "dblp10k.csv:p2key:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "p2key is a unique record identifier/key referencing a specific publication, not a business dimension for grouping or filtering."
+ },
+ "dblp10k.csv:p2key:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "p2key is a unique per-record technical identifier (bibliographic key) rather than a business dimension."
+ },
+ "dblp10k.csv:p2key:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "p2key is a unique record identifier/key for a publication entry, not a business dimension."
+ },
+ "dblp10k.csv:p2publisher:0": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "Publisher name is a categorical attribute that could be used to filter or group publications, despite sparse population."
+ },
+ "dblp10k.csv:p2publisher:1": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "Publisher name is a categorical dimension users could filter or group by, despite very sparse data."
+ },
+ "dblp10k.csv:p2publisher:2": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "Publisher name is a categorical attribute users could filter or group publications by, despite sparse population."
+ },
+ "dblp10k.csv:p2series:0": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "p2series represents a publication series category that could be used to group or filter records, though it has very few non-null values in this dataset."
+ },
+ "dblp10k.csv:p2series:1": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "It represents a publication series category that could be filtered or grouped on, though it has very few non-null values."
+ },
+ "dblp10k.csv:p2series:2": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "p2series represents a publication series/category that could be used to filter or group records, though with only 3 non-null values it's rarely populated."
+ },
+ "dblp10k.csv:p2title:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "p2title is a free-form publication title, essentially unique per record, not a categorical dimension for grouping or filtering."
+ },
+ "dblp10k.csv:p2title:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "p2title is a free-form publication title, essentially unique per record, not a categorical dimension for grouping or filtering."
+ },
+ "dblp10k.csv:p2title:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "p2title is a free-form publication title, essentially unique per record, not a categorical dimension for grouping or filtering."
+ },
+ "dblp10k.csv:p2year:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Publication year is a natural dimension for filtering or grouping records over time."
+ },
+ "dblp10k.csv:p2year:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "p2year represents publication year, a natural dimension for filtering or grouping records over time."
+ },
+ "dblp10k.csv:p2year:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "p2year represents a publication year with low cardinality, commonly used to filter or group publications by time period."
+ },
+ "hospital.csv:MeasureCodeString:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "MeasureCodeString categorizes hospital quality measures, a natural dimension for filtering and grouping analysis."
+ },
+ "hospital.csv:MeasureCodeString:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "MeasureCodeString represents a categorical clinical measure code that users would filter or group by to analyze hospital performance metrics."
+ },
+ "hospital.csv:MeasureCodeString:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "MeasureCodeString is a low-cardinality categorical code representing a specific quality measure, commonly used to filter or group hospital performance data."
+ },
+ "hospital.csv:MeasureNameString:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "MeasureNameString categorizes the quality measure being reported, a natural dimension for grouping/filtering hospital performance data."
+ },
+ "hospital.csv:MeasureNameString:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "MeasureNameString categorizes the specific quality measure being reported, a natural dimension to filter or group healthcare performance data by."
+ },
+ "hospital.csv:MeasureNameString:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "MeasureNameString categorizes rows by clinical measure type, a natural dimension for filtering or grouping analysis."
+ },
+ "hospital.csv:PhoneNumberString:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "Phone number is a contact identifier for a hospital, not a business dimension used for grouping or analysis."
+ },
+ "hospital.csv:PhoneNumberString:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "Phone number is a contact identifier for a hospital, not a business dimension for analysis."
+ },
+ "hospital.csv:PhoneNumberString:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "Phone number is a per-provider identifier/contact detail, not a business dimension used for grouping or filtering."
+ },
+ "hospital.csv:ProviderNumberString:0": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "It acts as a hospital identifier that could be filtered on or drilled into to isolate a specific provider, though it functions more like a technical ID than a business dimension."
+ },
+ "hospital.csv:ProviderNumberString:1": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "It identifies a specific hospital/provider, so users may filter or drill into individual providers even though it's an identifier."
+ },
+ "hospital.csv:ProviderNumberString:2": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "ProviderNumberString identifies the hospital and could be used to filter or drill into specific providers, though it's more an identifier than a business dimension like category."
+ },
+ "hospital.csv:StateAvgString:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This column appears to be a composite state/measure code value used for reference, not a business dimension itself, since analysis would already use State and MeasureCode separately."
+ },
+ "hospital.csv:StateAvgString:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This is a composite/encoded value (state+measure code) representing a computed average reference, not a business dimension to group or filter by."
+ },
+ "hospital.csv:StateAvgString:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This column appears to be a composite state/measure code artifact rather than a clean business dimension, mixing state and measure identifiers into a metric-like field."
+ },
+ "hospital.csv:ZIPCodeString:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "ZIP code is a geographic dimension commonly used to filter or group hospital data by location."
+ },
+ "hospital.csv:ZIPCodeString:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "ZIP code is a geographic dimension commonly used to filter or group hospital data by location."
+ },
+ "hospital.csv:ZIPCodeString:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "ZIP code is a geographic dimension commonly used to filter or group hospital data by location."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:AgentText:0": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "AgentText represents collector/agent names that users could filter or group by to analyze contributions by person, despite being free-text."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:AgentText:1": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "AgentText represents the collecting agent/person name, which users could filter or group by to analyze contributions per collector, despite being free-text."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:AgentText:2": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "AgentText represents collector/agent names that users might filter or group by to analyze contributions, though it is fairly free-form."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:PersonFullName:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "PersonFullName identifies the collector/agent, a meaningful dimension for grouping or filtering records by person."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:PersonFullName:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "PersonFullName identifies the collector/agent and is commonly used to filter or group records by who collected specimens."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:PersonFullName:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "PersonFullName identifies the collector/agent and is commonly used to filter or group records by who collected the specimen."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:PersonGivenNames:0": {
+  "groupable": false,
+  "confidence": "medium",
+  "reason": "PersonGivenNames is a personal name attribute of a collector/agent, more of a descriptive identifier than a business dimension typically used for aggregation."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:PersonGivenNames:1": {
+  "groupable": false,
+  "confidence": "medium",
+  "reason": "This is a personal name attribute of a collector/agent, useful for identification rather than a business reporting dimension."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:PersonGivenNames:2": {
+  "groupable": false,
+  "confidence": "medium",
+  "reason": "PersonGivenNames is a personal name attribute of a collector/agent, not a business dimension typically used for grouping or filtering analysis."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:PersonInheritedName:0": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "This holds a collector's surname/family name, which users could filter or group by to analyze records by person."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:PersonInheritedName:1": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "This column contains surname/family name values that could be used to filter or group records by collector/agent identity."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:PersonInheritedName:2": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "This holds a collector's surname, which users could filter or group by to analyze records by person, though it's more of a name attribute than a core business dimension."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:PersonPrefix:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "PersonPrefix has only one value across a tiny fraction of rows, providing no meaningful categorical distinction for analysis."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:PersonPrefix:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "PersonPrefix has only one value across a tiny fraction of rows, so it carries no meaningful categorical variation to group or filter on."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:PersonPrefix:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "PersonPrefix has only one distinct value across a tiny fraction of rows, providing no meaningful categorical basis for grouping or filtering."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:PrimaryCollector:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "Column has a single constant value across all rows, providing no distinguishing category to group or filter on."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:PrimaryCollector:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "Only one distinct value across all rows means it carries no meaningful categorical distinction for grouping or filtering."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:PrimaryCollector:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This column has only a single constant value across all rows, so it carries no distinguishing category for grouping or filtering."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:Sequence:0": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "Sequence indicates order of collector/agent listing (e.g., primary vs secondary), which users could filter on to distinguish primary collectors."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:Sequence:1": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "Sequence indicates order of collectors/agents (e.g., primary vs secondary), which users could filter on to distinguish primary collector entries."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:Sequence:2": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "Sequence likely indicates order of collectors/agents (e.g., primary vs secondary), which users could filter on to distinguish first-listed vs additional agents."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:_datasetguid:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "It is a technical GUID identifying the source dataset, not a business dimension."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:_datasetguid:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "It's a technical surrogate key identifying the source dataset, not a business dimension."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:_datasetguid:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "It's a surrogate dataset identifier used for internal linkage, not a meaningful business dimension."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:_gatheringagentguid:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This is a unique surrogate key identifying each gathering agent record, not a business dimension."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:_gatheringagentguid:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This is a unique surrogate key identifying each gathering agent record, not a business dimension."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:_gatheringagentguid:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This is a unique surrogate key identifying each gathering agent record, not a business dimension."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:_unitguid:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "It's a unique surrogate identifier linking to a unit record, not a business dimension."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:_unitguid:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This is a unique surrogate key/reference to a unit record, not a business dimension."
+ },
+ "t_biocase_gathering_agent_r72738_c18.csv:_unitguid:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This is a near-unique surrogate key linking to a unit record, not a business dimension."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:AreaClass:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "AreaClass categorizes rows as country/state, a natural dimension for filtering or grouping geographic data."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:AreaClass:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "AreaClass categorizes area records into types like country or state, a natural dimension for grouping or filtering."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:AreaClass:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "AreaClass categorizes rows into area types like country or state, a natural dimension for filtering or grouping geographic data."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:AreaClass_Language:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "It has only a single constant value (EN) across all rows, so it carries no distinguishing category to group or filter on."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:AreaClass_Language:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "Only one distinct value across all rows, so it carries no meaningful category to group or filter by."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:AreaClass_Language:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "Only one distinct value (EN) across all rows, so it carries no meaningful categorical distinction to group or filter on."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:AreaCode:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "AreaCode represents a categorical geographic area code (e.g., country codes) that users would filter or group by when analyzing regional data."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:AreaCode:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "AreaCode represents categorical geographic area codes (e.g., country codes) that users would filter or group by to slice data geographically."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:AreaCode:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "AreaCode represents a categorical geographic area code (e.g., country codes) that users would filter or group by to analyze data by region."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:AreaName:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "AreaName holds named geographic areas (countries/regions) that users would filter or group by to slice data geographically."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:AreaName:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "AreaName holds named geographic areas (countries/regions) that users would filter or group by to slice data geographically."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:AreaName:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "AreaName represents named geographic areas/countries, a natural dimension for grouping or filtering data by location."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:AreaName_Language:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "It's a constant language code with only one distinct value, providing no meaningful categorical grouping."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:AreaName_Language:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "It's a constant language code with only one distinct value, providing no meaningful categorical breakdown."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:AreaName_Language:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "Only one distinct value (EN) across all rows, so it carries no meaningful categorical variation to group or filter on."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:Sequence:0": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "Sequence appears to be a low-cardinality ordering/category code (only two values) that users could filter or group by, though its business meaning is unclear."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:Sequence:1": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "Sequence has only two distinct values, likely representing an ordering or priority category (e.g., primary vs secondary area) that users could filter or group by."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:Sequence:2": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "Sequence has only two distinct values, suggesting it represents a categorical ordering/priority flag that could be filtered or grouped on rather than a unique row identifier."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:_datasetguid:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This is a surrogate technical identifier linking to a dataset, not a business dimension for analysis."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:_datasetguid:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "It's a surrogate key identifying the source dataset, not a business dimension."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:_datasetguid:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "It's a surrogate internal identifier for the dataset source, not a business dimension."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:_namedareasguid:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This is a unique surrogate key identifying each row, not a business dimension for grouping or filtering."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:_namedareasguid:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This is a unique surrogate key identifying each named area record, not a business dimension."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:_namedareasguid:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This is a unique surrogate identifier (GUID) per row, not a business dimension."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:_unitguid:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This is a surrogate GUID foreign key referencing a unit entity, not a business dimension."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:_unitguid:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This is a surrogate GUID foreign key referencing a unit entity, not a business dimension."
+ },
+ "t_biocase_gathering_namedareas_r137711_c11.csv:_unitguid:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "It is a GUID foreign key referencing a unit record, used for joins rather than business analysis grouping."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_Altid_Parameter:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "Constant value 'Altitude' across all rows provides no discriminating category to group or filter on."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_Altid_Parameter:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "Constant value 'Altitude' across all rows provides no discriminating category for grouping or filtering."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_Altid_Parameter:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "Constant value 'Altitude' across all rows provides no discriminating category to group or filter on."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_AreaDetail:0": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "This column captures locality/area detail of specimen gathering, which could be used to filter or group records geographically despite its high cardinality free-text nature."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_AreaDetail:1": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "It captures a locality/area description that users could filter or drill into for geographic analysis, though its high cardinality free-text nature limits clean grouping."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_AreaDetail:2": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "Gath_AreaDetail contains locality/area descriptions that users could filter or group by to analyze gathering location patterns, though its high cardinality and free-text nature limit its usefulness as a clean dimension."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_Country_Name:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Country name is a categorical dimension commonly used to filter or group gathering/collection records geographically."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_Country_Name:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Country name is a natural geographic dimension for grouping and filtering gathering/collection records."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_Country_Name:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Country name is a categorical geographic dimension commonly used to filter or group gathering records."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_Country_Name_Language:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This column has only a single constant value (language code for the country name field) across all rows, so it carries no discriminating category to group or filter on."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_Country_Name_Language:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This column only records the language code of the country name text and has a single constant value, so it carries no meaningful categorical signal for analysis."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_Country_Name_Language:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This column is a constant language code metadata field with only one value, providing no meaningful category for analysis."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_DateTime_Begin:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "This is a collection start date/time, commonly used to filter or aggregate specimen gathering events by year, decade, or date range."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_DateTime_Begin:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "This is a collection start date/time, commonly used to filter or drill into records by date range or year."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_DateTime_Begin:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Represents the collection start date, which users would filter on or drill into by year/period to analyze gathering events over time."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_DateTime_End:0": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "It represents the end date of a gathering event, which users could filter or drill into by date ranges or years, though its high cardinality limits typical grouping."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_DateTime_End:1": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "It represents the end date of a gathering event, which users could filter by or drill into by year/date range, though its high cardinality makes it more of a filter/drill dimension than a grouping one."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_DateTime_End:2": {
+  "groupable": true,
+  "confidence": "medium",
+  "reason": "It's an end date of collection events, which users could filter on or drill into by time period, though its high cardinality suggests it's more for filtering than grouping."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_DateTime_Text:0": {
+  "groupable": false,
+  "confidence": "medium",
+  "reason": "This is a free-form textual date range description with high cardinality, better suited for display than for grouping/filtering compared to structured Gath_DateTime_Begin/End fields."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_DateTime_Text:1": {
+  "groupable": false,
+  "confidence": "medium",
+  "reason": "This is a free-text/date-range description with high cardinality, better represented by the structured Gath_DateTime_Begin/End fields for filtering or grouping."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_DateTime_Text:2": {
+  "groupable": false,
+  "confidence": "medium",
+  "reason": "This is a free-form textual date range description rather than a structured category, better suited to filtering via parsed date fields like Gath_DateTime_Begin/End."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_Depth_Parameter:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This column has only one constant value ('Depth') across all rows, so it carries no distinguishing category for grouping or filtering."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_Depth_Parameter:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "Column has only one constant value ('Depth') across all rows, so it carries no distinguishing category to group or filter on."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_Depth_Parameter:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This column has only one constant value ('Depth') across all rows, so it carries no distinguishing category to group or filter on."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_Notes:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This is a free-form notes field with collector/locality remarks, not a categorical dimension for grouping or filtering."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_Notes:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This is a free-form notes field with sparse, unique textual annotations rather than a reportable category."
+ },
+ "t_biocase_gathering_r90992_c35.csv:Gath_Notes:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "Gath_Notes is a free-form textual note about collection details, not a categorical dimension for grouping or filtering."
+ },
+ "t_biocase_gathering_r90992_c35.csv:_datasetguid:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "It's a surrogate technical identifier for the source dataset, not a business dimension."
+ },
+ "t_biocase_gathering_r90992_c35.csv:_datasetguid:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "It is a technical dataset identifier (GUID) used for linking records, not a business dimension."
+ },
+ "t_biocase_gathering_r90992_c35.csv:_datasetguid:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "It is a surrogate dataset identifier used for internal linkage, not a business dimension."
+ },
+ "t_biocase_gathering_r90992_c35.csv:_unitguid:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This is a 100% unique surrogate GUID identifying individual unit records, not a categorical business dimension."
+ },
+ "t_biocase_gathering_r90992_c35.csv:_unitguid:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This is a unique surrogate identifier per record, not a business dimension."
+ },
+ "t_biocase_gathering_r90992_c35.csv:_unitguid:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This is a unique surrogate identifier per record, not a categorical business dimension."
+ },
+ "t_biocase_identification_r91800_c38.csv:FullScientificNameString:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "It represents the species/taxon name, a natural category for grouping or filtering specimen records."
+ },
+ "t_biocase_identification_r91800_c38.csv:FullScientificNameString:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "It represents the species/taxon name, a natural category users would filter or group specimen records by."
+ },
+ "t_biocase_identification_r91800_c38.csv:FullScientificNameString:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "This is the full species name string, a natural taxonomic dimension for filtering or grouping records by species."
+ },
+ "t_biocase_identification_r91800_c38.csv:Notes:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "Notes is a free-form text field with sparse, unique curator remarks, not a categorical dimension for grouping or filtering."
+ },
+ "t_biocase_identification_r91800_c38.csv:Notes:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "Notes is a free-form text field with unique commentary per record, not a categorical dimension."
+ },
+ "t_biocase_identification_r91800_c38.csv:Notes:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "Notes is a free-form text field with sparse, unique annotations rather than a categorical dimension."
+ },
+ "t_biocase_identification_r91800_c38.csv:ScientificName:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "ScientificName is a taxonomic category that users would filter or group by to analyze species-level data."
+ },
+ "t_biocase_identification_r91800_c38.csv:ScientificName:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "ScientificName identifies the species/taxon of each specimen record, a natural category for grouping and filtering."
+ },
+ "t_biocase_identification_r91800_c38.csv:ScientificName:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "ScientificName is a taxonomic category commonly used to filter, group, or drill into specimen/identification records by species."
+ },
+ "t_biocase_identification_r91800_c38.csv:Subgenus:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Subgenus is a taxonomic classification attribute that users would filter or group specimen records by."
+ },
+ "t_biocase_identification_r91800_c38.csv:Subgenus:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Subgenus is a taxonomic classification attribute that users would filter or group specimen records by."
+ },
+ "t_biocase_identification_r91800_c38.csv:Subgenus:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Subgenus is a taxonomic classification attribute that users would filter or group by when analyzing species identifications."
+ },
+ "t_biocase_identification_r91800_c38.csv:SubspeciesEpithet:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "SubspeciesEpithet is a taxonomic category that users would filter or group by to analyze species-level records."
+ },
+ "t_biocase_identification_r91800_c38.csv:SubspeciesEpithet:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "SubspeciesEpithet is a taxonomic classification attribute that users would filter or group by to analyze species identifications."
+ },
+ "t_biocase_identification_r91800_c38.csv:SubspeciesEpithet:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "SubspeciesEpithet is a taxonomic classification attribute that users would filter or group by to analyze species-level identification data."
+ },
+ "t_biocase_identification_r91800_c38.csv:_identificationguid:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This is a unique surrogate key identifying each identification record, not a business dimension."
+ },
+ "t_biocase_identification_r91800_c38.csv:_identificationguid:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This is a unique surrogate key identifying each identification record, not a business dimension."
+ },
+ "t_biocase_identification_r91800_c38.csv:_identificationguid:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This is a unique surrogate identifier for each identification record, not a business dimension."
+ },
+ "t_biocase_identification_r91800_c38.csv:_unitguid:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This is a surrogate GUID identifying a specimen/unit record, not a business dimension for grouping or filtering."
+ },
+ "t_biocase_identification_r91800_c38.csv:_unitguid:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This is a surrogate GUID identifying a unit/specimen record, not a business dimension for grouping or filtering."
+ },
+ "t_biocase_identification_r91800_c38.csv:_unitguid:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "This is a surrogate GUID identifying a unit/record, not a business dimension for grouping or filtering."
+ },
+ "tax.csv:AreaCodeString:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Area code represents a geographic region that users could filter or group by to analyze regional distribution."
+ },
+ "tax.csv:AreaCodeString:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Area code represents a geographic region that users could filter or group by to analyze customer distribution."
+ },
+ "tax.csv:AreaCodeString:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Area code represents a geographic region that users could filter or group by to analyze regional patterns."
+ },
+ "tax.csv:FNameString:0": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "First name is a personal identifier attribute with high cardinality, not a business dimension for grouping or filtering."
+ },
+ "tax.csv:FNameString:1": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "First name is a high-cardinality personal identifier, not a business dimension used for grouping or filtering."
+ },
+ "tax.csv:FNameString:2": {
+  "groupable": false,
+  "confidence": "high",
+  "reason": "First name is a personal identifier attribute, not a business dimension used for grouping or analysis."
+ },
+ "tax.csv:ZipString:0": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "ZipString represents a geographic dimension that business users commonly filter or group by for regional analysis."
+ },
+ "tax.csv:ZipString:1": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "ZipString represents a geographic dimension (postal code) that business users commonly filter or group by for regional analysis."
+ },
+ "tax.csv:ZipString:2": {
+  "groupable": true,
+  "confidence": "high",
+  "reason": "Zip code is a geographic dimension commonly used to filter or group customer data by location."
+ }
+}
