@@ -28,6 +28,7 @@ strategies once each", which is all this runner does.
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -53,6 +54,18 @@ class Outcome:
     ran: bool = False
     asserted: bool | None = None  # None = skipped, True = green, False = failed
     error: str = ""
+    coverage: dict = field(default_factory=dict)  # oracle_coverage.json, written by conftest
+
+
+def _read_coverage(strategy: str) -> dict:
+    """What the assert pass actually graded (see conftest.pytest_terminal_summary)."""
+    path = runner.OUTPUT_DIR / strategy / "oracle_coverage.json"
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text())  # type: ignore[no-any-return]
+    except (OSError, ValueError):
+        return {}
 
 
 @dataclass
@@ -67,8 +80,30 @@ class Summary:
         for o in self.outcomes:
             assert_s = {None: "—", True: "PASS", False: "FAIL"}[o.asserted]
             run_s = "ran" if o.ran else f"ERROR ({o.error})"
-            print(f"  {o.strategy:<34} {run_s:<22} assert={assert_s}")
-        print(f"  → {'ALL GREEN' if self.ok() else 'FAILURES ABOVE'}")
+            cov = o.coverage
+            graded_s = ""
+            if cov:
+                graded_s = (
+                    f"  graded={cov.get('passed', 0) + cov.get('failed', 0)}"
+                    f" skipped={cov.get('skipped', 0)}"
+                    f" xfail={cov.get('xfailed', 0)}"
+                )
+                if cov.get("xpassed"):
+                    graded_s += f" XPASS={cov['xpassed']}"
+            print(f"  {o.strategy:<34} {run_s:<22} assert={assert_s}{graded_s}")
+
+        # Skips are how a run goes green without checking anything — name them.
+        for o in self.outcomes:
+            reasons = o.coverage.get("skip_reasons") or {}
+            if not reasons:
+                continue
+            print(f"\n  {o.strategy} — skipped oracles ({o.coverage.get('skipped', 0)}):")
+            for reason, count in list(reasons.items())[:8]:
+                print(f"    {count:>3}× {reason[:110]}")
+            if len(reasons) > 8:
+                print(f"    … {len(reasons) - 8} more distinct reason(s)")
+
+        print(f"\n  → {'ALL GREEN' if self.ok() else 'FAILURES ABOVE'}")
 
 
 def _run_one(strategy: str, *, seed: int, fresh: bool, do_assert: bool) -> Outcome:
@@ -90,6 +125,7 @@ def _run_one(strategy: str, *, seed: int, fresh: bool, do_assert: bool) -> Outco
             cwd=runner.EVAL_ROOT,
         )
         out.asserted = res.returncode == 0
+        out.coverage = _read_coverage(strategy)
     return out
 
 

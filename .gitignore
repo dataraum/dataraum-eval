@@ -10,6 +10,9 @@ data/
 output/
 lake_data/
 workspace/
+# External corpora (Tier B): fetched from the wild, never committed, and NOT
+# under data/ — `make clean` wipes data/, and re-fetching these needs the network.
+corpora/
 # no logs at the repo root — logs belong under output/
 /output_*.log
 

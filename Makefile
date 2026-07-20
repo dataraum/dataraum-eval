@@ -22,6 +22,8 @@ list:
 	uv run python -m calibration.run --list
 
 # Wipe local generated dirs (data/ output/ lake_data/ workspace/). PG/Temporal untouched.
+# NEVER touches corpora/ — the external Tier-B corpora (RelBench, RWD) are fetched
+# from the wild, cost a network round-trip to rebuild, and are not regenerable locally.
 clean:
 	rm -rf data output lake_data workspace
 

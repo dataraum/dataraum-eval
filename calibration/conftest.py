@@ -32,6 +32,45 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
 
 
+def pytest_terminal_summary(terminalreporter: Any) -> None:
+    """Record what this pass actually GRADED, not just whether it was green.
+
+    A calibration run is a bug-finding instrument, so "green because nothing was
+    checked" is the failure mode that matters. Skips here are broad and silent —
+    an empty truth section, a missing sidecar, a corpus without injections all
+    skip rather than fail — and the runner summary only ever printed PASS/FAIL.
+    A pass can drop whole oracles (a SQL error inside a read helper takes four
+    bus-matrix tests with it) and still read as a clean run.
+
+    Writes ``output/<strategy>/oracle_coverage.json`` for ``calibration.run`` to
+    fold into its summary. Reporting only — never changes an outcome.
+    """
+    import json
+    from collections import Counter
+
+    strategy = terminalreporter.config.getoption("--strategy")
+    stats = terminalreporter.stats
+    reasons: Counter[str] = Counter()
+    for report in stats.get("skipped", []):
+        # longrepr for a skip is (path, lineno, "Skipped: <reason>")
+        raw = report.longrepr[2] if isinstance(report.longrepr, tuple) else str(report.longrepr)
+        reasons[raw.removeprefix("Skipped: ").strip()] += 1
+
+    coverage = {
+        "strategy": strategy,
+        "passed": len(stats.get("passed", [])),
+        "failed": len(stats.get("failed", [])),
+        "skipped": len(stats.get("skipped", [])),
+        "xfailed": len(stats.get("xfailed", [])),
+        "xpassed": len(stats.get("xpassed", [])),
+        "errors": len(stats.get("error", [])),
+        "skip_reasons": dict(reasons.most_common()),
+    }
+    out = OUTPUT_DIR / strategy / "oracle_coverage.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(coverage, indent=2))
+
+
 def _load_yaml(path: Path) -> dict[str, Any]:
     with open(path) as f:
         result: dict[str, Any] = yaml.safe_load(f)

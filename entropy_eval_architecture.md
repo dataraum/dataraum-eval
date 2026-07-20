@@ -175,6 +175,67 @@ calibration and XPASS the moment the fix lands → flip to hard. (Aside: the sam
 is broadly un-rebaselined for DAT-725 — roles/relationships/reconciliation oracles fail on view-schema
 drift + several enriched views empty in both runs; that is DAT-736/P11's rebaseline, not DAT-688.)
 
+## The corpus policy — two tiers, two contracts (DAT-681 b/c)
+
+Every corpus above is one we generated. That is correct for what it proves and
+insufficient on its own, and the two halves must not be confused:
+
+**Tier A — synthetic (finance).** Full truth: injections (`entropy_map.yaml`),
+financial values (`ground_truth.yaml`), agent-layer truth (`metadata_truth.yaml`),
+teach closure. This is the **only** corpus where *recall* is assertable, because
+recall requires knowing what was put in — which requires having generated it. Tier A
+is not a limitation to be outgrown; nothing replaces it.
+
+**Tier B — wild (external corpora).** **Structural truth only** — declared foreign
+keys, declared types, declared time columns. Graded as a **scoreboard, never a
+build-break.** Scored: relationship precision/recall vs declared FKs; label
+plausibility; and detector fire-rate as a **false-positive corpus** (does clean-band
+behavior generalize beyond schemas we wrote?). A miserable result is a finding, and
+every miss feeds the generator backlog.
+
+Tier B exists for the one thing Tier A structurally cannot do: **falsify "we're
+great."** A schema we invented, which our own agents parse cleanly, mainly proves we
+are good at writing schemas for ourselves. The three levels of designer bias each get
+their own counter — schema → real-backend fidelity, defect → real-error corpora,
+value → the wild-data gate.
+
+**A second synthetic vertical is not the fix.** DAT-690 (supply chain) and DAT-691
+(hospitality) are cancelled: a second invented schema carries exactly the same
+designer bias as the first. Any future vertical replicates a **documented real backend
+system** (ERP/CRM/billing/POS export shapes) with synthetic values generated *into* the
+borrowed schema, so ground truth stays computable. Which verticals: TBD — this is how,
+not which.
+
+**License tiering.** *Redistributable* (permissive) corpora may be vendored.
+*Internal-use-only* (NC-style, e.g. CC BY-NC-SA) are acceptable for internal eval,
+fetched at run time, **never committed, never redistributed**. Auto-derived label sets
+(Sherlock/Sato/GitTables/TURL) are corpora, never ground truth; ML task labels
+(RelBench churn/LTV) are soft plausibility anchors, never metadata truth.
+
+**On disk today** (`corpora/`, gitignored, *not* under `data/` — `make clean` wipes
+`data/` and these cost a network round-trip to rebuild): `corpora/relbench/` (7
+databases, each with declared `pkey`/`fkeys`/`time_col` in `schema.json`) and
+`corpora/rwd/` (Parciak et al., ICDE 2024, CC-BY-4.0 — FD ground truth). Tier B has
+already changed the product offline: the λ floor and BH gate in the engine's hierarchy
+statistics were pre-registered and validated against RelBench, not against our own
+corpus.
+
+## What a run must report
+
+A calibration run is a **bug-finding instrument** first and a regression net second, so
+the failure mode that matters is **green because nothing was checked**. Skips here are
+broad and quiet by design — a missing sidecar, an empty truth section, a corpus with no
+injections all skip rather than fail — and a single swallowed error inside a read helper
+can take a whole oracle family with it.
+
+So the run summary reports **graded vs skipped, with reasons**, per strategy
+(`conftest.pytest_terminal_summary` → `output/<strategy>/oracle_coverage.json`, folded
+into `calibration.run`'s summary). A test may stand down for a **named capability
+reason**; it may never stand down because a query raised.
+
+The standing rule for reading a run: **a red test is a bug ticket or a teach scenario,
+never a relaxed oracle.**
+
 ## Measurement catalog
 
 The grounded statistic per measurement, and the honest "earns its place" call. The

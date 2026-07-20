@@ -38,6 +38,7 @@ from calibration.metadata_truth import (
     expected_bus_matrix,
     expected_degenerate_ids,
     expected_folded_dimensions,
+    read_view_exists,
 )
 from calibration.tools._runs import short, workspace_session
 
@@ -60,24 +61,27 @@ def engine_cells(strategy_name: str) -> list[dict[str, Any]]:
         read_schema = read_schema_name_for(
             str(session.execute(text("SELECT current_schema()")).scalar())
         )
-        try:
-            rows = session.execute(
-                text(
-                    "SELECT t.table_name AS fact, b.attachment AS attachment, "
-                    "b.concept_label AS concept_label, b.roles AS roles, "
-                    "b.attributes AS attributes, "
-                    "b.confirmation_source AS confirmation_source, "
-                    "b.conformed_group AS conformed_group, "
-                    "b.needs_confirmation AS needs_confirmation "
-                    f'FROM "{read_schema}".current_bus_matrix b '
-                    "JOIN tables t ON t.table_id = b.fact_table_id"
-                )
-            ).all()
-        except Exception:
+        # Skip ONLY for the one capability case this oracle is allowed to stand
+        # down on — the view genuinely not existing. A bare `except Exception`
+        # here used to swallow every query error and take all four bus-matrix
+        # tests with it, silently, while the run still reported PASS.
+        if not read_view_exists(session, "current_bus_matrix"):
             pytest.skip(
                 "current_bus_matrix not present — the run predates the DAT-762 "
                 "engine build; re-run the pipeline on the lane code"
             )
+        rows = session.execute(
+            text(
+                "SELECT t.table_name AS fact, b.attachment AS attachment, "
+                "b.concept_label AS concept_label, b.roles AS roles, "
+                "b.attributes AS attributes, "
+                "b.confirmation_source AS confirmation_source, "
+                "b.conformed_group AS conformed_group, "
+                "b.needs_confirmation AS needs_confirmation "
+                f'FROM "{read_schema}".current_bus_matrix b '
+                "JOIN tables t ON t.table_id = b.fact_table_id"
+            )
+        ).all()
     return [
         {
             "fact": short(r.fact),
