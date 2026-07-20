@@ -21,7 +21,7 @@ from typing import Any
 
 import pytest
 
-from calibration import runner as runner_mod
+from calibration.conftest import require_pipeline_run
 from calibration.metadata_truth import read_detected_cycles
 from calibration.tools._runs import workspace_session
 
@@ -29,13 +29,7 @@ from calibration.tools._runs import workspace_session
 @pytest.fixture(autouse=True)
 def _scoped_run(strategy_name: str) -> None:
     """Grade ONLY the strategy under test against its own truth (DAT-797)."""
-    sidecar = runner_mod.sidecar_path(strategy_name)
-    if not sidecar.exists():
-        pytest.skip(
-            f"no completed run for {strategy_name!r}; run "
-            f"`python -m calibration.run -s {strategy_name}` first"
-        )
-    runner_mod.activate_workspace(strategy_name)
+    require_pipeline_run(strategy_name)
 
 
 @pytest.mark.llm

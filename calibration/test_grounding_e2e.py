@@ -41,7 +41,7 @@ from typing import Any
 
 import pytest
 
-from calibration import runner as runner_mod
+from calibration.conftest import require_pipeline_run
 from calibration.metadata_truth import (
     expected_groundings,
     expected_reconciles_with,
@@ -80,13 +80,7 @@ _EMPTY_BATCH = (
 @pytest.fixture(autouse=True)
 def _completed_run(strategy_name: str) -> None:
     """Skip without a completed run; otherwise activate the strategy's workspace."""
-    sidecar = runner_mod.sidecar_path(strategy_name)
-    if not sidecar.exists():
-        pytest.skip(
-            f"no completed run for {strategy_name!r}; run "
-            f"`python -m calibration.run -s {strategy_name}` first"
-        )
-    runner_mod.activate_workspace(strategy_name)
+    require_pipeline_run(strategy_name)
 
 
 def _read_schema(session: Any) -> str:

@@ -24,7 +24,7 @@ from typing import Any
 
 import pytest
 
-from calibration import runner as runner_mod
+from calibration.conftest import require_pipeline_run
 from calibration.metadata_truth import (
     expected_relationships,
     fk_edge_satisfies,
@@ -44,13 +44,7 @@ def _scoped_run(strategy_name: str) -> None:
     mid-pass poisoned every later read in the same pytest process, and the
     strategy under test was never graded here at all.
     """
-    sidecar = runner_mod.sidecar_path(strategy_name)
-    if not sidecar.exists():
-        pytest.skip(
-            f"no completed run for {strategy_name!r}; run "
-            f"`python -m calibration.run -s {strategy_name}` first"
-        )
-    runner_mod.activate_workspace(strategy_name)
+    require_pipeline_run(strategy_name)
 
 
 def _satisfies(true_fk: _Edge, defined: set[_Edge]) -> bool:

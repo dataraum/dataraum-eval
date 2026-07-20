@@ -41,7 +41,7 @@ from dataraum.storage.read_views import read_schema_name_for
 from sqlalchemy import text
 
 from calibration import runner as runner_mod
-from calibration.conftest import DATA_DIR
+from calibration.conftest import DATA_DIR, require_pipeline_run
 from calibration.test_detector_recall import DETECTION_THRESHOLD
 
 _DROP_MARGIN = 0.02  # anti-noise floor on signed deltas, NOT a point threshold
@@ -115,14 +115,7 @@ def _load_run(strategy: str) -> runner_mod.CalibrationRun:
     run #2's assert pass silently spent ~4 min of unbudgeted LLM on a foreign
     strategy and left a two-pass workspace state that masked a recall gap.
     """
-    sidecar = runner_mod.sidecar_path(strategy)
-    if not sidecar.exists():
-        pytest.skip(
-            f"no completed run for {strategy!r}; run "
-            f"`python -m calibration.run -s {strategy}` first — tests never drive pipelines"
-        )
-    runner_mod.activate_workspace(strategy)
-    return runner_mod.CalibrationRun.from_json(sidecar.read_text())
+    return require_pipeline_run(strategy)
 
 
 # ---------------------------------------------------------------------------
@@ -473,10 +466,7 @@ def _prove_relationship_confirm_keep() -> None:
     """
     if not (DATA_DIR / _REL_STRATEGY).exists():
         pytest.skip(f"no data for {_REL_STRATEGY}; run the strategy + teach protocol first")
-    sidecar = runner_mod.sidecar_path(_REL_STRATEGY)
-    if not sidecar.exists():
-        pytest.skip(f"no completed run for {_REL_STRATEGY} (missing {sidecar})")
-    runner_mod.activate_workspace(_REL_STRATEGY)  # read this strategy's workspace (DAT-508)
+    require_pipeline_run(_REL_STRATEGY)  # read this strategy's workspace (DAT-508)
 
     taught = _taught_pair_plan()
     assert taught, f"{_REL_STRATEGY} entropy_map lists no genuine relationship pairs"

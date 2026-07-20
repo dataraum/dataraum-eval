@@ -22,7 +22,7 @@ from dataraum.storage.read_views import read_schema_name_for
 from sqlalchemy import text
 
 from calibration import runner as runner_mod
-from calibration.conftest import DATA_DIR
+from calibration.conftest import DATA_DIR, require_pipeline_run
 
 _STRATEGY = "detection-stockflow-v1"
 _MIN_ACCURACY = 0.70  # the gate's optimistic bracket floor; below this is the CUT signal
@@ -81,14 +81,7 @@ def test_llm_reads_clear_named_stock_flow_accurately(strategy_name: str) -> None
             f"no data for {_STRATEGY}; run `python -m calibration.runner {_STRATEGY}` first"
         )
 
-    sidecar = runner_mod.sidecar_path(_STRATEGY)
-    if not sidecar.exists():
-        # Tests never drive pipelines (real LLM) — the runner does (run-#2 forensics).
-        pytest.skip(
-            f"no completed run for {_STRATEGY!r}; run "
-            f"`python -m calibration.run -s {_STRATEGY}` first — tests never drive pipelines"
-        )
-    runner_mod.activate_workspace(_STRATEGY)  # read this strategy's workspace (DAT-508)
+    require_pipeline_run(_STRATEGY)
 
     truth = _true_behaviours()
     claims = _llm_claims()

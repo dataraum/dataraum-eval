@@ -124,7 +124,43 @@ def _require_pipeline_run(strategy: str) -> runner_mod.CalibrationRun:
             f"`python -m calibration.run -s {strategy}` first — tests never drive pipelines"
         )
     runner_mod.activate_workspace(strategy)
+
+    # The sidecar is a FILE; the run's data lives in Postgres. The two can part
+    # ways — a `down -v`, a PG major-version reset (PG18→PG19 for the DAT-725
+    # substrate), a dropped schema — and then a stale sidecar asserts a completed
+    # run whose tables are gone. Measured on `clean`, 2026-07-20: sidecar present,
+    # workspace holding 0 tables / 0 columns / 0 entropy objects, and every oracle
+    # reading it either failed for the wrong reason (`test_stable_clean_emitters_
+    # still_emit` reporting every banded key as "went silent") or passed on empty
+    # sets. FAIL, never skip: a skip reads as "not applicable this pass", which is
+    # exactly the vacuous-pass this harness is supposed to stop.
+    from sqlalchemy import text
+
+    from calibration.tools._runs import workspace_session
+
+    with workspace_session() as session:
+        populated = session.execute(text("SELECT 1 FROM tables LIMIT 1")).first() is not None
+    if not populated:
+        pytest.fail(
+            f"stale sidecar for {strategy!r}: {sidecar} describes run "
+            f"{runner_mod.CalibrationRun.from_json(sidecar.read_text()).run_id} but the "
+            f"workspace holds NO tables — the database was reset under it. Re-run: "
+            f"`python -m calibration.run -s {strategy}`",
+            pytrace=False,
+        )
+
     return runner_mod.CalibrationRun.from_json(sidecar.read_text())
+
+
+def require_pipeline_run(strategy: str) -> runner_mod.CalibrationRun:
+    """Public form of :func:`_require_pipeline_run` for per-module ``_scoped_run``
+    fixtures.
+
+    Those fixtures each hand-rolled ``if not sidecar.exists(): skip`` plus an
+    ``activate_workspace``, which meant the stale-sidecar check above had to be
+    written eight times or (as it was) zero. One gate, one place.
+    """
+    return _require_pipeline_run(strategy)
 
 
 def _head_resolved_entropy_rows(session: Any) -> list[Any]:

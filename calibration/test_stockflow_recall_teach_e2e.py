@@ -23,7 +23,7 @@ from dataraum.storage.read_views import read_schema_name_for
 from sqlalchemy import text
 
 from calibration import runner as runner_mod
-from calibration.conftest import DATA_DIR
+from calibration.conftest import DATA_DIR, require_pipeline_run
 
 _STRATEGY = "detection-stockflow-v1"
 _MARGIN = 0.2  # anti-noise floor on the signed conflict deltas, NOT a point threshold
@@ -98,15 +98,7 @@ def test_stockflow_mislabel_recall_and_concept_teach_closure(strategy_name: str)
             f"no data for {_STRATEGY}; run `python -m calibration.runner {_STRATEGY}` first"
         )
 
-    sidecar = runner_mod.sidecar_path(_STRATEGY)
-    if not sidecar.exists():
-        # Tests never drive pipelines (real LLM) — the runner does (run-#2 forensics).
-        pytest.skip(
-            f"no completed run for {_STRATEGY!r}; run "
-            f"`python -m calibration.run -s {_STRATEGY}` first — tests never drive pipelines"
-        )
-    runner_mod.activate_workspace(_STRATEGY)  # read this strategy's workspace (DAT-508)
-    run = runner_mod.CalibrationRun.from_json(sidecar.read_text())
+    run = require_pipeline_run(_STRATEGY)
 
     truth = _true_behaviours()
     base = _probe_state()
