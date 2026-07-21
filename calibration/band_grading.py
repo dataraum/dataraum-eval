@@ -31,7 +31,7 @@ from dataraum.entropy.loss import (
     get_loss_config,
     loss_risk_for_object,
 )
-from dataraum.entropy.models import EntropyObject
+from dataraum.entropy.models import STATUS_ABSTAINED, EntropyObject
 
 # Bands a practitioner must not ignore — the outcomes an oracle exists to catch.
 NON_READY_BANDS = frozenset({"investigate", "blocked"})
@@ -44,45 +44,90 @@ BAND_RANK = {"ready": 0, "investigate": 1, "blocked": 2}
 class BandedMeasurement:
     """One entropy measurement carrying the loss-band surface the product shows.
 
-    ``score`` is ``EntropyObjectRecord.score``. ``conflict`` is the SAME value: the
-    loss table reads the ``conflict`` / ``score`` / ``surprise`` weight off ``obj.score``
-    (DAT-457 — score is conflict-only), so ``conflict == score`` by construction, exposed
-    under both names for oracle clarity. ``ignorance`` is the engine's own pooling of the
-    literal ``ignorance`` evidence signal (``loss.py`` ``_signal_value``) — the
-    adjudication ignorance of ``null_semantics`` / ``temporal_behavior`` /
-    ``relationship_discovery``. NOTE: ``derived_value`` carries its evidence conflict /
+    ``status`` is the measurement's outcome (DAT-853): ``measured`` — the detector
+    answered, ``score`` carries the number; ``abstained`` — the detector did not
+    measure this target (``abstain_reason`` says why), so ``score`` / ``conflict``
+    are ``None`` and there is NO band. An abstained measurement is coverage evidence,
+    never dropped from the surface, but it drives no risk or band — the score-consuming
+    engine functions (``measured_score`` / ``loss_risk_for_object``) raise on an
+    abstention, so this class never calls them for one.
+
+    ``score`` is ``EntropyObjectRecord.score`` (``None`` for an abstention). ``conflict``
+    is the SAME value: the loss table reads the ``conflict`` / ``score`` / ``surprise``
+    weight off ``obj.score`` (DAT-457 — score is conflict-only), so ``conflict == score``
+    by construction, exposed under both names for oracle clarity. ``ignorance`` is the
+    engine's own pooling of the literal ``ignorance`` evidence signal (``loss.py``
+    ``_signal_value``) — the adjudication ignorance of ``null_semantics`` /
+    ``temporal_behavior`` / ``relationship_discovery``. It reads evidence only (never the
+    score), so it is defined for an abstention too (typically ``0.0`` — an abstained row
+    carries no ignorance evidence). NOTE: ``derived_value`` carries its evidence conflict /
     ignorance under ``formula_conflict`` / ``formula_ignorance``, which this field does
     NOT pool — read those via ``intent_risk`` (which the engine computes over ALL
     signals). ``intent_risk`` / ``intent_band`` are the engine's per-intent expected loss
-    and its banding for THIS measurement — never a reimplementation.
+    and its banding for THIS measurement (both empty for an abstention) — never a
+    reimplementation.
     """
 
     target: str
     detector_id: str
-    score: float
-    conflict: float
+    status: str
+    score: float | None
+    conflict: float | None
     ignorance: float
+    abstain_reason: str | None = None
     intent_risk: dict[str, float] = field(default_factory=dict)
     intent_band: dict[str, str] = field(default_factory=dict)
 
+    def is_abstained(self) -> bool:
+        """True if the detector abstained — no score, no band, coverage evidence only."""
+        return self.status == STATUS_ABSTAINED
+
     def worst_band(self) -> str:
-        """The worst readiness band this measurement drives across its intents."""
+        """The worst readiness band this measurement drives across its intents.
+
+        An abstention has no intents → ``ready`` (the vacuous default), matching the
+        engine's own coverage semantics: an unmeasured target claims no risk.
+        """
         return max(self.intent_band.values(), key=lambda b: BAND_RANK[b], default="ready")
 
     def is_non_ready(self) -> bool:
-        """True if this measurement bands any intent above ``ready``."""
+        """True if this measurement bands any intent above ``ready`` (never for an
+        abstention — it has no bands)."""
         return any(band in NON_READY_BANDS for band in self.intent_band.values())
 
 
 def band_measurement(obj: EntropyObject, config: LossConfig | None = None) -> BandedMeasurement:
-    """Grade one ``EntropyObject`` on the loss-band surface via the ENGINE's rollup."""
+    """Grade one ``EntropyObject`` on the loss-band surface via the ENGINE's rollup.
+
+    A MEASURED object is graded through ``loss_risk_for_object`` + ``LossConfig.band``.
+    An ABSTAINED object (DAT-853: ``score`` NULL — e.g. ``join_path_determinism``'s
+    ``not_applicable`` structural-norm abstention, DAT-851) carries no number and drives
+    no band; it is represented faithfully as coverage evidence, never scored. The engine's
+    own contract forbids the score path on it — ``measured_score`` and
+    ``loss_risk_for_object`` both raise on an abstention — so this NEVER calls them for one.
+    """
     cfg = config or get_loss_config()
+    if obj.status == STATUS_ABSTAINED:
+        return BandedMeasurement(
+            target=obj.target,
+            detector_id=obj.detector_id,
+            status=obj.status,
+            score=None,
+            conflict=None,
+            # Evidence-only signal read (never touches the absent score) — safe on an
+            # abstention. Kept for a uniform surface; typically 0.0.
+            ignorance=_signal_value(obj, "ignorance"),
+            abstain_reason=obj.abstain_reason,
+        )
     risk = loss_risk_for_object(obj, cfg)  # engine computation — never reimplemented here
     return BandedMeasurement(
         target=obj.target,
         detector_id=obj.detector_id,
-        score=obj.score,
-        conflict=obj.score,
+        status=obj.status,
+        # ``measured_score`` is the engine's narrowing accessor: a float here, raises if
+        # a non-abstained object somehow lacks a score (fail loud, never a silent 0.0).
+        score=obj.measured_score,
+        conflict=obj.measured_score,
         # Engine's own signal reader (not a copy): for the non-primary "ignorance"
         # signal it returns the worst value across the object's evidence.
         ignorance=_signal_value(obj, "ignorance"),

@@ -80,7 +80,18 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 @dataclass
 class DetectorScores:
-    """Detector scores from persisted EntropyObjectRecord rows, split by scope."""
+    """Detector scores from persisted EntropyObjectRecord rows, split by scope.
+
+    MEASURED rows only (DAT-853). An abstained row (``status='abstained'``, score
+    NULL — e.g. ``join_path_determinism``'s ``not_applicable`` structural-norm
+    abstention) carries no number and never enters a score map: score-based grading
+    (``test_detector_recall`` / ``test_detector_precision`` /
+    ``test_temporal_behavior_e2e``) is over what was measured. DECISION: this surface
+    stays minimal — no abstention counts. The score oracles do not need them, and
+    abstention IS first-class coverage evidence on the banded surface
+    (``BandedMeasurement.is_abstained`` / ``status``, ``banded_measurements``), which
+    is where coverage belongs — not duplicated here (one home per fact).
+    """
 
     # Column-scoped: (table, column, detector_id) → score
     column: dict[tuple[str, str, str], float] = field(default_factory=dict)
@@ -188,38 +199,48 @@ def _head_resolved_entropy_rows(session: Any) -> list[Any]:
     return rows
 
 
-def _load_scores_for_strategy(strategy: str) -> DetectorScores:
-    """Read promoted-run entropy objects and aggregate into DetectorScores.
+def _record_to_entropy_object(rec: Any) -> Any:
+    """Reconstruct the engine ``EntropyObject`` from a persisted ``entropy_objects`` row.
 
-    Post-DAT-399/408: ``entropy/measurement.py`` (``measure_entropy``) is gone and
-    ``entropy_objects`` no longer carries ``source_id``. Scores are read off the
-    HEAD-RESOLVED view (see ``_head_resolved_entropy_rows``), bucketed by ``target``
-    prefix (``column:`` / ``table:`` / ``view:`` / ``relationship:``). For each
-    (target, detector) the max score is kept.
+    THE single record→object conversion for every reader that rebuilds domain objects
+    (the banded surface and the readiness assembler). ``status`` / ``abstain_reason`` are
+    passed through so an abstained row (DAT-853: ``score`` NULL) constructs VALIDLY — the
+    engine's ``__post_init__`` enforces the status/score/reason pairing and would
+    (correctly) raise if a NULL-scored row defaulted to ``status='measured'``. A MEASURED
+    row with a NULL score is corrupt data (violates the engine's own CHECK) and raises
+    here, loud, by that same invariant — never silently swallowed.
     """
-    _require_pipeline_run(strategy)  # ensure the pipeline has run (writes the sidecar)
+    from dataraum.entropy.models import EntropyObject
 
-    runner_mod.bootstrap_engine()
+    return EntropyObject(
+        object_id=rec.object_id,
+        layer=rec.layer,
+        dimension=rec.dimension,
+        sub_dimension=rec.sub_dimension,
+        target=rec.target,
+        score=rec.score,
+        status=rec.status,
+        abstain_reason=rec.abstain_reason,
+        evidence=rec.evidence if isinstance(rec.evidence, list) else [],
+        detector_id=rec.detector_id,
+    )
 
-    from dataraum.core.connections import ConnectionConfig, ConnectionManager
-    from dataraum.entropy.models import parse_relationship_target
-    from dataraum.storage import Column, Table
-    from sqlalchemy import select
 
-    workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
-    workspace_mgr.initialize()
-    try:
-        with workspace_mgr.session_scope() as session:
-            records = _head_resolved_entropy_rows(session)
-            # column_id → (table_name, column_name): relationship rows carry no
-            # table_id/column_id — identity is the two column ids inside ``target``.
-            table_names = {t.table_id: t.table_name for t in session.execute(select(Table)).scalars()}
-            col_names = {
-                c.column_id: (table_names.get(c.table_id, ""), c.column_name)
-                for c in session.execute(select(Column)).scalars()
-            }
-    finally:
-        workspace_mgr.close()
+def _aggregate_detector_scores(
+    records: list[Any],
+    col_names: dict[str, tuple[str, str]],
+) -> DetectorScores:
+    """Bucket MEASURED entropy rows into ``DetectorScores`` by target prefix (pure).
+
+    Abstention split (DAT-853): an abstained row (``status='abstained'``, score NULL)
+    NEVER enters a score map or a max-comparison — score-based grading is over MEASURED
+    rows only. A MEASURED row with a NULL score violates the engine's status/score
+    pairing (corrupt data) → fail LOUD, never a silent drop (that would blanket-swallow
+    a real bug). ``col_names`` maps ``column_id → (table, column)`` for relationship
+    endpoints. Extracted from the DB read so Tier-1 can exercise the abstention split on
+    synthetic rows without a pipeline.
+    """
+    from dataraum.entropy.models import STATUS_ABSTAINED, parse_relationship_target
 
     result = DetectorScores()
 
@@ -228,7 +249,14 @@ def _load_scores_for_strategy(strategy: str) -> DetectorScores:
             d[key] = score
 
     for rec in records:
+        if rec.status == STATUS_ABSTAINED:
+            continue  # abstention carries no score — coverage evidence, not a score
         det, target, score = rec.detector_id, rec.target, rec.score
+        if score is None:
+            raise ValueError(
+                "measured entropy row has a NULL score (corrupt — violates the engine's "
+                f"status/score pairing): {det} on {target}"
+            )
         if target.startswith("column:"):
             parts = target.removeprefix("column:").split(".", 1)
             if len(parts) != 2:
@@ -236,7 +264,9 @@ def _load_scores_for_strategy(strategy: str) -> DetectorScores:
             tbl, col = parts
             _keep_max(result.column, (_strip_source_prefix(tbl), col, det), score)
         elif target.startswith("table:"):
-            _keep_max(result.table, (_strip_source_prefix(target.removeprefix("table:")), det), score)
+            _keep_max(
+                result.table, (_strip_source_prefix(target.removeprefix("table:")), det), score
+            )
         elif target.startswith("view:"):
             _keep_max(result.view, (target.removeprefix("view:"), det), score)
         else:
@@ -253,27 +283,87 @@ def _load_scores_for_strategy(strategy: str) -> DetectorScores:
     return result
 
 
+def _load_scores_for_strategy(strategy: str) -> DetectorScores:
+    """Read promoted-run entropy objects and aggregate into DetectorScores.
+
+    Post-DAT-399/408: ``entropy/measurement.py`` (``measure_entropy``) is gone and
+    ``entropy_objects`` no longer carries ``source_id``. Scores are read off the
+    HEAD-RESOLVED view (see ``_head_resolved_entropy_rows``) and bucketed by
+    ``_aggregate_detector_scores`` — by ``target`` prefix (``column:`` / ``table:`` /
+    ``view:`` / ``relationship:``), MEASURED rows only, max score per (target, detector).
+    """
+    _require_pipeline_run(strategy)  # ensure the pipeline has run (writes the sidecar)
+
+    runner_mod.bootstrap_engine()
+
+    from dataraum.core.connections import ConnectionConfig, ConnectionManager
+    from dataraum.storage import Column, Table
+    from sqlalchemy import select
+
+    workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
+    workspace_mgr.initialize()
+    try:
+        with workspace_mgr.session_scope() as session:
+            records = _head_resolved_entropy_rows(session)
+            # column_id → (table_name, column_name): relationship rows carry no
+            # table_id/column_id — identity is the two column ids inside ``target``.
+            table_names = {
+                t.table_id: t.table_name for t in session.execute(select(Table)).scalars()
+            }
+            col_names = {
+                c.column_id: (table_names.get(c.table_id, ""), c.column_name)
+                for c in session.execute(select(Column)).scalars()
+            }
+    finally:
+        workspace_mgr.close()
+
+    return _aggregate_detector_scores(records, col_names)
+
+
+def _records_to_banded_measurements(
+    records: list[Any], loss_config: Any
+) -> list[BandedMeasurement]:
+    """Reconstruct loss-table ``EntropyObject``s from persisted rows and band them (pure).
+
+    Keeps only the loss-table detectors (``LossConfig.is_loss_measurement``),
+    reconstructs each through ``_record_to_entropy_object`` (so ``status`` /
+    ``abstain_reason`` ride through), and grades each with ``band_measurement``.
+
+    Abstention (DAT-853): an abstained loss row (e.g. ``join_path_determinism``'s
+    ``not_applicable``, score NULL) is NOT dropped — it is coverage evidence. It
+    constructs validly and ``band_measurement`` represents it faithfully (no score, no
+    band; ``measured_score`` is never called on it). The score-invisible band case the
+    score loaders cannot see stays first-class here. Extracted from the DB read so
+    Tier-1 can exercise the abstention path on synthetic rows without a pipeline.
+    """
+    measurements: list[BandedMeasurement] = []
+    for rec in records:
+        if not loss_config.is_loss_measurement(rec.detector_id):
+            continue
+        measurements.append(band_measurement(_record_to_entropy_object(rec), loss_config))
+    return measurements
+
+
 def _load_banded_measurements(strategy: str) -> list[BandedMeasurement]:
     """Loss-table measurements for the strategy, each carrying its readiness band.
 
     The score loaders above (``_load_scores_for_strategy``) grade
     ``EntropyObjectRecord.score``; the PRODUCT bands on expected loss over
-    ``(conflict, ignorance)`` (DAT-849). This reads the SAME head-resolved rows,
-    keeps only the loss-table detectors (``LossConfig.is_loss_measurement``),
-    reconstructs the domain object, and grades each through the engine's own loss
+    ``(conflict, ignorance)`` (DAT-849). This reads the SAME head-resolved rows and
+    grades them through ``_records_to_banded_measurements`` — the engine's own loss
     rollup (``band_measurement`` → ``loss_risk_for_object`` + ``band``). So a
     measurement that scores ``0.0`` yet bands ``investigate`` through ignorance is
-    now first-class graded data — the case the score loaders cannot see.
+    now first-class graded data — the case the score loaders cannot see — and an
+    abstained loss row rides through as coverage evidence (no score, no band).
 
-    Backwards-compatible: ``DetectorScores`` / ``_load_scores_for_strategy`` are
-    untouched; this is an ADDITIONAL surface read off the same rows.
+    ``DetectorScores`` / ``_load_scores_for_strategy`` are untouched; this is an
+    ADDITIONAL surface read off the same rows.
     """
     _require_pipeline_run(strategy)  # ensure the pipeline has run (writes the sidecar)
     runner_mod.bootstrap_engine()
 
     from dataraum.core.connections import ConnectionConfig, ConnectionManager
     from dataraum.entropy.loss import get_loss_config
-    from dataraum.entropy.models import EntropyObject
 
     loss_config = get_loss_config()
     workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
@@ -284,22 +374,7 @@ def _load_banded_measurements(strategy: str) -> list[BandedMeasurement]:
     finally:
         workspace_mgr.close()
 
-    measurements: list[BandedMeasurement] = []
-    for rec in records:
-        if not loss_config.is_loss_measurement(rec.detector_id):
-            continue
-        obj = EntropyObject(
-            object_id=rec.object_id,
-            layer=rec.layer,
-            dimension=rec.dimension,
-            sub_dimension=rec.sub_dimension,
-            target=rec.target,
-            score=rec.score,
-            evidence=rec.evidence if isinstance(rec.evidence, list) else [],
-            detector_id=rec.detector_id,
-        )
-        measurements.append(band_measurement(obj, loss_config))
-    return measurements
+    return _records_to_banded_measurements(records, loss_config)
 
 
 # ---------------------------------------------------------------------------
@@ -432,7 +507,6 @@ def _assemble_readiness(
     runner_mod.bootstrap_engine()
 
     from dataraum.core.connections import ConnectionConfig, ConnectionManager
-    from dataraum.entropy.models import EntropyObject
     from dataraum.entropy.views.readiness_context import assemble_readiness_context
     from dataraum.storage import Column, Table
     from sqlalchemy import select
@@ -445,21 +519,14 @@ def _assemble_readiness(
             # Reconstruct domain objects for the rollup (DAT-399: read-path swap from
             # the retired measurement module to the readiness-context assembler).
             # Head-resolved (DAT-447 Step 0) so a teach re-run's drop is visible.
-            objects = [
-                EntropyObject(
-                    object_id=r.object_id,
-                    layer=r.layer,
-                    dimension=r.dimension,
-                    sub_dimension=r.sub_dimension,
-                    target=r.target,
-                    score=r.score,
-                    evidence=r.evidence if isinstance(r.evidence, list) else [],
-                    detector_id=r.detector_id,
-                )
-                for r in records
-            ]
+            # ``_record_to_entropy_object`` passes ``status`` / ``abstain_reason`` through
+            # (DAT-853), so abstained rows construct validly and the engine's own rollup
+            # partitions on ``status`` for coverage — the assembler EXPECTS abstentions.
+            objects = [_record_to_entropy_object(r) for r in records]
             ctx = assemble_readiness_context(objects)
-            table_names = {t.table_id: t.table_name for t in session.execute(select(Table)).scalars()}
+            table_names = {
+                t.table_id: t.table_name for t in session.execute(select(Table)).scalars()
+            }
             col_names = {
                 c.column_id: (table_names.get(c.table_id, ""), c.column_name)
                 for c in session.execute(select(Column)).scalars()
