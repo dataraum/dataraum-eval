@@ -13,6 +13,30 @@ noise floor are uninteresting at any grain.
 
 Regenerate bands only by resweeping (the driver in scripts/probes/ is recreated
 per sweep) and rebuilding — never by hand-editing a band to make a run pass.
+
+**These oracles grade the ``clean`` workspace, so they run on the ``clean`` pass
+only** (the DAT-797 rule). The scores fixture reads ``clean`` unconditionally, so
+without that gate a ``--strategy clean-flat`` pass re-graded a stale ``clean``
+workspace and reported a failure that had nothing to do with the strategy under
+test — a red run pointing at the wrong corpus is worse than no run.
+
+**Pooled detectors (DAT-826).** A per-key band asks "did THIS column score above
+what it scored during the sweep". That is the right question for a deterministic
+statistic and the wrong one for an LLM confidence: ``business_meaning`` is
+``1 - naming_confidence``, and the model emits confidence on a coarse grid — the
+27 swept keys carry exactly three distinct maxima (0.15 / 0.20 / 0.25, i.e.
+confidence 0.85 / 0.80 / 0.75). Which well-named clean column lands on which grid
+point rotates run to run (the sweep notes say date/reference/amount "shuffle every
+run"). So a per-key band for that detector measures which column the LLM hedged
+on, not whether the detector is right, and it fails at 0.300 on a key swept at
+0.20 while passing at 0.300 on a key swept at 0.25 — pure assignment luck.
+
+The precision claim that actually has content is population-level: on clean data
+every column is well named, so NO column should look unnamed. That is asserted as
+a pooled ceiling over the whole clean population, which is the pooling the method
+doc prescribes for non-determinism (never an override, never a per-point
+threshold). The recall side already treats this detector the same way, via
+``LLM_NONDETERMINISTIC`` + ``xfail(strict=False)``.
 """
 
 from __future__ import annotations
@@ -31,20 +55,13 @@ BANDS_PATH = EVAL_ROOT / "calibration" / "clean_bands.yaml"
 # Scores at or below this are uninteresting — don't track them
 NOISE_FLOOR = 0.15
 
-# Per-detector floors where the default sits INSIDE the detector's natural
-# clean emission band. business_meaning hedges at 0.15-0.20 on a rotating
-# subset of legitimately-named clean columns (LLM confidence wobble — observed
-# across three batches: date/reference/amount entries shuffle every run, all
-# <= 0.2); the recall suite already classifies it LLM-nondeterministic. Above
-# 0.2 on clean IS a precision regression and stays tracked.
-NOISE_FLOOR_BY_DETECTOR = {"business_meaning": 0.2}
+# Detectors whose score IS a live LLM confidence, graded as a POOLED population
+# ceiling instead of per-key bands (see the module docstring). Per-detector
+# ceiling = the highest max the sweep measured for it across all keys.
+POOLED_LLM_DETECTORS = {"business_meaning"}
 
 # Band max + this much is a regression (sampling slack atop a 4-seed band).
 BAND_TOLERANCE = 0.05
-
-
-def _floor_for(detector: str) -> float:
-    return NOISE_FLOOR_BY_DETECTOR.get(detector, NOISE_FLOOR)
 
 
 def _load_bands_doc() -> dict[str, Any]:
@@ -71,14 +88,44 @@ def _scored_keys(scores: DetectorScores) -> dict[str, dict[str, tuple[str, float
     }
 
 
+@pytest.fixture
+def clean_only(strategy_name: str) -> None:
+    """Grade the clean baseline on the clean pass only (DAT-797).
+
+    ``clean_detector_scores`` reads the ``clean`` workspace unconditionally, so on
+    any other ``--strategy`` these oracles re-grade a stale clean run and report a
+    failure attributed to the wrong corpus. Scoping is the fix; pointing the
+    fixture at the strategy under test is not — a clean BASELINE band means
+    nothing against an injected or differently-shaped corpus.
+    """
+    if strategy_name != "clean":
+        pytest.skip(
+            f"clean-baseline oracle — runs on the 'clean' pass only (got {strategy_name!r})"
+        )
+
+
+def _pooled_ceiling(bands: dict[str, dict[str, dict[str, Any]]], detector: str) -> float | None:
+    """The highest max the sweep measured for ``detector``, across every key/grain."""
+    maxima = [
+        float(band["max"])
+        for entries in bands.values()
+        for key, band in entries.items()
+        if key.endswith(f":{detector}")
+    ]
+    return max(maxima) if maxima else None
+
+
 def test_clean_scores_within_measured_bands(
     clean_detector_scores: DetectorScores,
+    clean_only: None,
 ) -> None:
     """Every clean score above its floor sits within its measured band (+tolerance).
 
     Covers ALL scored grains — the old captured baseline guarded column grain
     only, leaving dimension_coverage (table) and the relationship scalars
-    unguarded (B2 finding).
+    unguarded (B2 finding). Detectors in ``POOLED_LLM_DETECTORS`` are graded by
+    the pooled test below instead: their per-key band tracks a rotating LLM
+    assignment, not the detector.
     """
     bands = _load_bands()
     regressions: list[str] = []
@@ -87,7 +134,7 @@ def test_clean_scores_within_measured_bands(
     for grain, keyed in _scored_keys(clean_detector_scores).items():
         grain_bands = bands.get(grain, {})
         for key, (detector, score) in sorted(keyed.items()):
-            if score <= _floor_for(detector):
+            if detector in POOLED_LLM_DETECTORS or score <= NOISE_FLOOR:
                 continue
             band = grain_bands.get(key)
             if band is None:
@@ -115,8 +162,62 @@ def test_clean_scores_within_measured_bands(
         raise AssertionError("\n".join(lines))
 
 
+def test_pooled_llm_detectors_below_measured_ceiling(
+    clean_detector_scores: DetectorScores,
+    clean_only: None,
+) -> None:
+    """No clean column looks unnamed — the population claim, not a per-column one.
+
+    On clean data every column is legitimately named, so the content of the
+    precision claim is that the LLM stays confident about ALL of them. Asserted
+    as the pooled maximum against the highest max the sweep measured for the
+    detector: it catches the regression that matters (the model starts hedging
+    harder than it ever did on clean data) without pinning which column it hedges
+    on, which rotates every run and is not a property of the detector.
+    """
+    bands = _load_bands()
+    breaches: list[str] = []
+
+    for detector in sorted(POOLED_LLM_DETECTORS):
+        ceiling = _pooled_ceiling(bands, detector)
+        if ceiling is None:
+            continue
+        scored = [
+            (grain, key, score)
+            for grain, keyed in _scored_keys(clean_detector_scores).items()
+            for key, (d, score) in keyed.items()
+            if d == detector
+        ]
+        if not scored:
+            continue
+        grain, key, worst = max(scored, key=lambda row: row[2])
+        print(
+            f"\n[{detector}] {len(scored)} clean emissions, "
+            f"worst {worst:.3f} ({grain} {key}) vs measured ceiling {ceiling:.3f}"
+        )
+        # Compare at the MEASUREMENT's resolution, not IEEE754's. The score is
+        # ``1 - confidence`` over a 2-decimal LLM confidence, so it lands on a
+        # coarse grid; ``1 - 0.7`` is 0.30000000000000004 while ``0.25 + 0.05`` is
+        # exactly 0.3, and a raw ``>`` fails a run that sits precisely ON the
+        # allowed boundary. Rounding to 4dp is far below the grid and far above
+        # float noise — it removes an artifact, it does not widen the criterion.
+        if round(worst, 4) > round(ceiling + BAND_TOLERANCE, 4):
+            breaches.append(
+                f"  {detector}: worst clean emission {worst:.3f} ({grain} {key}) "
+                f"> measured ceiling {ceiling:.3f} + {BAND_TOLERANCE} "
+                f"over {len(scored)} columns"
+            )
+
+    assert not breaches, (
+        "LLM-confidence detector(s) hedging harder on clean data than the sweep "
+        "ever measured — the model is less sure about well-named columns than it "
+        "was, which is a real precision regression:\n" + "\n".join(breaches)
+    )
+
+
 def test_stable_clean_emitters_still_emit(
     clean_detector_scores: DetectorScores,
+    clean_only: None,
 ) -> None:
     """RECALL guard: a key every sweep seed emitted must not go silent.
 
@@ -150,6 +251,7 @@ def test_stable_clean_emitters_still_emit(
 
 def test_clean_average_below_threshold(
     clean_pipeline_scores: dict[tuple[str, str, str], float],
+    clean_only: None,
 ) -> None:
     """Average column score across clean data should be low.
 
