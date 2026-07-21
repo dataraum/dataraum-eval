@@ -91,7 +91,10 @@ def build_from_docs(docs: list[dict[str, Any]]) -> tuple[dict[str, Any], list[st
 
     doc = {
         "provenance": {
-            "source": "A4 clean seed sweep (scripts/probes/a4-seed-sweep driver)",
+            # The original `scripts/probes/a4-seed-sweep` driver was deleted as a
+            # probe; `scripts/sweep_clean_seeds.py` replaced it as a rig. Naming a
+            # script that no longer exists made the artifact unreproducible to read.
+            "source": "clean seed sweep (scripts/sweep_clean_seeds.py)",
             "seeds": seeds,
             "date": date.today().isoformat(),
             "notes": (

@@ -1,10 +1,10 @@
 provenance:
-  source: A4 clean seed sweep (scripts/probes/a4-seed-sweep driver)
+  source: clean seed sweep (scripts/sweep_clean_seeds.py)
   seeds:
-  - 0
+  - 46
   - 47
   - 48
-  date: '2026-07-09'
+  date: '2026-07-21'
   notes: "Observed [min, max] per key across seeds; 'seen' < len(seeds) means the\
     \ key was not emitted on every run (LLM annotation coverage varies \u2014 normal,\
     \ not a regression). Wide bands document real run-to-run variance at sweep time;\
@@ -12,33 +12,13 @@ provenance:
     \ never by hand-editing."
 bands:
   column:
-    balance_sheet.account_id:business_meaning:
-      min: 0.1
-      max: 0.15
-      seen: 3
-    balance_sheet.ending_balance:business_meaning:
-      min: 0.1
-      max: 0.15
-      seen: 3
-    balance_sheet.ending_balance:unit_source:
-      min: 0.0
-      max: 1.0
-      seen: 3
-    balance_sheet.period:business_meaning:
-      min: 0.1
-      max: 0.15
-      seen: 3
     bank_transactions.account_id:business_meaning:
-      min: 0.15
+      min: 0.1
       max: 0.15
       seen: 3
     bank_transactions.amount:business_meaning:
       min: 0.1
       max: 0.15
-      seen: 3
-    bank_transactions.amount:unit_source:
-      min: 0.0
-      max: 1.0
       seen: 3
     bank_transactions.counterparty:business_meaning:
       min: 0.1
@@ -50,51 +30,31 @@ bands:
       seen: 3
     bank_transactions.payment_id:null_ratio:
       min: 0.5104
-      max: 0.5302
+      max: 0.5166
       seen: 3
     bank_transactions.payment_id:slice_conditional_null:
-      min: 0.9665
+      min: 0.9642
       max: 0.9712
       seen: 3
-    bank_transactions.reconciled:business_meaning:
-      min: 0.1
-      max: 0.15
-      seen: 3
     bank_transactions.reference:business_meaning:
-      min: 0.15
-      max: 0.2
-      seen: 3
-    chart_of_accounts.name:business_meaning:
-      min: 0.1
-      max: 0.15
+      min: 0.2
+      max: 0.25
       seen: 3
     chart_of_accounts.parent_id:business_meaning:
       min: 0.15
-      max: 0.15
-      seen: 3
-    fx_rates.from_ccy:business_meaning:
-      min: 0.1
       max: 0.2
       seen: 3
-    fx_rates.rate:unit_source:
-      min: 0.0
-      max: 1.0
+    fx_rates.rate:business_meaning:
+      min: 0.1
+      max: 0.15
       seen: 3
     fx_rates.source:business_meaning:
-      min: 0.15
-      max: 0.15
-      seen: 3
-    fx_rates.to_ccy:business_meaning:
       min: 0.1
-      max: 0.2
+      max: 0.15
       seen: 3
     invoices.amount:business_meaning:
-      min: 0.15
+      min: 0.1
       max: 0.15
-      seen: 3
-    invoices.amount:unit_source:
-      min: 0.0
-      max: 1.0
       seen: 3
     invoices.entry_id:business_meaning:
       min: 0.15
@@ -116,81 +76,33 @@ bands:
       min: 0.1
       max: 0.15
       seen: 3
-    journal_lines.account_id:business_meaning:
-      min: 0.1
-      max: 0.15
-      seen: 3
     journal_lines.cost_center:business_meaning:
-      min: 0.15
+      min: 0.1
       max: 0.15
       seen: 3
     journal_lines.cost_center:null_ratio:
       min: 0.5164
-      max: 0.5186
-      seen: 3
-    journal_lines.credit:unit_source:
-      min: 0.0
-      max: 1.0
-      seen: 3
-    journal_lines.debit:unit_source:
-      min: 0.0
-      max: 1.0
-      seen: 3
-    journal_lines.entry_id:business_meaning:
-      min: 0.1
-      max: 0.15
+      max: 0.5171
       seen: 3
     journal_lines.net_amount:business_meaning:
       min: 0.15
       max: 0.25
       seen: 3
-    journal_lines.net_amount:unit_source:
-      min: 0.0
-      max: 1.0
-      seen: 3
     payments.amount:business_meaning:
-      min: 0.15
-      max: 0.15
-      seen: 3
-    payments.amount:unit_source:
-      min: 0.0
-      max: 1.0
-      seen: 3
-    payments.method:business_meaning:
       min: 0.1
       max: 0.15
       seen: 3
     trial_balance.credit_balance:benford:
-      min: 0.2254
+      min: 0.199
       max: 0.2573
       seen: 3
-    trial_balance.credit_balance:temporal_behavior:
-      min: 0.3322
-      max: 0.8065
-      seen: 3
-    trial_balance.credit_balance:unit_source:
-      min: 0.0
-      max: 1.0
-      seen: 3
     trial_balance.debit_balance:benford:
-      min: 0.1946
+      min: 0.2315
       max: 0.3005
-      seen: 3
-    trial_balance.debit_balance:temporal_behavior:
-      min: 0.3322
-      max: 0.4344
-      seen: 3
-    trial_balance.debit_balance:unit_source:
-      min: 0.0
-      max: 1.0
-      seen: 3
-    trial_balance.period:business_meaning:
-      min: 0.1
-      max: 0.15
       seen: 3
   table:
     bank_transactions:dimension_coverage:
-      min: 0.2651
-      max: 0.5166
+      min: 0.1712
+      max: 0.2552
       seen: 3
   relationship: {}
