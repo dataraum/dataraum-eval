@@ -23,7 +23,7 @@ from dataraum.storage.read_views import read_schema_name_for
 from sqlalchemy import text
 
 from calibration import runner as runner_mod
-from calibration.conftest import DATA_DIR, require_pipeline_run
+from calibration.conftest import DATA_DIR, measured_rows, require_pipeline_run
 
 _STRATEGY = "detection-stockflow-v1"
 _MARGIN = 0.2  # anti-noise floor on the signed conflict deltas, NOT a point threshold
@@ -70,7 +70,8 @@ def _probe_state() -> dict[str, tuple[str | None, float | None]]:
             ).all()
             objs = s.execute(
                 text(
-                    f'SELECT target, score FROM "{read_schema}".current_entropy_objects '
+                    "SELECT target, score, status, detector_id "
+                    f'FROM "{read_schema}".current_entropy_objects '
                     "WHERE detector_id = 'temporal_behavior' "
                     "AND target LIKE '%measure_probes.%'"
                 ),
@@ -81,7 +82,11 @@ def _probe_state() -> dict[str, tuple[str | None, float | None]]:
     concept_by_col: dict[str, str | None] = {}
     for r in concepts:
         concept_by_col.setdefault(r.col, r.concept)  # most recent annotation per column
-    conflict_by_col = {r.target.rsplit(".", 1)[-1]: float(r.score) for r in objs}
+    # MEASURED rows only (DAT-853): an abstained temporal_behavior row carries no conflict
+    # score (float(None) would crash); a corrupt measured-NULL raises loud via measured_rows.
+    conflict_by_col = {
+        r.target.rsplit(".", 1)[-1]: float(r.score) for r in measured_rows(list(objs))
+    }
     return {
         col: (concept_by_col.get(col), conflict_by_col.get(col))
         for col in set(concept_by_col) | set(conflict_by_col)

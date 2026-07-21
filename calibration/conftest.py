@@ -226,21 +226,50 @@ def _record_to_entropy_object(rec: Any) -> Any:
     )
 
 
+def measured_rows(rows: list[Any]) -> list[Any]:
+    """MEASURED entropy rows only — the DAT-853 abstention split, one home (pure).
+
+    Every reader that takes ``float(row.score)`` — a score map, a ``round``, a sort key —
+    filters through here first. An abstained row (``status='abstained'``, score NULL —
+    e.g. ``join_path_determinism``'s ``not_applicable`` structural-norm abstention, DAT-851)
+    carries no number and is DROPPED from a score-required computation: it is coverage
+    evidence, surfaced distinctly on the banded/oracle surfaces (and represented in the tool
+    output that reports rows), never fed into score maths here. A MEASURED row with a NULL
+    score violates the engine's status/score pairing (corrupt data) and raises LOUD — a
+    blanket ``if score is None: continue`` would hide a real bug.
+
+    ``rows`` must carry ``status`` / ``score`` / ``detector_id`` / ``target`` (raw-SQL
+    readers must add ``status`` to their SELECT). Pure, so Tier-1 exercises the split on
+    synthetic rows without a pipeline.
+    """
+    from dataraum.entropy.models import STATUS_ABSTAINED
+
+    out: list[Any] = []
+    for r in rows:
+        if r.status == STATUS_ABSTAINED:
+            continue  # abstention carries no score — coverage evidence, not a score
+        if r.score is None:
+            raise ValueError(
+                "measured entropy row has a NULL score (corrupt — violates the engine's "
+                f"status/score pairing): {r.detector_id} on {r.target}"
+            )
+        out.append(r)
+    return out
+
+
 def _aggregate_detector_scores(
     records: list[Any],
     col_names: dict[str, tuple[str, str]],
 ) -> DetectorScores:
     """Bucket MEASURED entropy rows into ``DetectorScores`` by target prefix (pure).
 
-    Abstention split (DAT-853): an abstained row (``status='abstained'``, score NULL)
-    NEVER enters a score map or a max-comparison — score-based grading is over MEASURED
-    rows only. A MEASURED row with a NULL score violates the engine's status/score
-    pairing (corrupt data) → fail LOUD, never a silent drop (that would blanket-swallow
-    a real bug). ``col_names`` maps ``column_id → (table, column)`` for relationship
-    endpoints. Extracted from the DB read so Tier-1 can exercise the abstention split on
-    synthetic rows without a pipeline.
+    Abstention split (DAT-853): score-based grading is over MEASURED rows only —
+    ``measured_rows`` drops abstentions (coverage evidence, not a score) and fails LOUD on
+    a corrupt measured-NULL before any bucketing. ``col_names`` maps ``column_id →
+    (table, column)`` for relationship endpoints. Extracted from the DB read so Tier-1 can
+    exercise the abstention split on synthetic rows without a pipeline.
     """
-    from dataraum.entropy.models import STATUS_ABSTAINED, parse_relationship_target
+    from dataraum.entropy.models import parse_relationship_target
 
     result = DetectorScores()
 
@@ -248,15 +277,8 @@ def _aggregate_detector_scores(
         if key not in d or score > d[key]:
             d[key] = score
 
-    for rec in records:
-        if rec.status == STATUS_ABSTAINED:
-            continue  # abstention carries no score — coverage evidence, not a score
+    for rec in measured_rows(records):
         det, target, score = rec.detector_id, rec.target, rec.score
-        if score is None:
-            raise ValueError(
-                "measured entropy row has a NULL score (corrupt — violates the engine's "
-                f"status/score pairing): {det} on {target}"
-            )
         if target.startswith("column:"):
             parts = target.removeprefix("column:").split(".", 1)
             if len(parts) != 2:

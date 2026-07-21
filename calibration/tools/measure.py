@@ -86,6 +86,7 @@ def _dataset_view(strategy: str) -> dict[str, Any]:
 
 
 def _target_view(strategy: str, target: str) -> dict[str, Any]:
+    from dataraum.entropy.models import STATUS_ABSTAINED
     from sqlalchemy import select
 
     from calibration.conftest import _assemble_readiness, _head_resolved_entropy_rows
@@ -110,15 +111,27 @@ def _target_view(strategy: str, target: str) -> dict[str, Any]:
             tbl, col = ref.split(".", 1)
             if (short(tbl), col) != (table_name, column_name):
                 continue
-            objects.append(
-                {
-                    "detector": row.detector_id,
-                    "dimension": f"{row.layer}.{row.dimension}.{row.sub_dimension}",
-                    "score": round(row.score, 4),
-                    "evidence": row.evidence,
-                    "run_id": row.run_id,
-                }
-            )
+            obj: dict[str, Any] = {
+                "detector": row.detector_id,
+                "dimension": f"{row.layer}.{row.dimension}.{row.sub_dimension}",
+                "status": row.status,
+                "evidence": row.evidence,
+                "run_id": row.run_id,
+            }
+            if row.status == STATUS_ABSTAINED:
+                # Abstention carries no score — coverage evidence, represented distinctly
+                # (status + reason), NEVER dropped from the tool's output (DAT-853).
+                obj["abstain_reason"] = row.abstain_reason
+            else:
+                # A MEASURED row with a NULL score is corrupt (violates the engine's
+                # status/score pairing) — fail LOUD, never round(None).
+                if row.score is None:
+                    raise ValueError(
+                        "measured entropy row has a NULL score (corrupt — violates the "
+                        f"engine's status/score pairing): {row.detector_id} on {row.target}"
+                    )
+                obj["score"] = round(row.score, 4)
+            objects.append(obj)
         # Current witnesses = rows under any currently-promoted head (no session
         # axis post-DAT-506); mirrors the current_claim_witnesses view's filter.
         for rec in session.execute(
@@ -154,7 +167,11 @@ def _target_view(strategy: str, target: str) -> dict[str, Any]:
 
     return {
         "target": target,
-        "entropy_objects": sorted(objects, key=lambda o: -o["score"]),
+        # Measured objects by descending score; abstentions (no score) grouped after —
+        # still present as coverage evidence, never sorted by a NULL score.
+        "entropy_objects": sorted(
+            objects, key=lambda o: (o.get("score") is None, -(o.get("score") or 0.0))
+        ),
         "claim_witnesses": witnesses,
         "intent_readiness": intents,
     }

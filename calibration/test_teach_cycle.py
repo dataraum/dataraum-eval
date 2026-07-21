@@ -41,7 +41,7 @@ from dataraum.storage.read_views import read_schema_name_for
 from sqlalchemy import text
 
 from calibration import runner as runner_mod
-from calibration.conftest import DATA_DIR, require_pipeline_run
+from calibration.conftest import DATA_DIR, measured_rows, require_pipeline_run
 from calibration.test_detector_recall import DETECTION_THRESHOLD
 
 _DROP_MARGIN = 0.02  # anti-noise floor on signed deltas, NOT a point threshold
@@ -76,6 +76,10 @@ def _head_resolved_rows(detector_id: str) -> list[Any]:
     Head-resolved via the ``current_entropy_objects`` view (no session axis post
     DAT-506): the view returns only rows under a currently-promoted head, so a
     teach re-run's drop is visible and stale pre-teach rows are excluded.
+
+    MEASURED rows only (DAT-853): every consumer below takes ``float(row.score)``, so an
+    abstained row (score NULL) is filtered out via ``measured_rows`` (it carries no conflict
+    to close), and a corrupt measured-NULL raises loud rather than crashing a ``float(None)``.
     """
     runner_mod.bootstrap_engine()  # PG/Temporal env + workspace schema (idempotent)
     mgr = ConnectionManager(ConnectionConfig.for_workspace())
@@ -87,14 +91,15 @@ def _head_resolved_rows(detector_id: str) -> list[Any]:
             )
             rows = s.execute(
                 text(
-                    f'SELECT target, score, evidence FROM "{read_schema}".current_entropy_objects '
+                    "SELECT target, score, evidence, status, detector_id "
+                    f'FROM "{read_schema}".current_entropy_objects '
                     "WHERE detector_id = :det"
                 ),
                 {"det": detector_id},
             ).all()
     finally:
         mgr.close()
-    return list(rows)
+    return measured_rows(list(rows))
 
 
 def _column_rows(rows: list[Any], table_substr: str, column: str) -> list[Any]:
