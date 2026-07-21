@@ -18,6 +18,7 @@ import pytest
 import yaml
 
 from calibration import runner as runner_mod
+from calibration.band_grading import BandedMeasurement, band_measurement
 
 EVAL_ROOT = Path(__file__).parent.parent
 DATA_DIR = EVAL_ROOT / "data"
@@ -252,6 +253,55 @@ def _load_scores_for_strategy(strategy: str) -> DetectorScores:
     return result
 
 
+def _load_banded_measurements(strategy: str) -> list[BandedMeasurement]:
+    """Loss-table measurements for the strategy, each carrying its readiness band.
+
+    The score loaders above (``_load_scores_for_strategy``) grade
+    ``EntropyObjectRecord.score``; the PRODUCT bands on expected loss over
+    ``(conflict, ignorance)`` (DAT-849). This reads the SAME head-resolved rows,
+    keeps only the loss-table detectors (``LossConfig.is_loss_measurement``),
+    reconstructs the domain object, and grades each through the engine's own loss
+    rollup (``band_measurement`` → ``loss_risk_for_object`` + ``band``). So a
+    measurement that scores ``0.0`` yet bands ``investigate`` through ignorance is
+    now first-class graded data — the case the score loaders cannot see.
+
+    Backwards-compatible: ``DetectorScores`` / ``_load_scores_for_strategy`` are
+    untouched; this is an ADDITIONAL surface read off the same rows.
+    """
+    _require_pipeline_run(strategy)  # ensure the pipeline has run (writes the sidecar)
+    runner_mod.bootstrap_engine()
+
+    from dataraum.core.connections import ConnectionConfig, ConnectionManager
+    from dataraum.entropy.loss import get_loss_config
+    from dataraum.entropy.models import EntropyObject
+
+    loss_config = get_loss_config()
+    workspace_mgr = ConnectionManager(ConnectionConfig.for_workspace())
+    workspace_mgr.initialize()
+    try:
+        with workspace_mgr.session_scope() as session:
+            records = _head_resolved_entropy_rows(session)
+    finally:
+        workspace_mgr.close()
+
+    measurements: list[BandedMeasurement] = []
+    for rec in records:
+        if not loss_config.is_loss_measurement(rec.detector_id):
+            continue
+        obj = EntropyObject(
+            object_id=rec.object_id,
+            layer=rec.layer,
+            dimension=rec.dimension,
+            sub_dimension=rec.sub_dimension,
+            target=rec.target,
+            score=rec.score,
+            evidence=rec.evidence if isinstance(rec.evidence, list) else [],
+            detector_id=rec.detector_id,
+        )
+        measurements.append(band_measurement(obj, loss_config))
+    return measurements
+
+
 # ---------------------------------------------------------------------------
 # Strategy-aware fixtures
 # ---------------------------------------------------------------------------
@@ -349,6 +399,18 @@ def pipeline_relationship_scores(
 ) -> dict[tuple[str, str, str], float]:
     """Relationship-scoped scores, indexed per endpoint: (table, column, detector_id) → score."""
     return detector_scores.relationship
+
+
+@pytest.fixture(scope="session")
+def banded_measurements(strategy_name: str) -> list[BandedMeasurement]:
+    """Loss-table measurements for the current strategy, each carrying its
+    ``(conflict, ignorance)`` and per-intent readiness band (DAT-849).
+
+    The banded counterpart to ``detector_scores``: where the score fixtures expose
+    ``EntropyObjectRecord.score``, this exposes the readiness-band surface the
+    product actually shows, graded through the engine's own loss rollup.
+    """
+    return _load_banded_measurements(strategy_name)
 
 
 # ---------------------------------------------------------------------------
