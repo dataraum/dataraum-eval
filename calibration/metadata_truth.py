@@ -589,6 +589,88 @@ def read_column_meanings(session: Any) -> dict[str, str]:
     return {f"{short(r.tn)}.{r.cn}": r.bc for r in rows}
 
 
+@dataclass(frozen=True)
+class MeaningRow:
+    """One eligible catalogue column and its ColumnConcept meaning coverage (DAT-853/DAT-823).
+
+    ``has_concept`` — a ``column_concepts`` row exists for the column (LEFT-JOIN hit).
+    ``meaning`` — the free-text meaning (NULL/blank = none authored; the engine coerces a
+    whitespace-only meaning to NULL at write). ``meaning_status`` — the DAT-823 split's status
+    (NULL on pre-split rows, ``'determined'``/``'ambiguous'`` post-split; ``'ambiguous'`` still
+    counts as covered — declared ignorance WITH a meaning present).
+    """
+
+    column: str
+    has_concept: bool
+    meaning: str | None
+    meaning_status: str | None
+
+
+def meaning_status_present(session: Any) -> bool:
+    """Whether ``current_column_concepts`` exposes the DAT-823 ``meaning_status`` column.
+
+    The pre/post-split capability probe for the semantic-authoring split (DAT-823 W3-F): the
+    column does not exist on today's engine, so the coverage-parity oracle stands down until
+    the split lands — the ADR-0022 oracle-first pattern (written BEFORE the engine cut, like
+    ``read_view_exists`` gates the P2 grounding oracles).
+    """
+    from dataraum.storage.read_views import read_schema_name_for
+    from sqlalchemy import text
+
+    read_schema = read_schema_name_for(
+        str(session.execute(text("SELECT current_schema()")).scalar())
+    )
+    return (
+        session.execute(
+            text(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_schema = :schema AND table_name = 'current_column_concepts' "
+                "AND column_name = 'meaning_status'"
+            ),
+            {"schema": read_schema},
+        ).first()
+        is not None
+    )
+
+
+def read_meaning_coverage(session: Any) -> list[MeaningRow]:
+    """Every eligible catalogue column with its ColumnConcept meaning + status (LEFT JOIN).
+
+    Eligible = every column of the catalogue tables — the coverage universe the engine's own
+    authoring targets (no id/type exclusion; only 100%-null columns are dropped upstream by
+    ``column_eligibility`` and never reach the catalogue). A column with no concept row, or a
+    NULL/blank meaning, is a coverage gap. ``meaning_status`` rides through for reporting;
+    ``'ambiguous'`` counts as covered. Call only after :func:`meaning_status_present` — the
+    SELECT references the DAT-823 column.
+    """
+    from dataraum.storage.read_views import read_schema_name_for
+    from sqlalchemy import text
+
+    from calibration.tools._runs import short
+
+    read_schema = read_schema_name_for(
+        str(session.execute(text("SELECT current_schema()")).scalar())
+    )
+    rows = session.execute(
+        text(
+            "SELECT t.table_name AS tn, c.column_name AS cn, cc.concept_id AS concept_id, "
+            "cc.meaning AS meaning, cc.meaning_status AS meaning_status "
+            f'FROM "{read_schema}".current_columns c '
+            f'JOIN "{read_schema}".current_tables t ON t.table_id = c.table_id '
+            f'LEFT JOIN "{read_schema}".current_column_concepts cc ON cc.column_id = c.column_id'
+        )
+    ).all()
+    return [
+        MeaningRow(
+            column=f"{short(r.tn)}.{r.cn}",
+            has_concept=r.concept_id is not None,
+            meaning=r.meaning,
+            meaning_status=r.meaning_status,
+        )
+        for r in rows
+    ]
+
+
 def read_driver_rankings(session: Any) -> dict[str, dict[str, Any]]:
     """``current_driver_rankings`` per measure column, keyed ``"table.column"`` (narrow).
 
