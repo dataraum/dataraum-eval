@@ -31,6 +31,7 @@ ARTIFACT = EVAL_ROOT / "calibration" / "clean_bands.yaml"
 
 # Bands below this are uninteresting at every grain — don't record them.
 # (Matches the precision test's NOISE_FLOOR; per-detector floors apply there.)
+# Recording threshold ONLY — the degeneracy check below runs independent of it.
 _FLOOR = 0.1
 
 _GRAINS = ("column", "table", "relationship")
@@ -72,13 +73,18 @@ def build_from_docs(docs: list[dict[str, Any]]) -> tuple[dict[str, Any], list[st
         keys = sorted({k for d in docs for k in d.get(grain, {})})
         for key in keys:
             values = [d[grain][key] for d in docs if key in d.get(grain, {})]
-            if max(values) <= _FLOOR:
-                continue
-            bands[grain][key] = {
-                "min": round(min(values), 4),
-                "max": round(max(values), 4),
-                "seen": len(values),
-            }
+            # Floor gates RECORDING only — a key at or below it never enters the
+            # bands artifact. It must NOT gate the degeneracy check below: a
+            # detector wired to emit a constant at/under the floor (e.g.
+            # join_path_determinism's 0.100 on every relationship of every
+            # corpus) is exactly the wiring bug this lint exists to catch, and
+            # skipping the check here defeated its purpose.
+            if max(values) > _FLOOR:
+                bands[grain][key] = {
+                    "min": round(min(values), 4),
+                    "max": round(max(values), 4),
+                    "seen": len(values),
+                }
             detector = key.rsplit(":", 1)[-1]
             if (
                 len(values) >= 2

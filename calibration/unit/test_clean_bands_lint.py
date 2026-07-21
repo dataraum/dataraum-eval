@@ -22,8 +22,10 @@ _spec.loader.exec_module(_mod)
 build_from_docs = _mod.build_from_docs
 
 
-def _doc(seed: int, column: dict[str, float]) -> dict[str, Any]:
-    return {"seed": seed, "column": column, "table": {}, "relationship": {}}
+def _doc(seed: int, values: dict[str, float], grain: str = "column") -> dict[str, Any]:
+    doc: dict[str, Any] = {"seed": seed, "column": {}, "table": {}, "relationship": {}}
+    doc[grain] = values
+    return doc
 
 
 def test_constant_continuous_band_is_flagged() -> None:
@@ -63,8 +65,39 @@ def test_single_seed_key_is_not_flagged() -> None:
     assert degenerate == []
 
 
-def test_below_floor_keys_record_nothing() -> None:
+def test_below_floor_constant_is_flagged_but_not_recorded() -> None:
     docs = [_doc(s, {"t.c:null_ratio": 0.05}) for s in (46, 47)]
+    doc, degenerate = build_from_docs(docs)
+    assert doc["bands"]["column"] == {}
+    # Recording semantics are unchanged: a below-floor key never enters the
+    # bands artifact. But this value is also CONSTANT across seeds for a
+    # non-exempt detector — exactly the join_path_determinism signature the
+    # lint exists to catch — so it must now be flagged. Before the fix, the
+    # floor's `continue` short-circuited the degeneracy check before it ran;
+    # the fix decouples the two, so this case is flagged like any other.
+    assert len(degenerate) == 1
+    assert "t.c:null_ratio" in degenerate[0]
+
+
+def test_constant_at_floor_boundary_is_flagged_and_not_recorded() -> None:
+    # The join_path_determinism bug signature: a non-exempt detector emitting
+    # exactly the floor value (0.1) on every relationship of every corpus.
+    # max(values) <= _FLOOR is still true at the boundary, so it must not be
+    # recorded — but it must be flagged, since the old `continue` swallowed
+    # exactly this case.
+    docs = [_doc(s, {"r1:join_path_determinism": 0.1}, grain="relationship") for s in (46, 47, 48)]
+    doc, degenerate = build_from_docs(docs)
+    assert doc["bands"]["relationship"] == {}
+    assert len(degenerate) == 1
+    assert "r1:join_path_determinism" in degenerate[0]
+    assert "constant 0.1" in degenerate[0]
+
+
+def test_varying_below_floor_values_not_flagged_not_recorded() -> None:
+    docs = [
+        _doc(46, {"t.c:null_ratio": 0.05}),
+        _doc(47, {"t.c:null_ratio": 0.08}),
+    ]
     doc, degenerate = build_from_docs(docs)
     assert doc["bands"]["column"] == {}
     assert degenerate == []
