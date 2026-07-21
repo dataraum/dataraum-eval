@@ -23,6 +23,10 @@ Read `data/$0/ground_truth.yaml` — the correct financial metrics (computed fro
 
 Read `data/$0/entropy_map.yaml` — the known injections with target columns and detector IDs. Only read the first ~100 lines to get the injection summary (the file is large due to row indices). Focus on the `injection_id`, `target_file`, `target_column`, `detector_id`, and `parameters` fields.
 
+Read `data/$0/metadata_truth.yaml` — the agent-layer truth (FK topology, table/column roles, stock/flow, cycles) the e2e oracles grade against.
+
+If `output/$0/oracle_coverage.json` exists (written by the last pytest pass), read it: which oracles graded, which skipped, and why. Skips are how a run goes green without checking anything — verify every skip is an expected stand-down, not a silent regression.
+
 ## Step 2: Look at the data
 
 Run `look` with no table for the full overview — tables, row counts, identified time axes, enriched views.
@@ -109,5 +113,18 @@ Print a concise summary table showing:
 - Detector recall: X/Y pass
 - Metric accuracy: X/Y within tolerance
 - Readiness: X blocked, Y investigate, Z ready
+- Oracle accounting: X graded, Y skipped (each skip named with its reason)
 - Top issues found
 - Key observations about tool surface gaps (if any)
+
+## Triage rule
+
+Classify every red or suspicious result before proposing anything:
+- **engine bug** — the pipeline persisted something wrong → file a DAT-* ticket
+- **stale eval** — the engine's output shape moved and the oracle didn't → fix the oracle, citing the engine change
+- **LLM variance** — within the measured band / xfail(strict=False) territory → record, don't patch
+- **testdata drift** — generator and committed truth disagree → regenerate, don't hand-edit
+
+A red oracle is a bug ticket or a teach scenario, never a relaxed assertion.
+When triage is ambiguous, read the prompt/response artifacts — that is where
+DAT-829/830/834 were actually found, not in assertion output.

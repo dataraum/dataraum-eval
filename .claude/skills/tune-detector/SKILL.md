@@ -54,16 +54,18 @@ Iterate **here**, at millisecond speed, until green.
 ## Step 4 — Gate, once
 
 When Tier 1/2 are green and the engine suite passes, run the one integration
-gate for the affected strategy (`make calibrate` / `make calibrate-typing`, or
-the stepwise targets). Background the run and line up other work — don't idle,
+gate for the affected strategy
+(`uv run python -m calibration.run -s <strategy>,clean`). Background the run
+and line up other work — don't idle,
 and don't loop on it. Recall regressions elsewhere in the suite are part of the
 verdict: a detector change that breaks another detector's recall is not done.
 
 ## Step 5 — Commit like an engine change
 
-Feature branch inside `vendor/dataraum-context`, commit the green work, update
-`.claude/handoff.md` there. Update the catalog row in
-`entropy_eval_architecture.md` if the statistic or its calibration changed.
+Feature branch inside `vendor/dataraum-context`, commit the green work (the
+engine's handoff journal is retired — the PR/ticket carries the context).
+Update the catalog row in `entropy_eval_architecture.md` if the statistic or
+its calibration changed.
 
 ## Anti-patterns (each has burned us)
 

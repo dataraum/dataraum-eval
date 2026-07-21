@@ -56,7 +56,7 @@ present at the expected rate, and the `entropy_map.yaml` entry matches.
 
 ```bash
 # generate and inspect (example for detection-v1)
-make generate-detection-v1            # → data/detection-v1/ + entropy_map.yaml
+uv run python -m calibration.run -s detection-v1 --fresh --no-assert   # → data/detection-v1/ + entropy_map.yaml
 ```
 
 ## Step 4 — Wire the proof at the right tier
@@ -71,6 +71,13 @@ make generate-detection-v1            # → data/detection-v1/ + entropy_map.yam
   is in `CURRENT_SLICE_DETECTORS` (or document the skip).
 - New financial-metric ground truth → `ground_truth.yaml` + the relevant
   `calibration/tools/` or `/investigate` expectations.
+- Agent-layer truth (FKs, table/column roles, stock/flow, cycles, folds, bus
+  matrix) lives in `vendor/dataraum-testdata/src/testdata/metadata_truth.py` —
+  author it from the generator/model STRUCTURE, never from what the agent
+  emitted. Update the canonical truth + its remap rules, regenerate the
+  committed fixture (`uv run python scripts/regen_metadata_truth.py`); Tier-1
+  `test_fixture_matches_generator` binds fixture and generator so they can't
+  drift.
 
 ## Step 5 — Commit in both repos
 

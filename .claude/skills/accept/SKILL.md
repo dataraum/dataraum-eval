@@ -21,12 +21,15 @@ uv run python -m calibration.tools.sql $0 "SELECT ..."        # read-only SQL on
 
 $ARGUMENTS is one of:
 - A strategy name (default: `detection-v1`) — run full acceptance
-- `handoff` — read the handoff file and test what changed
+- `changes` — test what recently changed in the engine
 
 ## Step 1: Understand what to test
 
-**If handoff mode:**
-Read `vendor/dataraum-context/.claude/handoff.md`. For each pending item, identify:
+**If changes mode:**
+The engine retired its `.claude/handoff.md` journal — change context lives in
+its code, ADRs, and Jira. Read the recent engine commits
+(`git -C vendor/dataraum-context log --oneline -20`) and their DAT-* tickets.
+For each change, identify:
 - Which read surface or pipeline behavior is affected
 - What behavior changed
 - What ground truth to check against
@@ -93,8 +96,8 @@ Write `output/acceptance_report.yaml`:
 ```yaml
 date: <YYYY-MM-DD>
 strategy: $0
-mode: handoff | full
-source: vendor/dataraum-context/.claude/handoff.md  # if handoff mode
+mode: changes | full
+source: <engine commits/tickets tested>  # if changes mode
 
 calibration:
   status: pass | fail
@@ -141,7 +144,6 @@ observations:
 
 ## Step 6: Close the loop
 
-- Update `vendor/dataraum-context/.claude/handoff.md`: change status of tested items from `pending` to `verified` or `failed`
 - If blocking issues: report them with specific findings (Jira lives at DAT-*)
 - Print summary to user: verdict, blocking issues, key observations
 

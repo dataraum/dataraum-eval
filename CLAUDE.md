@@ -67,6 +67,7 @@ Refresh the recorded fixture only when the pipeline's *output shape* changes
 | a detector misses, over-fires, or needs tuning | `/tune-detector` |
 | new injection family, fixture, or ground-truth values | `/evolve-testdata` |
 | check detector recall + financial accuracy via the direct read tools | `/investigate` |
+| run a real (non-generated) corpus through the pipeline and score it | `/wild-corpus` |
 | produce + validate a business deliverable | `/deliver` |
 | product acceptance of the tool surface | `/accept` |
 
@@ -85,15 +86,16 @@ recorded in the catalog. No `output_*.log` files at the repo root — logs go un
 
 | Repo | Role | Editable from here |
 |---|---|---|
-| `vendor/dataraum-testdata` | generates data with known injections → `entropy_map.yaml`, `ground_truth.yaml` | yes |
+| `vendor/dataraum-testdata` | generates data with known injections → `entropy_map.yaml`, `ground_truth.yaml`, `metadata_truth.yaml` | yes |
 | `vendor/dataraum-context` | the engine — pipeline, detectors, teach system | yes |
 | `dataraum-eval` (this) | strategies, calibration tests, runner | yes |
 
 When editing engine code, the engine's rules apply: read
 `vendor/dataraum-context/CLAUDE.md` and `packages/engine/CLAUDE.md` first, and
 **read the subsystem you're changing from code — not from memory or this file —
-before designing**. Feature branches inside the submodule, commit green work,
-update `.claude/handoff.md` there for detector changes. The engine's e2e tests
+before designing**. Feature branches inside the submodule, commit green work.
+The engine retired its `.claude/handoff.md` journal — engine change context
+lives in its code, ADRs, and Jira, nowhere else. The engine's e2e tests
 make real LLM calls — never run them as an iteration loop.
 
 ## Running calibration (Tier 3)
@@ -141,11 +143,37 @@ runner and conftest compose them; the multi-seed clean-bands sweep stays in
   is untouched — safe to run anytime. It is the ONLY `down -v`; never inside a run.
 - Long pipeline runs go to the background — line up other work while they run;
   don't idle.
+- The run summary names every skipped oracle with its reason
+  (`output/<strategy>/oracle_coverage.json`). Skips are how a run goes green
+  without checking anything — account for them before calling a run green. A red
+  oracle is a bug ticket or a teach scenario, never a relaxed assertion.
+
+## Two corpus tiers (the corpus policy, DAT-681b/c)
+
+- **Tier A — synthetic finance** (testdata generator): full truth — injections,
+  financial values, `metadata_truth.yaml`, teach closure. The only corpus where
+  recall is assertable, because recall requires a corpus you generated.
+- **Tier B — wild** (real databases, `corpora/`, gitignored — never under
+  `data/`'s `make clean`): structural truth only (declared FKs, types, time
+  columns). **Scoreboard, never a build-break.** Its job is to falsify "we're
+  great" — a schema we invented and parse cleanly mainly proves we write
+  schemas well. ML task labels are never ground truth; NC-licensed corpora are
+  fetched, never committed.
+
+```bash
+uv run python scripts/stage_wild_corpus.py rel-f1     # parquet → data/rel-f1/ + structural metadata_truth.yaml
+uv run python scripts/frame_wild_vertical.py rel-f1   # typed Concept rows (product config, NOT truth)
+uv run python -m calibration.runner rel-f1 --pipeline-only --vertical rel-f1
+uv run pytest calibration/ --strategy rel-f1 -q       # Tier-B-aware oracles grade; the rest stand down
+```
+
+Bugs come from **reading the prompt/response artifacts**, not only from
+assertions firing — DAT-829/830/834/835/836 all came out of reading dumps.
 
 ## Where things live
 
 - Method + measurement catalog (every measure, every CUT and why): `entropy_eval_architecture.md`
 - Historical record (pre-reset results, slice log, old learnings): `docs/history.md`
-- Active epic state: Jira (DAT-442 and children) + session memory — not this file
+- Active epic state: Jira (DAT-680 and children) + session memory — not this file
 - Deliverable specs with tolerances: `deliverables/`
-- Engine→eval handoff: `vendor/dataraum-context/.claude/handoff.md`
+- Engine change context: the engine's code, ADRs, and Jira (its `.claude/handoff.md` journal is retired)
