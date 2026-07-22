@@ -171,3 +171,12 @@ items:
       esp. the ambiguous conflicting-cue stratum where the name lies) is still a Tier-3
       measurement — grade it in the batched confirming run. But the detector's core signal
       is now covered free by the structural net above.
+    engine_witness_graded_free: >
+      UPGRADED (test_temporal_behavior_witness.py): the ENGINE's own classifier
+      (dataraum.analysis.lineage.reconcile — pure arithmetic, no DB/LLM, ported FROM an
+      eval probe) is now called AS A LIBRARY on the fixture. Reconciling stocks →
+      CUMULATIVE, match_rate 1.0, all entities fire; broken stocks → degrade, match_rate
+      0.20-0.40 (broken series abstain past FIRE_RESIDUAL_MAX). So the structural-witness
+      RECALL — which I wrongly called an e2e-only grade — is a millisecond Tier-2 test
+      against the engine's real code. NO pipeline run needed for the structural authority;
+      only the LLM-claim/slicing-integration path is irreducibly a run.
