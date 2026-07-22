@@ -101,3 +101,14 @@ def test_varying_below_floor_values_not_flagged_not_recorded() -> None:
     doc, degenerate = build_from_docs(docs)
     assert doc["bands"]["column"] == {}
     assert degenerate == []
+
+
+def test_constant_zero_is_the_clean_baseline_not_flagged() -> None:
+    # A correct continuous detector reads exactly 0.0 on clean — no entropy to
+    # find. That is the ideal clean band, NOT the join_path_determinism smell
+    # (a constant NONZERO fallback). It must be neither recorded (0 <= _FLOOR)
+    # NOR flagged (ruling 2026-07-22: correct is 0.0, not a floor value).
+    docs = [_doc(s, {"t.c:cross_table_consistency": 0.0}) for s in (46, 47, 48)]
+    doc, degenerate = build_from_docs(docs)
+    assert doc["bands"]["column"] == {}
+    assert degenerate == []

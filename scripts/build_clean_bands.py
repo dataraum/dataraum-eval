@@ -62,8 +62,10 @@ _DISCRETE_BY_DESIGN = frozenset(
 def build_from_docs(docs: list[dict[str, Any]]) -> tuple[dict[str, Any], list[str]]:
     """Build the bands document from sweep dumps; also return degenerate keys.
 
-    Degenerate = zero-width on raw (unrounded) values across >= 2 seeds for a
-    detector not in ``_DISCRETE_BY_DESIGN``.
+    Degenerate = zero-width on raw (unrounded) values at a NONZERO constant
+    across >= 2 seeds for a detector not in ``_DISCRETE_BY_DESIGN``. A constant
+    0.0 is the correct clean baseline (the detector read the data and found no
+    entropy), never degeneracy.
     """
     seeds = [d["seed"] for d in docs]
 
@@ -89,6 +91,14 @@ def build_from_docs(docs: list[dict[str, Any]]) -> tuple[dict[str, Any], list[st
             if (
                 len(values) >= 2
                 and min(values) == max(values)
+                # A CORRECT continuous detector reads exactly 0.0 on clean (no
+                # entropy to find) — that is the ideal, not a wiring bug, so a
+                # constant 0.0 is NOT degenerate. The smell this lint exists to
+                # catch is a constant NONZERO fallback (join_path_determinism's
+                # 0.1 on every relationship, temporal_behavior's 0.5127, the
+                # unit_entropy 1.0 false-block) — a detector "not reading the
+                # data" invents a spurious signal, it does not invent a zero.
+                and max(values) > 0.0
                 and detector not in _DISCRETE_BY_DESIGN
             ):
                 degenerate.append(
