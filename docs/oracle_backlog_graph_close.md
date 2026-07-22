@@ -3,8 +3,15 @@
 Handoff from the DAT-725 owner (2026-07-22). Seven oracle specs banked against the
 execution cube (DAT-860): each carries its exact `cube.needs(...)` declaration so the
 evolved framework can plan cells before any oracle is written. **Nothing here has been
-run**; the engine substrate lives on `epic/dat-725-graph-close` (dataraum-context, not
-yet merged to main — vendor pin follows the merge). Companion: the eval-prep brief on
+run**; the engine substrate lives on `epic/dat-725-graph-close` (dataraum-context).
+**Pin protocol (owner + eval, 2026-07-22 — do NOT wait for the merge):** the moment
+DAT-787 integrates, the owner posts the epic-tip SHA on DAT-736 and the eval side pins
+`vendor/dataraum-context` to it immediately for oracle authoring + Tier-1/2 iteration.
+Graded sweeps re-pin to the merged-main SHA for verdict-store identity — the epic
+branch is rebased onto main when main moves, so an epic-tip SHA is a fine dev target
+but a bad durable identity (the store's `engine_on_main` field makes off-main
+recording self-identifying). Since main hasn't moved all slice, the re-pin is expected
+byte-identical — an identity swap only. Companion: the eval-prep brief on
 DAT-736 (Jira) and the two new generator items in `generator_backlog.yaml`
 (`CAP-measured-in-truth`, `CAP-roleplay-fk-fixture`).
 
@@ -283,10 +290,12 @@ contract for conditioned-hard, all three parts:
    cycles recall owns "should a cycle exist"; the conditioned entries grade plumbing
    only) — a conditioned-hard oracle without that pairing is a silent hole.
 
-**Flag while answering (verify-before-executor class, zero blast radius in report
-mode):** O1 declares `from_stage="begin_session"` but asserts over "the promoted
-operating-model graph"; O6 likewise reads `og_conformed_dimension` at
-`begin_session`. If the og_* graph promotes with the OM head rather than the
-catalogue head, both declarations under-materialize. Confirm which head promotes the
-graph tables before the DAT-863 executor trusts these two claims — same class as the
-bus-matrix/folded-dims caveat on DAT-860.
+**Flag — RESOLVED by the graph-close owner (2026-07-22):** O1/O6's `begin_session`
+declarations are **correct as banked**. There is no unified "og_* promotes with the
+OM head": the graph is DDL over `current_*` views, and each element view resolves its
+own substrate's grain at query time. O1/O6's substrates (temporal profiles,
+time_columns, hierarchies, slices, bus matrix, lineage witness) are all
+add_source/begin_session-grain; the genuinely OM-grain elements are exactly the ones
+already declared `operating_model` (additivity, validity filters). The same fact
+clears the DAT-860 bus-matrix/folded-dims caveat. The executor can trust the
+declarations as banked.

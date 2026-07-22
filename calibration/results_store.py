@@ -52,6 +52,33 @@ def _commit(repo: Path) -> str:
         return "unknown"
 
 
+@cache
+def _on_main(repo: Path) -> bool | None:
+    """Is the repo's HEAD an ancestor of origin/main? The durable-identity check.
+
+    DAT-736 pin protocol: the engine's epic branch is REBASED onto main when main
+    moves, so an epic-tip SHA is a fine development target but a bad durable identity
+    for verdicts — it can vanish from history. Dev-pin passes record
+    ``engine_on_main=False`` (self-identifying, still useful iteration data); graded
+    sweeps must record on-main commits. Best-effort: reads the locally-fetched
+    ``origin/main`` (a stale fetch can read False for a fresh main commit); ``None``
+    when undeterminable. The field is a hint for queries — the protocol is the rule.
+    """
+    try:
+        res = subprocess.run(
+            ["git", "-C", str(repo), "merge-base", "--is-ancestor",
+             "HEAD", "refs/remotes/origin/main"],
+            capture_output=True,
+        )
+    except OSError:
+        return None
+    if res.returncode == 0:
+        return True
+    if res.returncode == 1:
+        return False
+    return None  # ref missing / not a repo — undeterminable, not "off main"
+
+
 def _run_id(strategy: str) -> str:
     """The pipeline run this verdict graded, from the strategy's sidecar."""
     sidecar = EVAL_ROOT / "output" / strategy / "calibration_run.json"
@@ -124,6 +151,7 @@ def record_pass(
                 "from_stage": spec.from_stage if spec else None,
                 "eval_commit": eval_commit,
                 "engine_commit": engine_commit,
+                "engine_on_main": _on_main(ENGINE_DIR),
                 "run_id": run_id,
             }
             f.write(json.dumps(row, sort_keys=True) + "\n")

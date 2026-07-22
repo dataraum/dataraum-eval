@@ -33,6 +33,8 @@ def test_record_filters_unit_and_roundtrips(tmp_path: Path) -> None:
     assert rec["from_stage"] == "operating_model"
     assert rec["oracle_version"] == 1
     assert rec["engine_commit"] and rec["eval_commit"]
+    # durable-identity hint (DAT-736 pin protocol): present, tri-state — never absent
+    assert rec["engine_on_main"] in (True, False, None)
     # one pass_id groups the batch
     assert len({r["pass_id"] for r in rows}) == 1
 
