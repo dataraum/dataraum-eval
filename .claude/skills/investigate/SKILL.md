@@ -1,13 +1,20 @@
 ---
 name: investigate
-description: Investigate calibration output via the direct engine reads — check detector recall against entropy_map and financial accuracy against ground_truth
+description: Hunt a completed calibration run for breakage via the direct engine reads — check detector recall against entropy_map and financial accuracy against ground_truth, then file findings. Never fixes the engine.
 ---
 
 # Investigate: $ARGUMENTS
 
-You are investigating the calibration output for strategy **$0** (default: `detection-v1`).
+You are hunting the calibration output for strategy **$0** (default: `detection-v1`)
+for defects, and filing what you find. You are the hostile practitioner: assume the
+engine got something wrong and go prove it. Nothing here is a fix — every red or
+suspicious result becomes a **finding** (a `DAT-*` ticket or a teach scenario),
+never a relaxed oracle and never an engine patch.
 
-The pipeline has already run (the sidecar at `output/$0/calibration_run.json` proves it; if it is missing, stop and say so — do not trigger a run). The engine's MCP server is retired (ADR-0002); you read the run through the direct tools in `calibration/tools/`:
+The pipeline has already run (the sidecar at `output/$0/calibration_run.json` proves
+it; if it is missing, stop and say so — **do not trigger a run** to satisfy this
+skill; that burns tokens for no named hypothesis). You read the run through the
+read-only tools in `calibration/tools/`:
 
 ```bash
 uv run python -m calibration.tools.look $0 [table]            # schema + profiles
@@ -15,53 +22,60 @@ uv run python -m calibration.tools.measure $0 [--target t.c]  # scores + readine
 uv run python -m calibration.tools.sql $0 "SELECT ..."        # read-only SQL on the lake
 ```
 
-Your job: assess data quality AND financial accuracy, then write structured findings.
+## Step 1 — Load ground truth (what SHOULD be true)
 
-## Step 1: Load ground truth
+- `data/$0/ground_truth.yaml` — the correct financial metrics (computed from clean
+  data before injection).
+- `data/$0/entropy_map.yaml` — the known injections (target column + `detector_id` +
+  params). Read only the first ~100 lines for the injection summary; the file is
+  large because of row indices.
+- `data/$0/metadata_truth.yaml` — the agent-layer truth (FK topology, roles,
+  stock/flow, cycles) the e2e oracles grade against.
+- `output/$0/oracle_coverage.json` if present — which oracles graded, which skipped,
+  and why. **Skips are how a run goes green without finding anything** — verify every
+  skip is an expected stand-down, not a silent regression. An oracle that stood down
+  because a read helper swallowed an error is itself a finding.
 
-Read `data/$0/ground_truth.yaml` — the correct financial metrics (computed from clean data before injection).
+## Step 2 — Look at the data
 
-Read `data/$0/entropy_map.yaml` — the known injections with target columns and detector IDs. Only read the first ~100 lines to get the injection summary (the file is large due to row indices). Focus on the `injection_id`, `target_file`, `target_column`, `detector_id`, and `parameters` fields.
+`look $0` (no table) for the overview — tables, row counts, time axes, enriched
+views. Then `look $0 <table>` on 2–3 tables with known injections: does the metadata
+make sense, are the injected columns visibly corrupted? You are looking for the
+engine quietly getting it wrong, not for confirmation it's fine.
 
-Read `data/$0/metadata_truth.yaml` — the agent-layer truth (FK topology, table/column roles, stock/flow, cycles) the e2e oracles grade against.
+## Step 3 — Measure entropy, hunt the misses and over-fires
 
-If `output/$0/oracle_coverage.json` exists (written by the last pytest pass), read it: which oracles graded, which skipped, and why. Skips are how a run goes green without checking anything — verify every skip is an expected stand-down, not a silent regression.
+`measure $0` for all column-scoped detector scores and the per-intent readiness
+(`ready` / `investigate` / `blocked` — a deterministic loss rollup; the BBN is gone,
+DAT-442). For each injection in entropy_map:
 
-## Step 2: Look at the data
+- Is there a score for the target column + expected detector? **A missing or below-
+  clean score is a recall miss — a finding.**
+- What is the worst-intent readiness? Injected columns should reach `investigate`
+  or `blocked`; one that stays `ready` is a finding.
 
-Run `look` with no table for the full overview — tables, row counts, identified time axes, enriched views.
+Also hunt the other direction: **clean columns that scored or banded** — over-fires
+are often the sharper finding. `measure $0 --target <table.column>` drills into a
+column's evidence: every entropy object, its witness claims, and the
+`claim_witnesses` provenance (which witness said what, at what reliability).
 
-For 2-3 tables that have known injections, run `look $0 <table>` to see column profiles. Check: does the metadata make sense? Are injected columns showing signs of corruption?
+## Step 4 — Check financial accuracy against ground truth
 
-## Step 3: Measure entropy
+YOU write the SQL — the retired `query` tool wrapped an LLM, and that judgment is
+yours now. Use `sql` for the metrics in `ground_truth.yaml`, at minimum: total
+revenue FY2025, total expenses FY2025, ending AR at Dec 2025, ending cash at Dec
+2025, and whether all journal entries balance (debits = credits).
 
-Run `measure $0` for all column-scoped detector scores and the loss-rollup readiness (per-intent `ready` / `investigate` / `blocked` — the Bayesian network is gone, readiness is a deterministic loss rollup; DAT-442).
+Mind the trial-balance semantics: the trial balance is **periodic, not cumulative** —
+balance-sheet items need the right aggregation over periods, and a column's
+`temporal_behavior` evidence (stock vs flow) tells you whether SUM is even
+meaningful. When the entropy evidence flags a column you're querying, that's the
+engine warning you — factor it into your confidence, and if a flagged column
+produces a wrong number the engine didn't guard, that's a finding.
 
-For each injection in entropy_map, check:
-- Is there a score for the target column + expected detector?
-- Is the score > 0.3?
-- What is the worst intent readiness for the column? (should be `investigate` or `blocked` for injected columns)
-- Record: injection_id, detector_id, target, expected score > 0.3, actual score, readiness, pass/fail
+## Step 5 — Write the findings dossier
 
-Run `measure $0 --target <table.column>` to drill into a specific column's evidence: every entropy object with its witness claims plus the `claim_witnesses` provenance (which witness said what, with what reliability).
-
-## Step 4: Check financial accuracy
-
-YOU write the SQL now — the retired `query` tool wrapped an LLM, and that judgment is yours. Use `sql` for these key metrics from ground_truth:
-
-1. "What is total revenue for fiscal year 2025?"
-2. "What is total expenses for fiscal year 2025?"
-3. "What is the ending accounts receivable balance as of December 2025?"
-4. "What is the ending cash balance as of December 2025?"
-5. "Are all journal entries balanced (total debits equal total credits)?"
-
-Mind the trial-balance semantics: the trial balance is PERIODIC, not cumulative — balance-sheet items need the right aggregation over periods, and a column's `temporal_behavior` evidence (stock vs flow) tells you whether SUM is even meaningful. When the entropy evidence flags a column you are querying, factor that into your confidence.
-
-For each: record the question, the SQL you ran, expected value (from ground_truth), actual value, deviation percentage, and the assumptions you applied.
-
-## Step 5: Write findings
-
-Write the results to `output/$0/findings.yaml` with this structure:
+Write `output/$0/findings.yaml`:
 
 ```yaml
 strategy: $0
@@ -103,28 +117,27 @@ quality_state:
   columns_investigate: <N>
   top_issues: [<highest scoring measurement points>]
 
-tool_observations:
-  - <any observations about tool behavior, errors, gaps>
+findings:                      # the point of the whole exercise
+  - id: <slug>
+    kind: miss | over-fire | ungrounded-score | wrong-metric | stale-eval
+    target: <table.column or metric>
+    evidence: <numbers, named statistic, the read that shows it>
+    disposition: DAT-ticket | teach-scenario | ours-to-fix (oracle only)
 ```
 
-## Step 6: Summarize
+## Step 6 — Triage every red before you file
 
-Print a concise summary table showing:
-- Detector recall: X/Y pass
-- Metric accuracy: X/Y within tolerance
-- Readiness: X blocked, Y investigate, Z ready
-- Oracle accounting: X graded, Y skipped (each skip named with its reason)
-- Top issues found
-- Key observations about tool surface gaps (if any)
+Classify each red or suspicious result — the disposition decides where it goes:
 
-## Triage rule
+- **engine bug** — the pipeline persisted something wrong → a `DAT-*` ticket, with a
+  deterministic repro if you can push it to Tier 1/2 (that's `/break-detector`).
+- **stale eval** — the engine's output shape moved and the oracle didn't → **ours to
+  fix** (the oracle is our code), citing the engine change. Not a ticket to them.
+- **LLM variance** — within the measured band / xfail(strict=False) territory →
+  record, don't file, don't patch.
+- **testdata drift** — generator and committed truth disagree → regenerate via
+  `/evolve-testdata`, don't hand-edit.
 
-Classify every red or suspicious result before proposing anything:
-- **engine bug** — the pipeline persisted something wrong → file a DAT-* ticket
-- **stale eval** — the engine's output shape moved and the oracle didn't → fix the oracle, citing the engine change
-- **LLM variance** — within the measured band / xfail(strict=False) territory → record, don't patch
-- **testdata drift** — generator and committed truth disagree → regenerate, don't hand-edit
-
-A red oracle is a bug ticket or a teach scenario, never a relaxed assertion.
-When triage is ambiguous, read the prompt/response artifacts — that is where
-DAT-829/830/834 were actually found, not in assertion output.
+A red oracle is a filed finding, never a relaxed assertion. When triage is
+ambiguous, **read the prompt/response artifacts** — DAT-829/830/834 were found there,
+not in assertion output. And never patch the engine to make the red go green — file it.

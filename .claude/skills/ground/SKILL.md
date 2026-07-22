@@ -1,14 +1,23 @@
 ---
 name: ground
-description: The ground-first kill gate as a procedure — name an established statistic, probe separation on fixtures in milliseconds, verdict BUILD or CUT. Run BEFORE building any new measurement, detector, or scoring change.
+description: The ground-first kill gate as a procedure — name an established statistic, probe separation on fixtures in milliseconds, verdict BUILDABLE (file it) or CUT (file "don't build this"). Run BEFORE the engine builds any new measurement, or before forging a new attack.
 ---
 
 # Ground: $ARGUMENTS
 
-You are evaluating a measurement hypothesis. The default outcome is **CUT**.
-Survival requires a named established statistic separating the injected family
-from natural variation by a margin, in a millisecond probe — before any engine
-code, any pipeline run, any LLM call.
+You are evaluating a measurement hypothesis in 2 ms, before anyone spends a sprint.
+The default outcome is **CUT**. Survival requires a named established statistic
+separating the injected family from natural variation by a margin, in a millisecond
+probe — before any engine code, any pipeline run, any LLM call.
+
+This is the cheapest, highest-leverage thing the test team does, and it cuts two
+ways — neither is a build order, because this repo never builds the engine:
+
+- **The engine wants to build measurement X?** Probe it here first. If its named
+  statistic can't separate signal from noise, that's a **finding filed before the
+  sprint is wasted** — "don't build this, here's the math."
+- **You want a new attack?** Same gate — an injection family that doesn't reproduce
+  a break deterministically is not an attack.
 
 ## Step 0 — Name the statistic, or stop
 
@@ -58,17 +67,19 @@ margins — a clean comparison, not sequential tweaking until one fires.
 Run it: `uv run python scripts/probes/<slug>/probe_<lens>.py`. Milliseconds, no
 docker, no pipeline, no LLM.
 
-## Step 3 — Verdict
+## Step 3 — Verdict, filed as a finding either way
 
-- **Separation by a margin** → **BUILD.** Write the full contract entry in the
-  catalog, then Tier-1 synthetic tests + Tier-2 recorded tests in
-  `calibration/unit/` *before* the engine implementation (via `/tune-detector`
-  or engine work under its own CLAUDE.md rules).
-- **Overlap, or margin only under unrealistic parameters** → **CUT.** One
-  grounded attempt is the budget. Record the result in the
-  `entropy_eval_architecture.md` catalog (statistic tried, numbers, why it
-  fails — like the existing CUT rows), then delete the probe directory. The
-  recorded *why* is the deliverable; the scripts are not.
+- **Separation by a margin → BUILDABLE.** The statistic can work. Write the contract
+  entry in the `entropy_eval_architecture.md` catalog and file it to the engine team
+  as a finding — "this measurement is grounded, here's the probe and the margin,
+  build it." If it's *our* new attack, this is the green light to `/evolve-testdata`
+  the injection family + the Tier-1/2 oracles. Either way, the engine implementation
+  is the engine team's job, not this repo's.
+- **Overlap, or margin only under unrealistic parameters → CUT.** One grounded
+  attempt is the budget. Record the result in the catalog (statistic tried, numbers,
+  why it fails — like the existing CUT rows) as a filed "don't build this," then
+  delete the probe directory. The recorded *why* is the deliverable; the scripts are
+  not.
 
 ## Banned in this skill
 

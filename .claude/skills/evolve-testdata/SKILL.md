@@ -5,10 +5,13 @@ description: Add or change an injection family, fixture, or ground-truth values 
 
 # Evolve testdata: $ARGUMENTS
 
-You are changing what the harness can prove. Test data changes need their own
-rationale — never "so the detector passes." The deliverable is a *family*: a
-clean counterpart, an injected variant with known parameters, an
-`entropy_map.yaml` entry, and an assertion at the right tier.
+You are forging a new attack — the one thing the test team builds. `vendor/dataraum-testdata`
+is ours; sharpening it is the job, not a contradiction of the never-fix rule (that
+rule is about the *engine*). Test data changes need their own rationale — **never "so
+the detector passes"** (that's Goodharting our own instrument). The deliverable is a
+*family*: a clean counterpart, an injected variant with known parameters, an
+`entropy_map.yaml` entry, and an assertion at the right tier — a deterministic attack
+that reproduces a break on demand.
 
 ## Step 1 — Read what exists
 

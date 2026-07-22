@@ -1,8 +1,13 @@
 # Entropy Eval — Architecture & Method
 
-> **Status:** reset (2026-06-08). This supersedes the implicit "run the calibration
-> suite until it's green" workflow. It is the definition of what eval *is* and how
-> we develop entropy measurements.
+> **Status:** reset (2026-06-08); re-charted as the test team's law (2026-07-22).
+> This supersedes the implicit "run the calibration suite until it's green"
+> workflow. It is the definition of what eval *is* and the **contract we hold the
+> engine to** — the grounded statistic every measurement must compute, and the
+> reason every CUT was cut. It is a spec we grade and file against, **not a
+> to-build list**: this repo never builds or fixes engine measurements (see the
+> charter in `CLAUDE.md`). A "BUILD" verdict below is a finding handed to the
+> engine team; a "CUT" is a finding that says *don't build this*.
 
 ## Why this document exists
 
@@ -238,9 +243,12 @@ never a relaxed oracle.**
 
 ## Measurement catalog
 
-The grounded statistic per measurement, and the honest "earns its place" call. The
-**conditional / cut** rows are where the reset pays off — purpose-first kills or
-reframes measurements that only ever produced noise.
+The grounded statistic per measurement, and the honest "earns its place" call —
+**the contract we hold the engine to.** Each row is what we grade the engine against
+and, when the engine diverges from it, what we file. The **conditional / cut** rows
+are where the reset pays off — purpose-first kills we hand the engine team as
+"don't build / stop tuning this," each with the probe that proves it produced only
+noise.
 
 | Measurement | Purpose / context it serves | Earns it? | Grounded statistic | Fix / teach |
 |---|---|---|---|---|
@@ -270,8 +278,8 @@ reframes measurements that only ever produced noise.
 
 1. **Capture the recorded fixture** (`scripts/capture_fixture.py` → `calibration/fixtures/entropy_inputs.sqlite`). One live run; docker once.
 2. **Build the Tier-1/2 harness** — fixture loaders + assertion helpers (ordering, calibration, teach-closure) that need no docker.
-3. **Per-measurement, purpose-first:** write the contract entry, then the Tier-1 unit (synthetic) + Tier-2 (recorded) tests, then the statistic. Cut / reframe the **conditional** rows honestly.
-4. **Tier 3** becomes the milestone gate: the existing calibration suite, run when Tier 1/2 are green — proving wiring, not math.
+3. **Per-measurement, purpose-first:** write the contract entry, then the Tier-1 unit (synthetic) + Tier-2 (recorded) **oracles** — those are ours. The statistic's *implementation* is the engine team's; we file the contract + the grounded probe and grade what they build against it. Cut / reframe the **conditional** rows honestly and file the cut.
+4. **Tier 3** becomes the budgeted gate: the existing calibration suite, run when Tier 1/2 are green — proving wiring, not math, and only against a named hypothesis (the token-budget rule in `CLAUDE.md`).
 
 ## How to run
 
