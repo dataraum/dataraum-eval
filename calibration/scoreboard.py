@@ -44,6 +44,7 @@ import argparse
 import json
 import statistics
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any
 
 # Fire = a MEASURED row with a strictly positive entropy score. 0.0 means "no
@@ -234,6 +235,33 @@ def _load_rows(strategy: str) -> list[Any]:
         return _head_resolved_entropy_rows(session)
 
 
+def load_scoreboard(strategy: str) -> Scoreboard:
+    """Read a completed run and build its scoreboard — the CLI + runner entry point.
+
+    Reads the same head-resolved rows the oracles read, against the recall lane's own
+    slice set and the engine's abstained-status constant, so the frontier grade and the
+    backbone grade never diverge on what a detector produced.
+    """
+    from dataraum.entropy.models import STATUS_ABSTAINED
+
+    from calibration.test_detector_recall import CURRENT_SLICE_DETECTORS
+
+    rows = _load_rows(strategy)
+    return build_scoreboard(
+        rows, CURRENT_SLICE_DETECTORS, strategy=strategy, abstained_status=STATUS_ABSTAINED
+    )
+
+
+def write_scoreboard(board: Scoreboard) -> Path:
+    """Persist the scoreboard as the run's dossier artifact."""
+    from calibration import runner
+
+    out = runner.OUTPUT_DIR / board.strategy / "fire_scoreboard.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(board.to_dict(), indent=2, sort_keys=False))
+    return out
+
+
 def _is_wild(strategy: str) -> bool | None:
     from calibration import runner
 
@@ -260,21 +288,13 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    from dataraum.entropy.models import STATUS_ABSTAINED
-
     from calibration import runner
-    from calibration.test_detector_recall import CURRENT_SLICE_DETECTORS
 
-    rows = _load_rows(args.strategy)
-    board = build_scoreboard(
-        rows, CURRENT_SLICE_DETECTORS, strategy=args.strategy, abstained_status=STATUS_ABSTAINED
-    )
+    board = load_scoreboard(args.strategy)
     print(render(board, is_wild=_is_wild(args.strategy)))
 
     if not args.no_write:
-        out = runner.OUTPUT_DIR / args.strategy / "fire_scoreboard.json"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(board.to_dict(), indent=2, sort_keys=False))
+        out = write_scoreboard(board)
         print(f"\n  → {out.relative_to(runner.EVAL_ROOT)}")
 
 

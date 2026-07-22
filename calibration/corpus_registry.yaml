@@ -1,0 +1,26 @@
+# The tracked (corpus → vertical) pairings — the CAP-vertical-dataset-match seam
+# (docs/generator_backlog.yaml). One place records which wild corpus wears which
+# vertical, from which source, at which tier — instead of the pairing being a
+# constant baked into a code path (it used to live only in
+# scripts/frame_wild_vertical.py: VERTICALS = {"rel-f1": ...}).
+#
+# This lives under calibration/ (TRACKED config), NOT under corpora/ (which is
+# gitignored wholesale — NC-licensed wild DATA is fetched, never committed). The
+# registry is metadata about the corpora, not the corpora themselves.
+#
+# A vertical is PRODUCT CONFIGURATION, not ground truth (frame_wild_vertical's
+# docstring): the concept vocabulary a customer onboarding this data would declare.
+# This file records the PAIRING so it is deliberate and gradeable; the concept
+# CONTENT still lives in scripts/frame_wild_vertical.py until frame induction
+# (DAT-738) can induce it from the dataset — at which point the induced vertical is
+# graded against the pairing declared here.
+#
+# `vertical` defaults to the corpus name when omitted (today they coincide: the frame
+# helper writes concepts under vertical == corpus name). When an induced vertical gets
+# its own id, declare it here.
+
+corpora:
+  rel-f1:
+    source: relbench      # corpora/relbench/rel-f1 — staged by scripts/stage_wild_corpus.py
+    vertical: rel-f1      # concept content: scripts/frame_wild_vertical.py (MOTORSPORT)
+    tier: wild

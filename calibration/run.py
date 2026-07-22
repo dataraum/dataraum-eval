@@ -14,11 +14,17 @@ rules this runner enforces, learned the expensive way:
   stops leaked workers from piling up and destabilising Temporal.
 
     uv run python -m calibration.run -s detection-v1,clean      # run these, then assert
-    uv run python -m calibration.run --all                      # every strategy
+    uv run python -m calibration.run --all                      # every synthetic strategy
+    uv run python -m calibration.run -s rel-f1                  # a WILD corpus: stage→frame→run→scoreboard
     uv run python -m calibration.run -s detection-v1 --no-assert
     uv run python -m calibration.run --build                    # also (re)build clean bands
     uv run python -m calibration.run --reset                    # the ONLY `down -v`; then exit
-    uv run python -m calibration.run --list                     # show strategies
+    uv run python -m calibration.run --list                     # show strategies + wild corpora
+
+A target is a synthetic strategy (``strategies/<name>.yaml`` — recall assertable) OR a
+wild corpus (registered in ``calibration/corpus_registry.yaml`` / staged / stageable). The wild
+lane skips generate, frames the corpus's vertical, runs the pipeline, and grades with
+the fire-rate scoreboard (recall stands down — a wild corpus has no injected truth).
 
 Multi-seed sweeps of one strategy (distinct workspace per seed, for clean bands) stay in
 ``scripts/sweep_clean_seeds.py`` — that isolation is a different concern from "run these
@@ -34,13 +40,55 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any
 
-from calibration import runner, stack
+from calibration import corpora, runner, stack
 
 WORKER_PROC = "dataraum.worker.main"
 
 
 def _discover_strategies() -> list[str]:
     return sorted(p.stem for p in runner.STRATEGIES_DIR.glob("*.yaml"))
+
+
+def _staged_wild(name: str) -> bool:
+    """A wild corpus already staged into ``data/<name>/`` (tier: wild truth present)."""
+    import yaml
+
+    truth = runner.DATA_DIR / name / "metadata_truth.yaml"
+    if not truth.exists():
+        return False
+    try:
+        return str((yaml.safe_load(truth.read_text()) or {}).get("tier") or "").lower() == "wild"
+    except (OSError, ValueError):
+        return False
+
+
+def _stageable_wild(name: str) -> bool:
+    """A wild corpus fetched under ``corpora/relbench/<name>/`` but not yet staged."""
+    return (runner.EVAL_ROOT / "corpora" / "relbench" / name / "schema.json").exists()
+
+
+def _is_wild_target(name: str) -> bool:
+    """Route ``name`` to the wild lane? A finance strategy always wins the name.
+
+    Wild = registered in ``calibration/corpus_registry.yaml``, already staged with ``tier: wild``,
+    or fetched-and-stageable under ``corpora/``. The synthetic backbone is never wild.
+    """
+    if name in set(_discover_strategies()):
+        return False
+    return corpora.get(name) is not None or _staged_wild(name) or _stageable_wild(name)
+
+
+def _llm_call_count(name: str) -> int | None:
+    """Cost proxy: the run's dumped prompt+response artifacts (one file per LLM call).
+
+    The provider chokepoint dumps every rendered prompt + raw response under
+    ``output/<name>/prompts/`` (runner.activate_workspace sets PROMPT_DUMP_DIR). Counting
+    them is the honest "what did this run cost in LLM calls" line — a run that spends
+    tokens is accountable for how many. ``None`` when nothing was dumped."""
+    prompts = runner.OUTPUT_DIR / name / "prompts"
+    if not prompts.is_dir():
+        return None
+    return sum(1 for _ in prompts.rglob("*") if _.is_file())
 
 
 def _kill_orphan_workers() -> None:
@@ -55,8 +103,12 @@ class Outcome:
     ran: bool = False
     asserted: bool | None = None  # None = skipped, True = green, False = failed
     error: str = ""
+    tier: str = "synthetic"  # synthetic (recall assertable) | wild (scoreboard only)
     # oracle_coverage.json, written by conftest.pytest_terminal_summary
     coverage: dict[str, Any] = field(default_factory=dict)
+    # the wild fire-rate scoreboard's findings (mute/never-fired/saturated), if produced
+    scoreboard: dict[str, Any] = field(default_factory=dict)
+    llm_calls: int | None = None  # dumped prompt+response artifacts — the cost proxy
 
 
 def _read_coverage(strategy: str) -> dict[str, Any]:
@@ -92,7 +144,12 @@ class Summary:
                 )
                 if cov.get("xpassed"):
                     graded_s += f" XPASS={cov['xpassed']}"
-            print(f"  {o.strategy:<34} {run_s:<22} assert={assert_s}{graded_s}")
+            # Cost line: tier + LLM-call count, so every run is accountable for its spend.
+            cost_s = f"  [{o.tier}"
+            if o.llm_calls is not None:
+                cost_s += f", {o.llm_calls} llm-calls"
+            cost_s += "]"
+            print(f"  {o.strategy:<34} {run_s:<22} assert={assert_s}{cost_s}{graded_s}")
 
         # Skips are how a run goes green without checking anything — name the ORACLES
         # (nodeids), not just reason tallies, so a silently-dropped one is visible.
@@ -153,6 +210,26 @@ class Summary:
                 "re-bless: python -m calibration.run -s <strat> --bless-coverage"
             )
 
+        # Wild scoreboard findings — on a wild corpus recall stands down, so the
+        # fire-rate flags ARE the grade. A miserable result is a finding to file
+        # (charter), never an auto engine-blame. The full board printed inline above.
+        for o in self.outcomes:
+            sb = o.scoreboard
+            if not sb:
+                continue
+            flags = []
+            if sb.get("mute"):
+                flags.append(f"MUTE: {', '.join(sb['mute'])}")
+            if sb.get("never_fired"):
+                flags.append(f"NEVER-FIRED: {', '.join(sb['never_fired'])}")
+            if sb.get("saturated"):
+                flags.append(f"SATURATED: {', '.join(sb['saturated'])}")
+            head = f"\n  {o.strategy} — wild scoreboard: "
+            print(head + ("; ".join(flags) if flags else "no flags (read the distribution)"))
+            if flags:
+                print("    → triage each: a confirmed miss/over-fire is a filed Finding, "
+                      "not an engine patch (calibration/findings.py)")
+
         print(f"\n  → {'ALL GREEN' if self.ok() else 'FAILURES ABOVE'}")
 
 
@@ -176,7 +253,106 @@ def _run_one(strategy: str, *, seed: int, fresh: bool, do_assert: bool) -> Outco
         )
         out.asserted = res.returncode == 0
         out.coverage = _read_coverage(strategy)
+    out.llm_calls = _llm_call_count(strategy)
     return out
+
+
+def _ensure_wild_staged(name: str) -> None:
+    """Stage the corpus into ``data/<name>/`` if it isn't already (fetch stays manual)."""
+    if _staged_wild(name):
+        return
+    if not _stageable_wild(name):
+        raise FileNotFoundError(
+            f"{name} is not staged (no data/{name}/metadata_truth.yaml) and not stageable "
+            f"(no corpora/relbench/{name}/). Fetch it, then: "
+            f"uv run python scripts/stage_wild_corpus.py {name}"
+        )
+    subprocess.run(
+        ["uv", "run", "python", "scripts/stage_wild_corpus.py", name],
+        cwd=runner.EVAL_ROOT, check=True,
+    )
+
+
+def _frame_wild(name: str) -> None:
+    """Write the corpus's vertical (concept vocabulary) into its workspace before the run.
+
+    A corpus in a domain the engine hasn't been framed for cannot reach the pipeline at
+    all (semantic_per_column fails on ``_adhoc``); this is eval's stand-in for the cockpit
+    frame stage. Runs as a subprocess so it activates its own workspace cleanly; the
+    concepts persist in Postgres for the in-process pipeline to read.
+    """
+    res = subprocess.run(
+        ["uv", "run", "python", "scripts/frame_wild_vertical.py", name],
+        cwd=runner.EVAL_ROOT,
+    )
+    if res.returncode != 0:
+        raise RuntimeError(
+            f"framing {name} failed — likely no vertical declared for it "
+            f"(scripts/frame_wild_vertical.py VERTICALS). A wild corpus with no frame "
+            f"cannot reach the pipeline; declare its concepts or file the gap."
+        )
+
+
+def _emit_scoreboard(name: str, out: Outcome) -> None:
+    """Build + print + persist the wild fire-rate scoreboard — the frontier grade.
+
+    Always runs for a wild corpus, even with ``--no-assert``: on wild data recall is
+    unassertable, so the scoreboard IS the grade (a detector that found nothing is only
+    visible here). Best-effort — a scoreboard failure never sinks the run.
+    """
+    from calibration import scoreboard
+
+    try:
+        board = scoreboard.load_scoreboard(name)
+    except Exception as exc:  # noqa: BLE001 — the scoreboard is a report, not a gate
+        print(f"[scoreboard] {name}: could not build — {exc}", file=sys.stderr)
+        return
+    print("\n" + scoreboard.render(board, is_wild=True))
+    print(f"\n  → {scoreboard.write_scoreboard(board).relative_to(runner.EVAL_ROOT)}")
+    out.scoreboard = {
+        "mute": board.mute,
+        "never_fired": board.never_fired,
+        "saturated": board.saturated,
+    }
+
+
+def _run_one_wild(name: str, *, do_assert: bool) -> Outcome:
+    """Stage → frame → run the pipeline → grade (wild-aware oracles) → scoreboard.
+
+    The frontier lane: no generate (the data is real), the vertical is framed not
+    injected, recall is unassertable (wild oracles stand down), and the fire-rate
+    scoreboard is the grade.
+    """
+    out = Outcome(strategy=name, tier="wild")
+    try:
+        _ensure_wild_staged(name)
+        _frame_wild(name)
+        spec = corpora.get(name)
+        vertical = spec.vertical if spec else name  # defaults to the corpus name
+        runner.run_pipeline(name, vertical=vertical)
+        out.ran = True
+    except Exception as exc:  # noqa: BLE001 — report, keep going to the next target
+        out.error = f"{type(exc).__name__}: {exc}"
+        print(f"[run] {name} (wild): FAILED — {out.error}", file=sys.stderr)
+        return out
+
+    if do_assert:
+        res = subprocess.run(
+            ["uv", "run", "pytest", "calibration/", "--strategy", name, "-q"],
+            cwd=runner.EVAL_ROOT,
+        )
+        out.asserted = res.returncode == 0
+        out.coverage = _read_coverage(name)
+    _emit_scoreboard(name, out)
+    out.llm_calls = _llm_call_count(name)
+    return out
+
+
+def _dispatch(strategy: str, *, seed: int, fresh: bool, do_assert: bool) -> Outcome:
+    """Route a target to the wild lane or the synthetic lane."""
+    if _is_wild_target(strategy):
+        return _run_one_wild(strategy, do_assert=do_assert)
+    return _run_one(strategy, seed=seed, fresh=fresh, do_assert=do_assert)
 
 
 def run(strategies: list[str], *, seed: int,
@@ -187,7 +363,7 @@ def run(strategies: list[str], *, seed: int,
     try:
         for strategy in strategies:
             summary.outcomes.append(
-                _run_one(strategy, seed=seed, fresh=fresh, do_assert=do_assert)
+                _dispatch(strategy, seed=seed, fresh=fresh, do_assert=do_assert)
             )
         if do_build:
             _build_artifacts()
@@ -210,7 +386,9 @@ def main() -> None:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("-s", "--strategies", help="comma-separated strategy names")
-    parser.add_argument("--all", action="store_true", help="run every strategy in strategies/")
+    parser.add_argument("--all", action="store_true",
+                        help="run every synthetic strategy in strategies/ (wild corpora are "
+                             "opt-in by name — they cost LLM tokens; see --list)")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--fresh", action="store_true", help="regenerate data even if it exists")
     parser.add_argument("--no-assert", action="store_true", help="skip the pytest assertions")
@@ -226,7 +404,14 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.list:
-        print("\n".join(_discover_strategies()))
+        print("synthetic strategies (recall assertable):")
+        print("\n".join(f"  {s}" for s in _discover_strategies()))
+        wild = corpora.wild_corpora()
+        if wild:
+            print("\nwild corpora (scoreboard only, costs LLM tokens — opt in by name):")
+            for name, spec in sorted(wild.items()):
+                staged = "staged" if _staged_wild(name) else "stageable"
+                print(f"  {name}  [{spec.source} → vertical {spec.vertical}, {staged}]")
         return
     if args.reset:
         print("[reset] tearing down the eval stack + volume (down -v)")
@@ -248,10 +433,11 @@ def main() -> None:
         parser.error("pass -s <names>, --all, or --list")
 
     known = set(_discover_strategies())
-    unknown = [s for s in strategies if s not in known]
+    unknown = [s for s in strategies if s not in known and not _is_wild_target(s)]
     if unknown:
-        parser.error(f"unknown strateg"
-                     f"{'ies' if len(unknown) > 1 else 'y'}: {', '.join(unknown)}")
+        parser.error(f"unknown target"
+                     f"{'s' if len(unknown) > 1 else ''}: {', '.join(unknown)} "
+                     f"(not a strategy in strategies/, nor a wild corpus — see --list)")
 
     if args.bless_coverage:
         from calibration import coverage
