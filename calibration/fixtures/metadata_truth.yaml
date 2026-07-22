@@ -325,6 +325,38 @@ cycles:
   - trial_balance
   - balance_sheet
   required: false
+measured_in:
+- measure: balance_sheet.ending_balance
+  unit_column: null
+  cross_unit: false
+- measure: bank_transactions.amount
+  unit_column: bank_transactions.currency
+  cross_unit: false
+- measure: fx_rates.rate
+  unit_column: null
+  cross_unit: false
+  dimensionless: true
+- measure: invoices.amount
+  unit_column: invoices.currency
+  cross_unit: false
+- measure: journal_lines.credit
+  unit_column: journal_lines.currency
+  cross_unit: false
+- measure: journal_lines.debit
+  unit_column: journal_lines.currency
+  cross_unit: false
+- measure: journal_lines.net_amount
+  unit_column: journal_lines.currency
+  cross_unit: false
+- measure: payments.amount
+  unit_column: payments.currency
+  cross_unit: false
+- measure: trial_balance.credit_balance
+  unit_column: null
+  cross_unit: false
+- measure: trial_balance.debit_balance
+  unit_column: null
+  cross_unit: false
 folded_dimensions: []
 degenerate_ids: []
 bus_matrix:

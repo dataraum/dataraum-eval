@@ -184,8 +184,13 @@ items:
   - id: CAP-measured-in-truth
     kind: capability
     title: metadata_truth emits measured_in + cross_unit sections (unit-edge grading)
-    status: queued
-    blocked_on: [DAT-725]            # og_measured_in lands with the epic merge (DAT-731)
+    status: graduated                # testdata e6f5fe6 (2026-07-22): truth section +
+                                     # data-derived cross_unit + declared mix_units
+                                     # variant landed. Remaining (with O2 post-pin):
+                                     # the mixed-currency variant STRATEGY — deferred
+                                     # so its detector_id can name the real drill-gate
+                                     # id, not a misleading unit_entropy placeholder.
+    blocked_on: [DAT-725]            # only the O2 oracle consumer still waits (DAT-731)
     vertical: finance
     dataset: "*"
     summary: >
