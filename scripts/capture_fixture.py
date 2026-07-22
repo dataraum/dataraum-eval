@@ -55,7 +55,23 @@ PG_TABLES = [
 # Strategies whose generated source CSVs carry the raw per-period values.
 # detection-null-v1 carries the inject_null_tokens columns (journal_lines.debit,
 # bank_transactions.amount) — the raw sentinel values behind the pooled witnesses.
-STRATEGIES = ["clean", "detection-v1", "detection-null-v1", "detection-typing-v1"]
+# detection-stockflow-events-v1 carries the temporal_behavior structural-reconciliation
+# corpus (measure_probes + probe_events).
+STRATEGIES = [
+    "clean",
+    "detection-v1",
+    "detection-null-v1",
+    "detection-typing-v1",
+    "detection-stockflow-events-v1",
+]
+
+# Per-strategy table allow-list: a strategy listed here captures ONLY these tables, not
+# every CSV it generates. detection-stockflow-events-v1 also emits the full finance table
+# set (balance_sheet, journal_lines, …) that the finance strategies already cover — the
+# probe tables are the only thing unique to it, so the fixture skips the redundant bulk.
+STRATEGY_TABLES: dict[str, set[str]] = {
+    "detection-stockflow-events-v1": {"measure_probes", "probe_events"},
+}
 
 
 def _cell(value: Any) -> Any:
@@ -152,6 +168,8 @@ _FK_COLUMNS: dict[str, list[str]] = {
     "payments": ["invoice_id", "payment_id"],  # invoice_id→invoices (orphans); payment_id→bank (xtable)
     "invoices": ["invoice_id"],  # parent of the referential-integrity relationship
     "bank_transactions": ["payment_id"],  # join to payments for the amount-reconciliation net
+    "measure_probes": ["series_id"],  # stock/flow slice key — join to probe_events (temporal_behavior)
+    "probe_events": ["series_id"],  # the shared series dimension the reconciliation groups on
 }
 
 # A column is a NUMERIC measure if at least this fraction of its non-null sampled
@@ -232,7 +250,10 @@ def capture_raw_values(sqlite_conn: sqlite3.Connection) -> None:
         if not data_dir.exists():
             print(f"  !! {data_dir} missing — run the pipeline for '{strat}' first")
             continue
+        only = STRATEGY_TABLES.get(strat)
         for csv_path in sorted(data_dir.glob("*.csv")):
+            if only is not None and csv_path.stem not in only:
+                continue  # this strategy captures only its unique tables (probe corpus)
             with csv_path.open(newline="") as f:
                 rows = list(csv.DictReader(f))
             keep = _keep_columns(rows, csv_path.stem)

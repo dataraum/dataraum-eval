@@ -138,3 +138,36 @@ items:
       MISS. If it fires = fine, silence was uninjected columns (decline). Batch with the
       type_fidelity run above — one Tier-3 pass covers both.
     repro: "PENDING confirm_run — not filable until a temporal-injection run reproduces the miss"
+
+  # --- Phase-4 note (2026-07-22, CORRECTED): temporal_behavior IS deterministic-groundable.
+  #     An earlier draft here claimed it was LLM-only — wrong. Stock/flow is decided by a
+  #     data-grounded STRUCTURAL reconciliation (Philipp: "stock flow is not an llm decision"),
+  #     and that reconciliation is a free arithmetic net like derived_value's. Built + landed.
+  - id: NET-temporal-behavior-structural
+    kind: capability
+    title: temporal_behavior free net — stock reconciliation break rate (landed)
+    status: graduated
+    vertical: finance
+    dataset: detection-stockflow-events-v1
+    detector_id: temporal_behavior
+    graduated_to: calibration/unit/test_temporal_behavior_recorded.py
+    summary: >
+      Stock/flow is NOT an LLM decision: the authority is the data-grounded
+      structural_reconciliation witness (DAT-491). A genuine STOCK's per-period delta
+      (level[t] − level[t−1]) equals the sum of its backing movement events in that
+      (series, period) cell (opening + Σ events = closing); a broken stock does not. That
+      identity is deterministic — a free net like derived_value / cross_table_consistency.
+      The `llm_claim` witness is one vote in the pool; the trajectory-shape classifier was
+      CUT (DAT-459) and the ontology_prior dropped (DAT-657), but the STRUCTURAL identity
+      is what actually decides it, so it grounds cheaply.
+    evidence: >
+      detection-stockflow-events-v1 (measure_probes ⋈ probe_events on series_id, seed
+      20260611): reconciling stocks (opening_reserve, ending_headcount, debt_level,
+      outstanding_inventory) break on 0.0 of non-opening cells (residual exactly 0.00);
+      broken stocks (outstanding_payables, payables_balance, opening_receivables) break on
+      0.60–0.87 (residual 121–196). Separation is the full break_ratio.
+    still_e2e: >
+      The llm_claim witness's recall (does the LLM's stock/flow claim match true_behavior,
+      esp. the ambiguous conflicting-cue stratum where the name lies) is still a Tier-3
+      measurement — grade it in the batched confirming run. But the detector's core signal
+      is now covered free by the structural net above.
