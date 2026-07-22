@@ -124,9 +124,18 @@ LINEAGE: dict[str, list[str]] = {
 
 
 def _gl_base(t: dict[str, str], window: tuple[str, str]) -> str:
-    """Posted journal lines joined to their entry, inside the fiscal window."""
+    """Posted journal lines joined to their entry, inside the fiscal window.
+
+    ``debit``/``credit`` are TRY_CAST to DOUBLE, not read raw: a type-corruption
+    strategy (``corrupt_types`` on journal_lines.debit) leaves VARCHAR garbage in the
+    column, and a raw ``THEN debit ELSE 0`` then mixes VARCHAR with the INTEGER literal
+    and the DuckDB binder throws before this labeler can report. TRY_CAST turns each
+    corrupted cell into NULL (SUM skips it), so the golden SQL runs, the deviation IS
+    the injection, and the caller reports + stands down on injected strategies.
+    """
     return (
-        f"SELECT CAST(jl.account_id AS VARCHAR) AS account_id, jl.debit, jl.credit "
+        f"SELECT CAST(jl.account_id AS VARCHAR) AS account_id, "
+        f"TRY_CAST(jl.debit AS DOUBLE) AS debit, TRY_CAST(jl.credit AS DOUBLE) AS credit "
         f"FROM {t['journal_lines']} jl "
         f"JOIN {t['journal_entries']} je ON jl.entry_id = je.entry_id "
         f"WHERE lower(CAST(je.status AS VARCHAR)) = 'posted' "
