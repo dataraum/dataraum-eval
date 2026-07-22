@@ -142,27 +142,43 @@ def capture_pg(sqlite_conn: sqlite3.Connection) -> None:
 # high-cardinality identifiers do not.
 _MAX_SLICE_CARDINALITY = 25
 
+# FK columns retained for referential-integrity grounding (relationship_entropy).
+# Identifiers are otherwise dropped (high-cardinality, not a per-column measure) —
+# but these specific parent/child keys ARE what relationship_entropy consumes: the
+# grounding net measures the orphan rate (a child key with no matching parent), so
+# the fixture must carry BOTH sides of each graded relationship. Keyed by table
+# stem; kept regardless of type or cardinality (an id is all-distinct by design).
+_FK_COLUMNS: dict[str, list[str]] = {
+    "payments": ["invoice_id"],  # child: FK → invoices.invoice_id (break_referential_integrity)
+    "invoices": ["invoice_id"],  # parent: the referenced key
+}
 
-def _keep_columns(rows: list[dict[str, str]]) -> list[str]:
+
+def _keep_columns(rows: list[dict[str, str]], source: str = "") -> list[str]:
     """Measure + slice-key columns — what the recorded measures consume. Keeps
     numeric measures (outlier_rate / benford / derived_value), date columns (when
-    present), and low-cardinality categorical slice keys (dimensional_entropy /
-    slice-conditional null). Drops identifiers, free text, and high-cardinality
-    strings so the committed fixture stays small.
+    present), low-cardinality categorical slice keys (dimensional_entropy /
+    slice-conditional null), and any declared FK column for ``source``
+    (relationship_entropy's orphan-rate grounding). Drops other identifiers, free
+    text, and high-cardinality strings so the committed fixture stays small.
 
-    Returns [] only when the table has NO numeric measure (a pure dimension table
-    like chart_of_accounts carries nothing the recorded measures use). A date is
-    NO LONGER required (temporal_drift was CUT, DAT-442): a numeric fact table
-    whose date lives in a parent — journal_lines → journal_entries — is now KEPT
-    for its measures + slice keys instead of being skipped for want of a time axis.
+    Returns [] only when the table has NO numeric measure AND no declared FK key (a
+    pure dimension table like chart_of_accounts carries nothing the recorded
+    measures use). A date is NO LONGER required (temporal_drift was CUT, DAT-442): a
+    numeric fact table whose date lives in a parent — journal_lines →
+    journal_entries — is now KEPT for its measures + slice keys instead of being
+    skipped for want of a time axis.
     """
     if not rows:
         return []
+    fk_keep = [c for c in _FK_COLUMNS.get(source, []) if c in rows[0]]
     sample = rows[: min(200, len(rows))]
     dates, numerics, categoricals = [], [], []
     for col in rows[0]:
+        if col in fk_keep:
+            continue  # retained below as a referential key, regardless of type/cardinality
         if col.lower() == "id" or col.lower().endswith("_id"):
-            continue  # identifiers are not measures or slice keys
+            continue  # other identifiers are not measures or slice keys
         values = [r[col] for r in sample if r.get(col)]
         first = values[0] if values else None
         if first is None:
@@ -181,10 +197,10 @@ def _keep_columns(rows: list[dict[str, str]]) -> list[str]:
         distinct = len(set(values))
         if distinct <= _MAX_SLICE_CARDINALITY and distinct < len(values):
             categoricals.append(col)
-    # No numeric measure → nothing the recorded measures consume.
-    if not numerics:
+    # No numeric measure AND no referential key → nothing the recorded measures consume.
+    if not numerics and not fk_keep:
         return []
-    return dates + numerics + categoricals
+    return dates + numerics + categoricals + fk_keep
 
 
 def capture_raw_values(sqlite_conn: sqlite3.Connection) -> None:
@@ -199,7 +215,7 @@ def capture_raw_values(sqlite_conn: sqlite3.Connection) -> None:
         for csv_path in sorted(data_dir.glob("*.csv")):
             with csv_path.open(newline="") as f:
                 rows = list(csv.DictReader(f))
-            keep = _keep_columns(rows)
+            keep = _keep_columns(rows, csv_path.stem)
             if not keep:
                 continue  # no numeric/date column → nothing drift/benford can use
             out = [(strat, csv_path.stem, json.dumps({c: r[c] for c in keep})) for r in rows]
