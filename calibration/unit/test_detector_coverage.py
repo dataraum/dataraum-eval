@@ -21,7 +21,9 @@ import pytest
 import yaml
 from dataraum.entropy.detectors import get_default_registry
 
-_COVERAGE = Path(__file__).parent / "detector_coverage.yaml"
+# The scorecard lives at calibration/detector_coverage.yaml; this test now sits one
+# level down in calibration/unit/ (the always-on deterministic lane), so reach up.
+_COVERAGE = Path(__file__).parent.parent / "detector_coverage.yaml"
 
 _DISPOSITIONS = {"pool", "scalar", "informative", "candidate"}
 _RECALL_PRECISION = {"proven", "baseline", "out_of_slice", "unverified", "n/a"}

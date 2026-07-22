@@ -56,6 +56,16 @@ def test_fact_dimension_roles(metadata_truth: dict[str, Any]) -> None:
     dims = set(roles.get("dimensions") or [])
     ambiguous = set(roles.get("ambiguous") or [])
 
+    # Without this stand-down the test is a vacuous PASS on any corpus that declares
+    # no table roles: empty facts/dims -> the loops below iterate nothing -> assert
+    # not wrong is trivially true. Tier-B (wild) declares structural truth only (no
+    # fact/dimension roles), so it must skip explicitly like its measure/timestamp
+    # siblings; a non-wild corpus with no role truth is a real failure, not green.
+    if not facts and not dims:
+        if is_wild(metadata_truth):
+            pytest.skip("Tier-B corpus declares no table roles — structural truth only")
+        pytest.fail("no table-role ground truth declared (facts/dimensions both empty)")
+
     print("\n[table roles] detected classification (entity_type reported):")
     for tbl in sorted(entities):
         e = entities[tbl]
