@@ -73,14 +73,23 @@ def build_from_docs(docs: list[dict[str, Any]]) -> tuple[dict[str, Any], list[st
     degenerate: list[str] = []
     for grain in _GRAINS:
         keys = sorted({k for d in docs for k in d.get(grain, {})})
+        # Per-detector census across ALL its keys × seeds, for the degeneracy
+        # lint below. Degeneracy is a property of the DETECTOR (is it reading the
+        # data at all?), not of a single key: a detector that varies across keys
+        # is alive, and a lone key that is constant across seeds is a
+        # SEED-INVARIANT input (a fixed dimension's null_ratio, a fixed date
+        # grid's temporal_behavior), not a wiring bug. Keying the flag per-key
+        # false-flagged exactly those (DAT-853 validation, 2026-07-22).
+        detector_vals: dict[str, set[float]] = {}
+        detector_keys: dict[str, list[str]] = {}
+        detector_obs: dict[str, int] = {}
         for key in keys:
             values = [d[grain][key] for d in docs if key in d.get(grain, {})]
             # Floor gates RECORDING only — a key at or below it never enters the
-            # bands artifact. It must NOT gate the degeneracy check below: a
-            # detector wired to emit a constant at/under the floor (e.g.
-            # join_path_determinism's 0.100 on every relationship of every
-            # corpus) is exactly the wiring bug this lint exists to catch, and
-            # skipping the check here defeated its purpose.
+            # bands artifact, but its values still feed the degeneracy census: a
+            # detector stuck at/under the floor (join_path_determinism's 0.100 on
+            # every relationship) is exactly the wiring bug this lint exists to
+            # catch, and skipping it below defeated the purpose.
             if max(values) > _FLOOR:
                 bands[grain][key] = {
                     "min": round(min(values), 4),
@@ -88,21 +97,28 @@ def build_from_docs(docs: list[dict[str, Any]]) -> tuple[dict[str, Any], list[st
                     "seen": len(values),
                 }
             detector = key.rsplit(":", 1)[-1]
+            detector_vals.setdefault(detector, set()).update(values)
+            detector_keys.setdefault(detector, []).append(key)
+            detector_obs[detector] = detector_obs.get(detector, 0) + len(values)
+        # Degenerate = a detector STUCK at a single NONZERO value across ALL its
+        # keys and seeds — it is not reading the data (join_path_determinism's
+        # 0.1 everywhere, temporal_behavior's 0.5127, the unit_entropy 1.0
+        # false-block). NOT flagged, each learned the expensive way: a detector
+        # that varies across keys (alive), a constant 0.0 (the correct clean
+        # baseline — a detector that read the data and found no entropy, never a
+        # wiring bug), a single observation (cannot witness), a discrete-by-design
+        # detector.
+        for detector, vals in sorted(detector_vals.items()):
             if (
-                len(values) >= 2
-                and min(values) == max(values)
-                # A CORRECT continuous detector reads exactly 0.0 on clean (no
-                # entropy to find) — that is the ideal, not a wiring bug, so a
-                # constant 0.0 is NOT degenerate. The smell this lint exists to
-                # catch is a constant NONZERO fallback (join_path_determinism's
-                # 0.1 on every relationship, temporal_behavior's 0.5127, the
-                # unit_entropy 1.0 false-block) — a detector "not reading the
-                # data" invents a spurious signal, it does not invent a zero.
-                and max(values) > 0.0
+                detector_obs[detector] >= 2
+                and len(vals) == 1
+                and next(iter(vals)) > 0.0
                 and detector not in _DISCRETE_BY_DESIGN
             ):
+                keys_str = ", ".join(sorted(detector_keys[detector]))
                 degenerate.append(
-                    f"[{grain}] {key}: constant {values[0]} across {len(values)} seeds"
+                    f"[{grain}] {detector}: constant {next(iter(vals))} across all "
+                    f"keys/seeds ({keys_str})"
                 )
 
     doc = {

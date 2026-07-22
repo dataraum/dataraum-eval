@@ -4,7 +4,7 @@ provenance:
   - 46
   - 47
   - 48
-  date: '2026-07-21'
+  date: '2026-07-22'
   notes: "Observed [min, max] per key across seeds; 'seen' < len(seeds) means the\
     \ key was not emitted on every run (LLM annotation coverage varies \u2014 normal,\
     \ not a regression). Wide bands document real run-to-run variance at sweep time;\
@@ -12,11 +12,7 @@ provenance:
     \ never by hand-editing."
 bands:
   column:
-    bank_transactions.account_id:business_meaning:
-      min: 0.1
-      max: 0.15
-      seen: 3
-    bank_transactions.amount:business_meaning:
+    balance_sheet.ending_balance:business_meaning:
       min: 0.1
       max: 0.15
       seen: 3
@@ -37,18 +33,34 @@ bands:
       max: 0.9712
       seen: 3
     bank_transactions.reference:business_meaning:
-      min: 0.2
-      max: 0.25
+      min: 0.15
+      max: 0.3
+      seen: 3
+    chart_of_accounts.opened_date:business_meaning:
+      min: 0.1
+      max: 0.15
       seen: 3
     chart_of_accounts.parent_id:business_meaning:
       min: 0.15
-      max: 0.2
+      max: 0.15
+      seen: 3
+    fx_rates.date:business_meaning:
+      min: 0.1
+      max: 0.15
+      seen: 3
+    fx_rates.from_ccy:business_meaning:
+      min: 0.1
+      max: 0.15
       seen: 3
     fx_rates.rate:business_meaning:
       min: 0.1
       max: 0.15
       seen: 3
     fx_rates.source:business_meaning:
+      min: 0.1
+      max: 0.15
+      seen: 3
+    fx_rates.to_ccy:business_meaning:
       min: 0.1
       max: 0.15
       seen: 3
@@ -64,12 +76,16 @@ bands:
       min: 0.1
       max: 0.15
       seen: 3
+    invoices.vendor_id:business_meaning:
+      min: 0.1
+      max: 0.15
+      seen: 3
     journal_entries.created_by:business_meaning:
       min: 0.1
       max: 0.15
       seen: 3
     journal_entries.description:business_meaning:
-      min: 0.1
+      min: 0.15
       max: 0.15
       seen: 3
     journal_entries.status:business_meaning:
@@ -84,11 +100,19 @@ bands:
       min: 0.5164
       max: 0.5171
       seen: 3
+    journal_lines.entry_id:business_meaning:
+      min: 0.1
+      max: 0.15
+      seen: 3
     journal_lines.net_amount:business_meaning:
       min: 0.15
-      max: 0.25
+      max: 0.2
       seen: 3
     payments.amount:business_meaning:
+      min: 0.1
+      max: 0.15
+      seen: 3
+    payments.invoice_id:business_meaning:
       min: 0.1
       max: 0.15
       seen: 3
@@ -96,13 +120,21 @@ bands:
       min: 0.199
       max: 0.2573
       seen: 3
+    trial_balance.credit_balance:business_meaning:
+      min: 0.1
+      max: 0.15
+      seen: 3
     trial_balance.debit_balance:benford:
       min: 0.2315
       max: 0.3005
       seen: 3
+    trial_balance.debit_balance:business_meaning:
+      min: 0.1
+      max: 0.15
+      seen: 3
   table:
     bank_transactions:dimension_coverage:
-      min: 0.1712
-      max: 0.2552
+      min: 0.2552
+      max: 0.2583
       seen: 3
   relationship: {}

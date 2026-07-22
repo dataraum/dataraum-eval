@@ -112,3 +112,31 @@ def test_constant_zero_is_the_clean_baseline_not_flagged() -> None:
     doc, degenerate = build_from_docs(docs)
     assert doc["bands"]["column"] == {}
     assert degenerate == []
+
+
+def test_seed_invariant_key_on_a_live_detector_not_flagged() -> None:
+    # Degeneracy is a property of the DETECTOR, not a single key. null_ratio here
+    # VARIES across keys (0.5 on one column, a constant 0.0833 on a fixed-dimension
+    # column) — it is reading the data. The lone constant key is a seed-invariant
+    # INPUT (a fixed dimension's null rate), not a wiring bug, so it must NOT be
+    # flagged. A per-key lint false-flagged exactly this (DAT-853 validation).
+    docs = [
+        _doc(s, {"fact.col:null_ratio": 0.5, "dim.parent_id:null_ratio": 0.0833})
+        for s in (46, 47, 48)
+    ]
+    _, degenerate = build_from_docs(docs)
+    assert degenerate == []
+
+
+def test_detector_stuck_at_one_nonzero_value_across_all_keys_is_flagged() -> None:
+    # The join_path_determinism signature at full scale: the SAME nonzero value on
+    # every key — the detector is not reading the data. Must flag (both keys named).
+    docs = [
+        _doc(s, {"r1:join_path_determinism": 0.1, "r2:join_path_determinism": 0.1}, grain="relationship")
+        for s in (46, 47, 48)
+    ]
+    _, degenerate = build_from_docs(docs)
+    assert len(degenerate) == 1
+    assert "r1:join_path_determinism" in degenerate[0]
+    assert "r2:join_path_determinism" in degenerate[0]
+    assert "constant 0.1" in degenerate[0]
