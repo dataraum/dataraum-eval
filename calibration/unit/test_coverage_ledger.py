@@ -1,14 +1,18 @@
-"""The per-oracle coverage ledger (Phase 1a) — pure logic, Tier 1.
+"""The coverage ledger + baseline diff (Phase 1) — pure logic, Tier 1.
 
 ``build_oracle_ledger`` turns pytest's per-outcome report lists into a
-nodeid -> {status, reason?} map. The flat counts it replaces hid which oracle
-stood down; this names every one so a silent drop is visible. Tested here with
-synthetic reports — no pytest run, no pipeline.
+nodeid -> {status, reason?} map; ``diff_against_baseline`` flags oracles that
+graded in the blessed baseline and stand down now (a coverage regression to
+triage). Tested with synthetic reports — no pytest run, no pipeline.
 """
 
 from __future__ import annotations
 
-from calibration.conftest import build_oracle_ledger
+from calibration.coverage import (
+    build_oracle_ledger,
+    diff_against_baseline,
+    graded_nodeids,
+)
 
 
 class _Rep:
@@ -52,3 +56,34 @@ def test_graded_oracles_carry_no_reason() -> None:
     led = build_oracle_ledger({"passed": [_Rep("t.py::a")], "failed": [_Rep("t.py::b")]})
     assert "reason" not in led["t.py::a"]
     assert "reason" not in led["t.py::b"]
+
+
+def test_graded_nodeids_excludes_skips_and_errors() -> None:
+    ledger = {
+        "a": {"status": "passed"},
+        "b": {"status": "failed"},
+        "c": {"status": "xfailed", "reason": "x"},
+        "d": {"status": "xpassed"},
+        "e": {"status": "skipped", "reason": "y"},
+        "f": {"status": "error"},
+    }
+    assert graded_nodeids(ledger) == {"a", "b", "c", "d"}
+
+
+def test_diff_flags_regressions_and_gains() -> None:
+    baseline = ["a", "b", "c"]
+    ledger = {
+        "a": {"status": "passed"},                          # still graded
+        "b": {"status": "skipped", "reason": "stood down"}, # REGRESSED (now skips)
+        # "c" absent entirely                               # REGRESSED (vanished)
+        "d": {"status": "passed"},                          # GAINED
+    }
+    diff = diff_against_baseline(baseline, ledger)
+    assert diff["regressed"] == ["b", "c"]
+    assert diff["gained"] == ["d"]
+
+
+def test_no_regression_when_coverage_matches() -> None:
+    baseline = ["a", "b"]
+    ledger = {"a": {"status": "passed"}, "b": {"status": "failed"}}
+    assert diff_against_baseline(baseline, ledger) == {"regressed": [], "gained": []}

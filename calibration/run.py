@@ -123,6 +123,36 @@ class Summary:
             if len(reasons) > 8:
                 print(f"    … {len(reasons) - 8} more distinct reason(s)")
 
+        # Coverage regressions — oracles that graded in the blessed baseline and
+        # stood down now. A FINDING TO TRIAGE, never an automatic engine-blame: the
+        # oracle may be wrongly skipping (test-suite/stale-eval bug), the engine may
+        # have stopped producing what it grades (engine bug), or the baseline was
+        # blessed at a bad state. The diff surfaces it; a human decides which, and it
+        # never fails the run.
+        from calibration import coverage
+
+        for o in self.outcomes:
+            ledger = o.coverage.get("oracles") or {}
+            base = coverage.load_baseline(o.strategy)
+            if base is None or not ledger:
+                continue
+            regressed = coverage.diff_against_baseline(base, ledger)["regressed"]
+            if not regressed:
+                continue
+            print(
+                f"\n  ⚠ {o.strategy} — COVERAGE REGRESSION "
+                f"({len(regressed)} graded in baseline, not now):"
+            )
+            for nid in regressed[:12]:
+                print(f"    - {nid.split('::', 1)[-1]}")
+            if len(regressed) > 12:
+                print(f"    … {len(regressed) - 12} more")
+            print(
+                "    triage: oracle wrongly skipping (test-suite/stale-eval bug) · "
+                "engine stopped producing it (engine bug) · baseline blessed wrong · "
+                "re-bless: python -m calibration.run -s <strat> --bless-coverage"
+            )
+
         print(f"\n  → {'ALL GREEN' if self.ok() else 'FAILURES ABOVE'}")
 
 
@@ -188,6 +218,11 @@ def main() -> None:
     parser.add_argument("--reset", action="store_true",
                         help="tear down the eval stack + volume (the ONLY down -v), then exit")
     parser.add_argument("--list", action="store_true", help="list strategies and exit")
+    parser.add_argument(
+        "--bless-coverage", action="store_true",
+        help="write the selected strategies' current oracle_coverage as the committed "
+             "baseline, then exit (the graded set future runs diff against)",
+    )
     args = parser.parse_args()
 
     if args.list:
@@ -217,6 +252,20 @@ def main() -> None:
     if unknown:
         parser.error(f"unknown strateg"
                      f"{'ies' if len(unknown) > 1 else 'y'}: {', '.join(unknown)}")
+
+    if args.bless_coverage:
+        from calibration import coverage
+
+        for strategy in strategies:
+            ledger = _read_coverage(strategy).get("oracles")
+            if not ledger:
+                print(f"[bless] {strategy}: no oracle ledger at "
+                      f"output/{strategy}/oracle_coverage.json — run its assert pass first")
+                continue
+            path = coverage.save_baseline(strategy, ledger)
+            print(f"[bless] {strategy}: {len(coverage.graded_nodeids(ledger))} "
+                  f"graded oracles -> {path.relative_to(runner.EVAL_ROOT)}")
+        return
 
     summary = run(
         strategies,
