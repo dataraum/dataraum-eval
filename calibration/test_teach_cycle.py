@@ -40,9 +40,12 @@ from dataraum.core.connections import ConnectionConfig, ConnectionManager
 from dataraum.storage.read_views import read_schema_name_for
 from sqlalchemy import text
 
+from calibration import cube
 from calibration import runner as runner_mod
 from calibration.conftest import DATA_DIR, measured_rows, require_pipeline_run
 from calibration.test_detector_recall import DETECTION_THRESHOLD
+
+pytestmark = cube.needs(vertical="finance", dataset="*", from_stage="operating_model")
 
 _DROP_MARGIN = 0.02  # anti-noise floor on signed deltas, NOT a point threshold
 

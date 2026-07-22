@@ -21,9 +21,12 @@ from typing import Any
 
 import pytest
 
+from calibration import cube
 from calibration.conftest import require_pipeline_run
 from calibration.metadata_truth import read_detected_cycles
 from calibration.tools._runs import workspace_session
+
+pytestmark = cube.needs(vertical="finance", dataset="*", from_stage="operating_model")
 
 
 @pytest.fixture(autouse=True)

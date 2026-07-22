@@ -33,6 +33,7 @@ from typing import Any
 
 import pytest
 
+from calibration import cube
 from calibration import runner as runner_mod
 from calibration.metadata_truth import (
     expected_bus_matrix,
@@ -41,6 +42,8 @@ from calibration.metadata_truth import (
     read_view_exists,
 )
 from calibration.tools._runs import short, workspace_session
+
+pytestmark = cube.needs(vertical="finance", dataset="*", from_stage="begin_session")
 
 
 @pytest.fixture(scope="module")

@@ -38,9 +38,12 @@ from __future__ import annotations
 
 import pytest
 
+from calibration import cube
 from calibration.band_grading import NON_READY_BANDS, BandedMeasurement
 from calibration.conftest import _strip_source_prefix
 from calibration.test_detector_recall import DETECTION_THRESHOLD
+
+pytestmark = cube.needs(vertical="finance", dataset="*", from_stage="operating_model")
 
 
 def _non_ready_intents_by_column(

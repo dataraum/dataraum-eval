@@ -32,9 +32,12 @@ from typing import Any
 import pytest
 import yaml
 
+from calibration import cube
 from calibration import runner as runner_mod
 from calibration.metadata_truth import read_driver_rankings
 from calibration.tools._runs import workspace_session
+
+pytestmark = cube.needs(vertical="finance", dataset="*", from_stage="operating_model")
 
 _INJECTED = "detection-driver-v1"
 _CLEAN = "clean"

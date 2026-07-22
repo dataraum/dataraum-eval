@@ -20,6 +20,10 @@ from __future__ import annotations
 
 import pytest
 
+from calibration import cube
+
+pytestmark = cube.needs(vertical="finance", dataset="*", from_stage="begin_session")
+
 _DETECTOR = "temporal_behavior"
 _RECALL = ("trial_balance", "debit_balance", _DETECTOR)
 _PRECISION = ("balance_sheet", "ending_balance", _DETECTOR)

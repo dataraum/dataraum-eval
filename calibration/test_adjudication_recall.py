@@ -18,6 +18,10 @@ from typing import Any
 
 import pytest
 
+from calibration import cube
+
+pytestmark = cube.needs(vertical="finance", dataset="*", from_stage="add_source", baseline=("clean",))
+
 # Anti-noise margin on the DELTA (injected − clean), NOT a calibrated detection
 # threshold on the absolute conflict. ADR-0009: orderings/deltas, never point
 # thresholds to be constant-tuned.

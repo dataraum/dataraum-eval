@@ -74,6 +74,13 @@ def pytest_terminal_summary(terminalreporter: Any) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(coverage, indent=2))
 
+    # DAT-862: append this pass's Tier-3 verdicts to the immutable store, so
+    # "did this regress?" is a diff query against history, not a re-run. Unit
+    # (Tier-1/2) nodeids are filtered inside; a unit-only pass writes nothing.
+    from calibration import results_store
+
+    results_store.record_pass(strategy, coverage["oracles"])
+
 
 def _load_yaml(path: Path) -> dict[str, Any]:
     with open(path) as f:

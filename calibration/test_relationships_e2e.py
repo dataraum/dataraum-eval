@@ -24,6 +24,7 @@ from typing import Any
 
 import pytest
 
+from calibration import cube
 from calibration.conftest import require_pipeline_run
 from calibration.metadata_truth import (
     expected_relationships,
@@ -32,6 +33,8 @@ from calibration.metadata_truth import (
     read_fk_miss_diagnostic,
 )
 from calibration.tools._runs import workspace_session
+
+pytestmark = cube.needs(vertical="finance", dataset="*", from_stage="begin_session")
 
 _Edge = tuple[str, str, str, str]  # (from_table, from_col, to_table, to_col)
 

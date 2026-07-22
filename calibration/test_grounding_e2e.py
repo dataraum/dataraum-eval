@@ -41,6 +41,7 @@ from typing import Any
 
 import pytest
 
+from calibration import cube
 from calibration.conftest import require_pipeline_run
 from calibration.metadata_truth import (
     expected_groundings,
@@ -52,6 +53,8 @@ from calibration.metadata_truth import (
     read_view_exists,
 )
 from calibration.tools._runs import workspace_session
+
+pytestmark = cube.needs(vertical="finance", dataset="*", from_stage="operating_model")
 
 # The P2 property-graph elements and the MATCH each must instantiate in. The
 # capability probe is the element VIEW's existence; the assertion is the graph

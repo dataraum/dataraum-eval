@@ -47,7 +47,10 @@ from typing import Any
 import pytest
 import yaml
 
+from calibration import cube
 from calibration.conftest import DetectorScores
+
+pytestmark = cube.needs(vertical="finance", dataset="*", from_stage="operating_model", baseline=("clean",))
 
 EVAL_ROOT = Path(__file__).parent.parent
 BANDS_PATH = EVAL_ROOT / "calibration" / "clean_bands.yaml"

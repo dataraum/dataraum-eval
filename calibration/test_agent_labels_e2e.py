@@ -27,6 +27,7 @@ from typing import Any
 
 import pytest
 
+from calibration import cube
 from calibration.conftest import require_pipeline_run
 from calibration.metadata_truth import (
     read_structural_patterns,
@@ -34,6 +35,8 @@ from calibration.metadata_truth import (
     read_temporal_behavior,
 )
 from calibration.tools._runs import workspace_session
+
+pytestmark = cube.needs(vertical="finance", dataset="*", from_stage="begin_session")
 
 # Reconciliation pattern → the stock/flow behaviour it proves (DAT-491 vocab).
 _PATTERN_TO_BEHAVIOR = {"per_period": "additive", "cumulative": "point_in_time"}

@@ -23,6 +23,10 @@ from typing import Any
 import pytest
 import yaml
 
+from calibration import cube
+
+pytestmark = cube.needs(vertical="finance", dataset="*", from_stage="operating_model", baseline=("clean",))
+
 # Minimum score for a detector to be considered "detected the injection"
 DETECTION_THRESHOLD = 0.3
 

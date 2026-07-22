@@ -24,6 +24,7 @@ from typing import Any
 import pytest
 import yaml
 
+from calibration import cube
 from calibration.test_detector_recall import (
     CURRENT_SLICE_DETECTORS,
     KNOWN_MISALIGNED,
@@ -31,6 +32,8 @@ from calibration.test_detector_recall import (
     NOT_IMPLEMENTED,
     OUT_OF_SLICE_REASON,
 )
+
+pytestmark = cube.needs(vertical="finance", dataset="*", from_stage="operating_model", baseline=("clean",))
 
 EVAL_ROOT = Path(__file__).parent.parent
 EXPECTATIONS_PATH = Path(__file__).parent / "intent_readiness.yaml"

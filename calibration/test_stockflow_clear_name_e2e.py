@@ -21,8 +21,11 @@ from dataraum.core.connections import ConnectionConfig, ConnectionManager
 from dataraum.storage.read_views import read_schema_name_for
 from sqlalchemy import text
 
+from calibration import cube
 from calibration import runner as runner_mod
 from calibration.conftest import DATA_DIR, require_pipeline_run
+
+pytestmark = cube.needs(vertical="finance", dataset="detection-stockflow-v1", from_stage="begin_session")
 
 _STRATEGY = "detection-stockflow-v1"
 _MIN_ACCURACY = 0.70  # the gate's optimistic bracket floor; below this is the CUT signal

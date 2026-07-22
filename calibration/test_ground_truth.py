@@ -15,7 +15,9 @@ from typing import Any
 
 import pytest
 
-from calibration import outcomes
+from calibration import cube, outcomes
+
+pytestmark = cube.needs(vertical="finance", dataset="*", from_stage="raw")
 
 
 def test_ground_truth_loaded(ground_truth: dict[str, Any]) -> None:

@@ -24,6 +24,7 @@ addopts = "-v --tb=short"
 markers = [
     "llm: tests that call an LLM (deselect with -m 'not llm')",
     "slow: slow tests that run a full pipeline (deselect with -m 'not slow')",
+    "needs: cube declaration — the oracle's vertical/dataset/from_stage (calibration/cube.py, DAT-860)",
 ]
 
 [tool.hatch.build.targets.wheel]
