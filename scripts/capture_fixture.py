@@ -149,8 +149,9 @@ _MAX_SLICE_CARDINALITY = 25
 # the fixture must carry BOTH sides of each graded relationship. Keyed by table
 # stem; kept regardless of type or cardinality (an id is all-distinct by design).
 _FK_COLUMNS: dict[str, list[str]] = {
-    "payments": ["invoice_id"],  # child: FK → invoices.invoice_id (break_referential_integrity)
-    "invoices": ["invoice_id"],  # parent: the referenced key
+    "payments": ["invoice_id", "payment_id"],  # invoice_id→invoices (orphans); payment_id→bank (xtable)
+    "invoices": ["invoice_id"],  # parent of the referential-integrity relationship
+    "bank_transactions": ["payment_id"],  # join to payments for the amount-reconciliation net
 }
 
 # A column is a NUMERIC measure if at least this fraction of its non-null sampled
