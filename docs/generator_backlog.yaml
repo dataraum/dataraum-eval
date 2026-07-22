@@ -1,0 +1,58 @@
+# Generator backlog — the authenticity loop's queue (charter: CLAUDE.md).
+#
+# The referent the charter names ("every miss feeds the generator backlog") and that
+# did not exist until now. A finding tracked by nobody silently regresses; this is
+# where it is tracked between sessions.
+#
+# Two kinds of item live here:
+#   finding    — a wild break or filed bug to GRADUATE into a synthetic injection
+#                family + a deterministic Tier-1/2 oracle (pay tokens once, monitor
+#                forever). Drained by /evolve-testdata; scaffolded by
+#                calibration/graduate_finding.py (Phase 2).
+#   capability — an eval capability to PREP for, usually unlocked by engine work
+#                (linked via blocked_on). Recorded so the prep is deliberate.
+#
+# Every item is scoped to a (vertical, dataset) pairing. Finance is the only shipped
+# vertical today, but eval is no longer finance-only in its MODEL.
+
+items:
+  - id: CAP-vertical-dataset-match
+    kind: capability
+    title: Prep for vertical-dataset match (verticals induced from data)
+    status: queued
+    blocked_on: [DAT-738, DAT-855]   # frame induction; ontology-graph -> recipes/verticals
+    vertical: "*"                    # the point: vertical stops being a finance constant
+    summary: >
+      Tier-A testdata is finance-only and each wild corpus's vertical is hand-authored
+      (scripts/frame_wild_vertical.py: VERTICALS = {"rel-f1": MOTORSPORT}). DAT-855
+      strand 2 (frame induction, ex-DAT-725 P13 / DAT-738) will INDUCE a vertical from
+      a dataset; per the DAT-845 ruling it must acquire validations, cycles, AND
+      metrics -- not just concepts (the engine's nothing_declared terminal state is an
+      INVALID end state, never valid). DAT-855 strand 3 extends the ontology graph to
+      extraction-recipe substrates (recipe = DAT-414 typed-materialization DDL),
+      cross-source and cross-table. DAT-725's own note -- "widening follows from the
+      eval project" -- is eval holding that slot.
+    eval_contract_when_unlocked:
+      - "Record each corpus's (vertical, dataset) pairing explicitly, not hardcoded."
+      - "Grade an engine-induced vertical against dataset ground truth -- concepts AND validations + cycles + metrics acquired (the DAT-845 invariant), not concepts alone. Synthetic Tier-A holds that full truth; wild is structural-only."
+      - "Grade the extraction recipes -- do they materialize the typed tables the dataset declares?"
+    prep_now_no_engine_gate:
+      - "Phase-2 Finding schema carries `vertical` + `dataset` (never finance-assumed)."
+      - "Centralise the dataset->vertical mapping so it is a tracked pairing, not a constant baked into finance code paths."
+    do_not_build_yet: >
+      Varying the vertical or the recipes. DAT-855 is Not Started, /refine pending, and
+      LAST in the lead-locked stabilisation program
+      (DAT-853 -> DAT-725 finish -> DAT-671 -> DAT-855). Prep the seams; do not fill them.
+
+  # Finding-graduation entries land here as investigations file them. Shape:
+  # - id: FIND-<slug>
+  #   kind: finding
+  #   title: <one line>
+  #   status: queued              # queued | graduated | declined
+  #   source: rel-f1 (wild) | detection-v1 | DAT-<n>
+  #   vertical: finance
+  #   dataset: detection-v1
+  #   detector_id: <id>
+  #   named_statistic: <KS | orphan-rate | Cramer's V | ...>
+  #   evidence: <numbers + the read that shows it>
+  #   graduated_to: <injection family + Tier-1/2 oracle nodeid, once done>
