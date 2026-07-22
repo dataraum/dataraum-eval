@@ -129,6 +129,7 @@ findings:                      # the point — machine-read by calibration/findi
     evidence: <numbers + the read that shows it>
     disposition: DAT-ticket | teach-scenario | ours-to-fix | graduate
     source: $0                 # where it surfaced (corpus / DAT-#)
+    repro: <calibration/unit/…::test_x | wild stage/run steps>   # the deterministic repro (charter: no rumors)
 ```
 
 ## Step 6 — Triage every red before you file

@@ -35,10 +35,23 @@ def _valid(**over: object) -> dict[str, object]:
 
 def test_valid_finding_round_trips_and_defaults() -> None:
     f = Finding.from_dict(_valid())
-    assert f.status == "open" and f.graduated_to == ""
+    assert f.status == "open" and f.graduated_to == "" and f.repro == ""
     item = f.to_backlog_item()
     assert item["kind"] == "finding" and item["status"] == "queued"
     assert item["vertical"] == "finance" and item["detector_id"] == "relationship_entropy"
+    assert item["repro"] == ""
+
+
+def test_repro_pointer_round_trips() -> None:
+    ref = "calibration/unit/test_relationship_orphan.py::test_orphan_rate_separates"
+    f = Finding.from_dict(_valid(repro=ref))
+    assert f.repro == ref and f.to_backlog_item()["repro"] == ref
+
+
+def test_require_repro_raises_when_absent_and_returns_when_present() -> None:
+    with pytest.raises(ValueError, match="no repro"):
+        Finding.from_dict(_valid()).require_repro()
+    assert Finding.from_dict(_valid(repro="steps: stage rel-f1; run")).require_repro()
 
 
 def test_named_statistic_is_required() -> None:

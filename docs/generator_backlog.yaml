@@ -55,4 +55,5 @@ items:
   #   detector_id: <id>
   #   named_statistic: <KS | orphan-rate | Cramer's V | ...>
   #   evidence: <numbers + the read that shows it>
-  #   graduated_to: <injection family + Tier-1/2 oracle nodeid, once done>
+  #   repro: <calibration/unit/…::test_x | wild stage/run steps>
+  #   graduated_to: <the permanent Tier-1/2 oracle nodeid, once done>

@@ -47,8 +47,13 @@ class Finding:
     disposition: str         # DAT-ticket | teach-scenario | ours-to-fix | graduate
     source: str              # where it surfaced (free text: "rel-f1 (wild)", "DAT-834")
     detector_id: str | None = None
+    repro: str = ""          # pointer to the deterministic repro: a committed Tier-1/2
+                             # test nodeid (calibration/unit/…::test_x) or the wild
+                             # stage/run steps. The artifact lives in the repo (a
+                             # committed test) or is fetchable (the corpus); this names
+                             # it. Optional at file-time; REQUIRED to graduate (no rumors).
     status: str = "open"     # open | filed | graduated | declined
-    graduated_to: str = ""   # injection family + Tier-1/2 oracle nodeid, once graduated
+    graduated_to: str = ""   # the permanent Tier-1/2 oracle it graduated into (nodeid)
 
     def __post_init__(self) -> None:
         self.validate()
@@ -75,6 +80,15 @@ class Finding:
                 f"Finding {self.id}: kind {self.kind!r} is about a detector's score, so "
                 "detector_id is required"
             )
+
+    def require_repro(self) -> str:
+        """The repro pointer, or raise — graduation refuses a finding it can't reproduce."""
+        if not self.repro.strip():
+            raise ValueError(
+                f"Finding {self.id}: no repro — a finding you can't reproduce on demand is a "
+                "rumor (charter); write the failing Tier-1/2 test or the wild steps first"
+            )
+        return self.repro
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Finding:
@@ -106,6 +120,7 @@ class Finding:
             "detector_id": self.detector_id,
             "named_statistic": self.named_statistic,
             "evidence": self.evidence,
+            "repro": self.repro,
             "graduated_to": self.graduated_to,
         }
 
