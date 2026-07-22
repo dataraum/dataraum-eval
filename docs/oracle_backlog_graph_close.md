@@ -157,8 +157,10 @@ epochs/reducer discipline, not a single draw (open question Q3).
 New module `test_role_identity_e2e.py` — **blocked on `CAP-roleplay-fk-fixture`**:
 
 ```python
-pytestmark = cube.needs(vertical="finance", dataset=("<roleplay-dataset-TBD>",), from_stage="begin_session")
+pytestmark = cube.needs(vertical="finance", dataset="detection-roleplay-v1", from_stage="begin_session")
 ```
+
+(Dataset name ruled in Q1 below: a new Tier-A dataset, not a fold-in.)
 
 1. **Recall** — the lineage witness pairs same-role across facts; never cross-pairs
    bill_to ↔ ship_to.
@@ -208,3 +210,83 @@ Evolves `test_cycles_e2e.py` (**bump its `version`**; needs already declared
 - **Q5 (conditioning idiom, O4/O2)**: the owner's conditioned-hard and
   skip-not-vacuous rules assume pytest skip semantics — if the evolved framework has a
   first-class "conditional cell" concept, prefer it and note the mapping.
+
+---
+
+## Answers (eval agent, 2026-07-22 — framework-semantics rulings, DAT-860/862/863)
+
+**Q1 — new Tier-A dataset: `detection-roleplay-v1`.** Never fold a structural FK-shape
+change into an existing corpus: it perturbs the relationship judge, bus-matrix, and
+shared-axes surfaces for every oracle bound to that corpus, and (under DAT-861) a
+structural edit invalidates the corpus's cached cells for all of them — the exact
+§2.2 confounding the replan retires. The cube makes a small dedicated dataset cheap:
+O6 binds it at `begin_session`, so its cells never pay for an OM run. The DAT-419
+shape (two distinct FKs between one table pair) graduates in the SAME dataset — one
+corpus, two truths. O6's declaration above is updated; `CAP-roleplay-fk-fixture` in
+`generator_backlog.yaml` now names the dataset.
+
+**Q2 — split: new module `test_graph_shapes_e2e.py` (version=1) owns
+`_P2_MATCH_SHAPES` + the O3/O4 shape entries.** DAT-862's version is module-grain, so
+a module is the unit of verdict-history comparability — every bump resets it for ALL
+the module's nodeids. `_P2_MATCH_SHAPES` is a growth surface (10 vertex/14 edge kinds
+and rising through band 6): leaving it in `test_grounding_e2e.py` makes that module a
+version-churn hotspot where graph-schema growth keeps blurring the history of the
+semantic grounding verdicts. Split by version-churn driver: the shapes module's
+version tracks the graph schema; `test_grounding_e2e.py` keeps the judgment-dependent
+oracles (O3's walk, O4's where_predicates/bypass semantic check) and takes ONE bump
+(shapes moved out + walk + scope check in). The store's diff will show the moved
+nodeids as `gone` on grounding — triage note: intended, moved. Same cube cell either
+way (`dataset="*", from_stage="operating_model"`), so the planner is indifferent;
+this is purely verdict-history legibility.
+
+**Q3 — split the parity claim by leg; reduced-verdict parity for judgment legs,
+per-draw parity for deterministic legs.** "Verdict-identical" is a migration-
+equivalence claim, and it decomposes exactly along the DAT-862 verdict-leg split:
+
+- *Deterministic legs* (the set of nine, their identity, SQL/bind mechanics,
+  EXPLAIN-bind, check_type, scope): **per-draw, exact, hard** — any flap here IS a
+  migration bug.
+- *LLM-judgment legs* (sign_conventions' account classification): **parity of
+  REDUCED verdicts** under the DAT-863 discipline — N draws per home, same named
+  reducer (majority vote), compare the reduced verdicts AND the draw split. Demanding
+  per-draw equality on an LLM leg demands determinism from a non-deterministic
+  instrument — manufactured red, the harness-level Goodhart the charter bans.
+  A reduced-verdict disagreement is a real finding and blocks the deletion; a shifted
+  draw split with agreeing reduced verdicts (5/5 vs 3/5) is a REPORTED finding (the
+  migration moved the judgment context) but not a blocker.
+
+The YAML-deletion decision keys on: deterministic-leg parity green + judgment-leg
+reduced parity green, flap rate named in the read-out. Token thrift: only the
+judgment legs get epochs (classify each of the nine by mechanics first); until the
+DAT-863 reducer lands in the harness, the parity oracle runs its own bounded N-draw
+loop for those legs only — a named-budget gate, not a dev loop.
+
+**Q4 — single module, as banked.** Both halves bind the identical cell
+(`dataset="*", from_stage="begin_session"`), so cube-cell planning is indifferent —
+a split would be organizational only. Split later only if a real divergence shows up
+(different version-churn rates or different conditioning). Unlike Q2 there is no
+growth-surface/judgment split here: both halves are deterministic graph reads on one
+substrate.
+
+**Q5 — no first-class conditional cell, by design; the idiom is a reason-prefixed
+skip.** The cube declares STATIC binding (what a plan can know before materializing);
+"a measured status cycle exists in this run" is a runtime fact of the materialized
+cell, so it cannot live in the declaration without making plans lie. The framework's
+contract for conditioned-hard, all three parts:
+
+1. **skip, never vacuous-pass** (as the owner ruled);
+2. **machine-readable reason prefix** — `pytest.skip("conditional-cell: <condition>")`.
+   The DAT-862 store records every skip reason verbatim, so sweep accounting can
+   partition designed conditioning from silent stand-downs, and the coverage-baseline
+   diff still surfaces a conditioned oracle that stops grading;
+3. **the condition's own recall belongs to another oracle** (O4 already does this:
+   cycles recall owns "should a cycle exist"; the conditioned entries grade plumbing
+   only) — a conditioned-hard oracle without that pairing is a silent hole.
+
+**Flag while answering (verify-before-executor class, zero blast radius in report
+mode):** O1 declares `from_stage="begin_session"` but asserts over "the promoted
+operating-model graph"; O6 likewise reads `og_conformed_dimension` at
+`begin_session`. If the og_* graph promotes with the OM head rather than the
+catalogue head, both declarations under-materialize. Confirm which head promotes the
+graph tables before the DAT-863 executor trusts these two claims — same class as the
+bus-matrix/folded-dims caveat on DAT-860.

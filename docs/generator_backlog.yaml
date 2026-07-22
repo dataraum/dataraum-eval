@@ -209,7 +209,7 @@ items:
     status: queued
     blocked_on: [DAT-725]            # role-separated conformed identity lands with the epic merge (DAT-788)
     vertical: finance
-    dataset: "*"
+    dataset: "detection-roleplay-v1"  # ruled Q1 (oracle_backlog_graph_close.md): new Tier-A dataset, never a fold-in; DAT-419 shape rides in the same corpus
     summary: >
       DAT-725/DAT-788 makes fk_role part of the referenced conformed identity
       (separate-until-conformed; the DAT-762 judge merges differently-named same-role
@@ -224,4 +224,4 @@ items:
       - "Conform path: a differently-named same-role pair the judge conforms DOES pair."
       - "Graph: og_conformed_dimension shows the two roles as distinct axes unless conformed."
     prep_now_no_engine_gate:
-      - "Design the fixture shape + its entropy_map truth entries; decide the dataset name (see docs/oracle_backlog_graph_close.md open questions)."
+      - "Design the fixture shape + its entropy_map truth entries; dataset name DECIDED: detection-roleplay-v1 (Q1 answer in docs/oracle_backlog_graph_close.md)."
