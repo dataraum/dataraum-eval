@@ -131,6 +131,7 @@ def test_zero_score_bands_are_corroborated_by_column_readiness(
         for measurement in banded_measurements
         if measurement.target.startswith("column:")
         and measurement.is_non_ready()
+        and measurement.score is not None  # non-ready ⇒ measured (never an abstention)
         and measurement.score < DETECTION_THRESHOLD
     ]
     if not zero_score_non_ready:

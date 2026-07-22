@@ -114,7 +114,9 @@ def test_evidence_driven_band_survives_zero_score(detector: str) -> None:
         f"evidence-driven non-ready outcome (the DAT-849 hole)"
     )
     # The blind spot: this bands non-ready while scoring below the detection threshold.
-    assert measurement.score < DETECTION_THRESHOLD
+    # A non-ready measurement is never an abstention (an abstention carries no band),
+    # so score is a real float here — the guard narrows the type and states that.
+    assert measurement.score is not None and measurement.score < DETECTION_THRESHOLD
 
 
 @pytest.mark.parametrize("detector", loss_table_detectors())

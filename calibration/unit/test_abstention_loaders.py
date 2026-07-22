@@ -204,7 +204,12 @@ def test_column_target_abstention_survives_the_zero_score_oracle_filter() -> Non
     zero_score_non_ready = [
         m
         for m in measurements
-        if m.target.startswith("column:") and m.is_non_ready() and m.score < DETECTION_THRESHOLD
+        if (
+            m.target.startswith("column:")
+            and m.is_non_ready()
+            and m.score is not None  # non-ready ⇒ measured (never an abstention)
+            and m.score < DETECTION_THRESHOLD
+        )
     ]
     assert zero_score_non_ready == []
 
