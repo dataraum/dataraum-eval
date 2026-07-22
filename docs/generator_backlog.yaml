@@ -112,7 +112,13 @@ items:
       graduate to a Tier-1 oracle). If it fires there = detector is fine, the silence was
       uninjected columns (decline this item). test_detector_recall already asserts it in
       slice, so a confirmed miss should ALSO show as a red recall oracle.
-    repro: "PENDING confirm_run — not filable until detection-typing-v1 reproduces the miss"
+    ground_truth_instrument: >
+      LANDED (free, Phase 4): test_type_fidelity_recorded.py measures the injection's
+      numeric-nonconformance rate — clean journal_lines.debit 0.0 vs detection-typing-v1
+      0.135 (the corrupt_types 0.15 ratio). So the confirm_run is now pure comparison:
+      engine type_fidelity score vs a KNOWN 13.5% type-violation ground truth. A 0.0
+      engine score against a measured 0.135 violation IS the filable miss.
+    repro: "PENDING confirm_run — instrument ready; not filable until detection-typing-v1 reproduces the engine miss"
 
   - id: FIND-temporal-entropy-never-fires
     kind: finding

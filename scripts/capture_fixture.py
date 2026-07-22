@@ -55,7 +55,7 @@ PG_TABLES = [
 # Strategies whose generated source CSVs carry the raw per-period values.
 # detection-null-v1 carries the inject_null_tokens columns (journal_lines.debit,
 # bank_transactions.amount) — the raw sentinel values behind the pooled witnesses.
-STRATEGIES = ["clean", "detection-v1", "detection-null-v1"]
+STRATEGIES = ["clean", "detection-v1", "detection-null-v1", "detection-typing-v1"]
 
 
 def _cell(value: Any) -> Any:
@@ -153,6 +153,27 @@ _FK_COLUMNS: dict[str, list[str]] = {
     "invoices": ["invoice_id"],  # parent: the referenced key
 }
 
+# A column is a NUMERIC measure if at least this fraction of its non-null sampled
+# values parse as float. Majority-based, not first-value: a numeric measure with
+# type corruption (corrupt_types dropping VARCHAR garbage into 15% of debit) is
+# STILL a measure — that's exactly what type_fidelity grades, so the fixture must
+# keep it. A genuine categorical (currency, status) sits near 0.0, far below this.
+_NUMERIC_FRACTION = 0.6
+
+
+def _fraction_float(values: list[str]) -> float:
+    """Fraction of ``values`` that parse as float (0.0 for an empty list)."""
+    if not values:
+        return 0.0
+    ok = 0
+    for v in values:
+        try:
+            float(v)
+        except (TypeError, ValueError):
+            continue
+        ok += 1
+    return ok / len(values)
+
 
 def _keep_columns(rows: list[dict[str, str]], source: str = "") -> list[str]:
     """Measure + slice-key columns — what the recorded measures consume. Keeps
@@ -183,12 +204,10 @@ def _keep_columns(rows: list[dict[str, str]], source: str = "") -> list[str]:
         first = values[0] if values else None
         if first is None:
             continue
-        try:
-            float(first)
+        # Majority-numeric → a measure, even with corrupt cells mixed in (type_fidelity).
+        if _fraction_float(values) >= _NUMERIC_FRACTION:
             numerics.append(col)
             continue
-        except ValueError:
-            pass
         if len(first) >= 7 and first[:4].isdigit() and first[4] in "-/":  # date-like
             dates.append(col)
             continue
