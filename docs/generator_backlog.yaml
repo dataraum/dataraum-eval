@@ -57,3 +57,78 @@ items:
   #   evidence: <numbers + the read that shows it>
   #   repro: <calibration/unit/…::test_x | wild stage/run steps>
   #   graduated_to: <the permanent Tier-1/2 oracle nodeid, once done>
+
+  # --- Collected 2026-07-22 from the fire-scoreboard's first pass (Phase 3). Batched
+  #     for ONE confirming Tier-3 run "once the dust settles" (Philipp) — each names the
+  #     run + hypothesis before the spend, per the token-budget rule. NOT filed as tickets
+  #     yet: a suspect with no reproducing run is a rumor (charter).
+
+  - id: HAZARD-vertical-nothing-declared
+    kind: finding
+    title: A vertical declaring no validations/cycles/metrics makes the operating-model lane vacuously green
+    status: queued
+    source: rel-f1 (wild) — scripts/frame_wild_vertical.py declares concepts only
+    vertical: "*"
+    dataset: rel-f1
+    detector_id: cross_table_consistency
+    named_statistic: declaration-coverage
+    evidence: >
+      On rel-f1 cross_table_consistency is MUTE (0 entropy rows) — it scores EXECUTED
+      validations (DAT-432/L7), and the hand-framed motorsport vertical declares none.
+      The OM detectors (cross_table_consistency, business_cycles, metrics) all go silent
+      with nothing declared, and silence currently reads as a clean pass.
+      "Not declaring validations/cycles/metrics is an easy way to make everything pass"
+      (Philipp 2026-07-22). The mechanism is confirmed + reproducible; the engine's
+      culpability is the open question below.
+    engine_question: >
+      Per the DAT-845 ruling an induced vertical's nothing_declared is an INVALID end
+      state — the engine is meant to REQUIRE validations + cycles + metrics, not just
+      concepts. Does the engine actually block/flag a nothing-declared vertical, or let it
+      reach a ready/green state? Passes green = engine finding (file DAT); eval's frame
+      merely under-declares = eval/testdata gap. Linked to CAP-vertical-dataset-match.
+    proposed_oracle: >
+      Cheap deterministic check to build once the dust settles: a run whose vertical
+      declared 0 validations AND 0 cycles AND 0 metrics has a VACUOUS OM axis — flag it,
+      never count it as a pass. Read the declared/executed counts off the completed run
+      (OM tables) the way scoreboard.py reads entropy rows.
+    repro: "uv run python -m calibration.scoreboard rel-f1 → cross_table_consistency MUTE; data/rel-f1/metadata_truth.yaml + frame_wild_vertical MOTORSPORT declare no validations"
+
+  - id: FIND-type-fidelity-never-fires
+    kind: finding
+    title: type_fidelity scores 0.0 on every measured column across all persisted runs
+    status: queued
+    source: fire-scoreboard (rel-f1 + detection-v1 + clean)
+    vertical: finance
+    dataset: detection-typing-v1
+    detector_id: type_fidelity
+    named_statistic: fire-rate
+    evidence: >
+      NEVER-FIRED on all three persisted runs (55 measured / 0 fired on detection-v1 + clean,
+      67/0 on rel-f1; max score 0.0 everywhere). SUSPECT, not filable: detection-v1 injects
+      NOTHING for type_fidelity (checked entropy_map), so its silence there proves nothing.
+    confirm_run: >
+      Run detection-typing-v1 (real type injections) and read its scoreboard. Hypothesis:
+      type_fidelity scores 0.0 even on the injected columns = a real MISS (file DAT +
+      graduate to a Tier-1 oracle). If it fires there = detector is fine, the silence was
+      uninjected columns (decline this item). test_detector_recall already asserts it in
+      slice, so a confirmed miss should ALSO show as a red recall oracle.
+    repro: "PENDING confirm_run — not filable until detection-typing-v1 reproduces the miss"
+
+  - id: FIND-temporal-entropy-never-fires
+    kind: finding
+    title: temporal_entropy scores 0.0 on every measured column across all persisted runs
+    status: queued
+    source: fire-scoreboard (rel-f1 + detection-v1 + clean)
+    vertical: finance
+    dataset: detection-stockflow-v1
+    detector_id: temporal_entropy
+    named_statistic: fire-rate
+    evidence: >
+      NEVER-FIRED on all three persisted runs (9 measured / 0 fired; max 0.0). SUSPECT, not
+      filable: none of the persisted runs inject a temporal signal temporal_entropy targets.
+    confirm_run: >
+      Run a strategy that injects the temporal signal temporal_entropy scores (a stockflow /
+      temporal strategy) and read its scoreboard. Hypothesis: 0.0 even where injected = real
+      MISS. If it fires = fine, silence was uninjected columns (decline). Batch with the
+      type_fidelity run above — one Tier-3 pass covers both.
+    repro: "PENDING confirm_run — not filable until a temporal-injection run reproduces the miss"
