@@ -94,8 +94,26 @@ class Summary:
                     graded_s += f" XPASS={cov['xpassed']}"
             print(f"  {o.strategy:<34} {run_s:<22} assert={assert_s}{graded_s}")
 
-        # Skips are how a run goes green without checking anything — name them.
+        # Skips are how a run goes green without checking anything — name the ORACLES
+        # (nodeids), not just reason tallies, so a silently-dropped one is visible.
         for o in self.outcomes:
+            ledger = o.coverage.get("oracles") or {}
+            skipped = [
+                (nid, e.get("reason", ""))
+                for nid, e in ledger.items()
+                if e.get("status") == "skipped"
+            ]
+            if skipped:
+                print(f"\n  {o.strategy} — skipped oracles ({len(skipped)}):")
+                for nid, reason in skipped[:12]:
+                    print(f"    - {nid.split('::', 1)[-1]:<46} {reason[:68]}")
+                if len(skipped) > 12:
+                    print(
+                        f"    … {len(skipped) - 12} more "
+                        f"(see output/{o.strategy}/oracle_coverage.json)"
+                    )
+                continue
+            # Fallback: coverage files written before the per-oracle ledger existed.
             reasons = o.coverage.get("skip_reasons") or {}
             if not reasons:
                 continue

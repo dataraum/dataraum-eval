@@ -33,6 +33,34 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
 
 
+_LEDGER_ORDER = ("passed", "xpassed", "xfailed", "skipped", "failed", "error")
+
+
+def _skip_reason(report: Any) -> str:
+    """The human reason from a skipped/xfailed report's longrepr."""
+    raw = report.longrepr[2] if isinstance(report.longrepr, tuple) else str(report.longrepr)
+    return raw.removeprefix("Skipped: ").removeprefix("xfail: ").strip()
+
+
+def build_oracle_ledger(stats: dict[str, list[Any]]) -> dict[str, dict[str, str]]:
+    """Per-oracle outcome map: nodeid -> {status, reason?}.
+
+    The flat pass/skip COUNTS hid which oracle stood down — a whole oracle could
+    vanish behind a bumped skip tally and the run still read clean. This names every
+    one, so a silently-dropped oracle is visible (and, later, diffable against an
+    expected-covered set). Severity order (``_LEDGER_ORDER``) makes a failed/errored
+    call beat the same test's passed setup report when both land under one nodeid.
+    """
+    ledger: dict[str, dict[str, str]] = {}
+    for status in _LEDGER_ORDER:
+        for report in stats.get(status, []):
+            entry: dict[str, str] = {"status": status}
+            if status in ("skipped", "xfailed"):
+                entry["reason"] = _skip_reason(report)
+            ledger[report.nodeid] = entry
+    return ledger
+
+
 def pytest_terminal_summary(terminalreporter: Any) -> None:
     """Record what this pass actually GRADED, not just whether it was green.
 
@@ -66,6 +94,7 @@ def pytest_terminal_summary(terminalreporter: Any) -> None:
         "xpassed": len(stats.get("xpassed", [])),
         "errors": len(stats.get("error", [])),
         "skip_reasons": dict(reasons.most_common()),
+        "oracles": build_oracle_ledger(stats),
     }
     out = OUTPUT_DIR / strategy / "oracle_coverage.json"
     out.parent.mkdir(parents=True, exist_ok=True)
