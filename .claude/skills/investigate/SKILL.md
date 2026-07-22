@@ -117,12 +117,18 @@ quality_state:
   columns_investigate: <N>
   top_issues: [<highest scoring measurement points>]
 
-findings:                      # the point of the whole exercise
+findings:                      # the point — machine-read by calibration/findings.py
   - id: <slug>
     kind: miss | over-fire | ungrounded-score | wrong-metric | stale-eval
-    target: <table.column or metric>
-    evidence: <numbers, named statistic, the read that shows it>
-    disposition: DAT-ticket | teach-scenario | ours-to-fix (oracle only)
+    title: <one line>
+    vertical: finance          # the (vertical, dataset) this was found on — never assume finance
+    dataset: $0
+    target: <table.column or metric id>
+    detector_id: <id>          # required for miss/over-fire/ungrounded-score
+    named_statistic: <KS | orphan-rate | Cramer's V | ...>   # no finding without one (charter)
+    evidence: <numbers + the read that shows it>
+    disposition: DAT-ticket | teach-scenario | ours-to-fix | graduate
+    source: $0                 # where it surfaced (corpus / DAT-#)
 ```
 
 ## Step 6 — Triage every red before you file
