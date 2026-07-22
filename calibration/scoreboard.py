@@ -66,6 +66,10 @@ class DetectorFireStats:
 
     detector_id: str
     in_slice: bool
+    # active | demoted | cut | off-slice. A demoted/cut detector is DELIBERATELY off the
+    # loss path (test_detector_recall.DEMOTED_DETECTORS / CUT_DETECTORS) — its silence is
+    # expected, so it is never a mute/never-fired FINDING. Shown, never flagged.
+    status: str
     n_targets: int  # distinct targets with ANY row (measured or abstained) — coverage
     n_measured: int
     n_abstained: int
@@ -102,13 +106,17 @@ def build_scoreboard(
     *,
     strategy: str = "",
     abstained_status: str = "abstained",
+    demoted: frozenset[str] = frozenset(),
 ) -> Scoreboard:
     """Aggregate head-resolved entropy rows into a fire-rate scoreboard (pure).
 
     ``rows`` carry ``detector_id`` / ``target`` / ``status`` / ``score`` (the
     ``current_entropy_objects`` shape). ``slice_detectors`` is the set the recall lane
     asserts on (``CURRENT_SLICE_DETECTORS``) — silence is only a finding for those; an
-    out-of-slice detector's silence is expected. ``abstained_status`` defaults to the
+    out-of-slice detector's silence is expected. ``demoted`` is the union of the recall
+    lane's ``DEMOTED_DETECTORS`` + ``CUT_DETECTORS``: detectors deliberately off the loss
+    path, whose silence is EXPECTED and must never raise a mute/never-fired finding (else
+    the scoreboard cries wolf and gets ignored). ``abstained_status`` defaults to the
     engine's ``STATUS_ABSTAINED`` value; the CLI passes the real constant so production
     never depends on this default. Pure, so Tier-1 exercises it on synthetic rows with
     no pipeline and no engine bootstrap.
@@ -133,6 +141,13 @@ def build_scoreboard(
             )
         bucket["measured_scores"].append(float(r.score))
 
+    def _status(det: str) -> str:
+        if det in demoted:  # DEMOTED_DETECTORS ∪ CUT_DETECTORS — deliberately off-path
+            return "demoted"
+        if det in slice_detectors:
+            return "active"
+        return "off-slice"
+
     per_detector: list[DetectorFireStats] = []
     for det, b in acc.items():
         scores: list[float] = b["measured_scores"]
@@ -142,6 +157,7 @@ def build_scoreboard(
             DetectorFireStats(
                 detector_id=det,
                 in_slice=det in slice_detectors,
+                status=_status(det),
                 n_targets=len(b["targets"]),
                 n_measured=n_measured,
                 n_abstained=b["n_abstained"],
@@ -157,16 +173,22 @@ def build_scoreboard(
     per_detector.sort(key=lambda s: (-s.fire_rate, -s.n_measured, s.detector_id))
 
     active = set(acc)
-    mute = sorted(d for d in slice_detectors if d not in active)
+    # Silence findings (mute / never-fired) fire ONLY for detectors we actually rely on:
+    # in-slice AND not deliberately demoted/cut. A demoted detector's silence is expected.
+    relied_on = slice_detectors - demoted
+    mute = sorted(d for d in relied_on if d not in active)
     never_fired = sorted(
         s.detector_id
         for s in per_detector
-        if s.in_slice and s.n_measured > 0 and s.n_fired == 0
+        if s.status == "active" and s.n_measured > 0 and s.n_fired == 0
     )
+    # Over-fire is worth seeing anywhere except on a known-demoted detector.
     saturated = sorted(
         s.detector_id
         for s in per_detector
-        if s.n_measured >= SATURATION_MIN_N and s.fire_rate >= SATURATION_FRACTION
+        if s.status != "demoted"
+        and s.n_measured >= SATURATION_MIN_N
+        and s.fire_rate >= SATURATION_FRACTION
     )
     off_slice_active = sorted(d for d in active if d not in slice_detectors)
 
@@ -192,14 +214,14 @@ def render(board: Scoreboard, *, is_wild: bool | None = None) -> str:
     lines.append(f"=== fire-rate scoreboard: {board.strategy}  [{tier}] ===")
     lines.append(f"    {board.total_rows} entropy rows over {len(board.per_detector)} detectors\n")
     lines.append(
-        f"    {'detector':<26} {'slice':<5} {'tgts':>4} {'meas':>4} "
+        f"    {'detector':<26} {'status':<9} {'tgts':>4} {'meas':>4} "
         f"{'abst':>4} {'fired':>5} {'fire%':>6}  {'min':>5} {'med':>5} {'max':>5}"
     )
-    lines.append(f"    {'-' * 26} {'-' * 5} {'-' * 4} {'-' * 4} {'-' * 4} {'-' * 5} {'-' * 6}  {'-' * 5} {'-' * 5} {'-' * 5}")
+    lines.append(f"    {'-' * 26} {'-' * 9} {'-' * 4} {'-' * 4} {'-' * 4} {'-' * 5} {'-' * 6}  {'-' * 5} {'-' * 5} {'-' * 5}")
     for s in board.per_detector:
         mark = "SAT" if s.detector_id in board.saturated else ("·" if s.n_fired else "0")
         lines.append(
-            f"    {s.detector_id:<26} {'yes' if s.in_slice else 'no':<5} "
+            f"    {s.detector_id:<26} {s.status:<9} "
             f"{s.n_targets:>4} {s.n_measured:>4} {s.n_abstained:>4} {s.n_fired:>5} "
             f"{s.fire_rate * 100:>5.0f}% {mark:>1}  "
             f"{_fmt(s.score_min):>5} {_fmt(s.score_median):>5} {_fmt(s.score_max):>5}"
@@ -244,11 +266,20 @@ def load_scoreboard(strategy: str) -> Scoreboard:
     """
     from dataraum.entropy.models import STATUS_ABSTAINED
 
-    from calibration.test_detector_recall import CURRENT_SLICE_DETECTORS
+    from calibration.test_detector_recall import (
+        CURRENT_SLICE_DETECTORS,
+        CUT_DETECTORS,
+        DEMOTED_DETECTORS,
+    )
 
     rows = _load_rows(strategy)
+    demoted = frozenset(DEMOTED_DETECTORS) | frozenset(CUT_DETECTORS)
     return build_scoreboard(
-        rows, CURRENT_SLICE_DETECTORS, strategy=strategy, abstained_status=STATUS_ABSTAINED
+        rows,
+        CURRENT_SLICE_DETECTORS,
+        strategy=strategy,
+        abstained_status=STATUS_ABSTAINED,
+        demoted=demoted,
     )
 
 

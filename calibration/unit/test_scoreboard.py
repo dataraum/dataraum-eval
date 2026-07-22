@@ -35,7 +35,32 @@ def test_fire_rate_and_distribution() -> None:
     assert (b.n_measured, b.n_fired, b.n_abstained) == (3, 2, 0)
     assert b.fire_rate == pytest.approx(2 / 3)
     assert b.score_max == 0.8 and b.score_min == 0.0 and b.score_median == pytest.approx(0.4)
-    assert b.in_slice is True
+    assert b.in_slice is True and b.status == "active"
+
+
+def test_demoted_detector_silence_is_never_a_finding() -> None:
+    # dimensional_entropy is in-slice but DEMOTED (real case: NMI anti-predictive off the
+    # loss path). Its silence — zero rows, or measured-but-0.0, or firing everywhere — must
+    # never raise mute/never-fired/saturated, else the scoreboard cries wolf and is ignored.
+    slice_with_demoted = SLICE | {"dimensional_entropy"}
+    demoted = frozenset({"dimensional_entropy"})
+
+    # (a) zero rows → not mute
+    b1 = build_scoreboard(
+        [_row("benford", "column:t.a", 0.5)], slice_with_demoted, demoted=demoted
+    )
+    assert "dimensional_entropy" not in b1.mute
+    assert "benford" not in b1.mute  # benford emitted
+
+    # (b) ran, all 0.0 → not never-fired; status is surfaced as demoted
+    rows = [_row("dimensional_entropy", f"column:t.c{i}", 0.0) for i in range(3)]
+    b2 = build_scoreboard(rows, slice_with_demoted, demoted=demoted)
+    assert b2.never_fired == [] and b2.mute == sorted(SLICE)  # the 4 active ones are mute
+    assert next(s for s in b2.per_detector if s.detector_id == "dimensional_entropy").status == "demoted"
+
+    # (c) fires on everything → not saturated
+    hot = [_row("dimensional_entropy", f"column:t.h{i}", 0.9) for i in range(SATURATION_MIN_N)]
+    assert build_scoreboard(hot, slice_with_demoted, demoted=demoted).saturated == []
 
 
 def test_abstentions_are_coverage_not_scores() -> None:
