@@ -357,6 +357,7 @@ measured_in:
 - measure: trial_balance.debit_balance
   unit_column: null
   cross_unit: false
+fk_roles: {}
 folded_dimensions: []
 degenerate_ids: []
 bus_matrix:

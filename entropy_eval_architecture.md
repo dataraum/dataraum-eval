@@ -106,6 +106,22 @@ the existing grammar: a named set-statistic (precision/recall/F1/Jaccard) for
 set-valued claims, exact-match verdict accuracy for categorical ones — never a new
 framework.
 
+**Truth sections added for the DAT-725 graph close (2026-07-23, CAP items):**
+`measured_in` — every monetary measure's same-table unit column, authored from the
+models with a model-introspection bind test; `cross_unit` is **data-derived at
+export** (declared unit column with >1 distinct value), so an injector that silently
+no-ops can never produce a false truth. Serves the banked O2 units/additivity oracle;
+the `mix_units` injector gained a **declared** variant (`unit_col` param — converted
+rows also flip the unit column) producing the genuinely multi-currency shape the
+drill gate must flag. `fk_roles` — the role-playing-FK probe shape
+(`detection-roleplay-v1`: addresses ← orders.bill_to/ship_to, the DAT-419
+two-FKs-one-pair case, + deliveries.delivery_addr sharing ship_to under another
+name). Probe-style conditional (zero perturbation of other corpora); labelled-clean
+`stratum: genuine_clean` (precision material, never a recall target); role
+consistency is by construction (delivery_addr = parent order's ship_to). Serves the
+banked O6 role-identity oracle; `bus_matrix` deliberately cannot express two roled
+exposures of one concept — that inexpressibility is DAT-788's point.
+
 The **determinism split** governs that grammar. A claim fixed by structure alone
 (a `COUNT(DISTINCT)` never reconciles under SUM) is **hard-asserted** — a mismatch
 is a real defect and no upstream label can game it. A claim that depends on an

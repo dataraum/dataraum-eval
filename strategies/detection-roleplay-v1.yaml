@@ -1,0 +1,25 @@
+name: detection-roleplay-v1
+level: low
+description: >
+  Role-playing-FK structural corpus (DAT-788 / DAT-419, CAP-roleplay-fk-fixture):
+  one address dimension referenced by TWO differently-roled FKs on the same fact
+  (orders.bill_to_addr + orders.ship_to_addr — the DAT-419 two-FKs-one-table-pair
+  shape) plus a second fact sharing the ship_to role under a different column name
+  (deliveries.delivery_addr — the judge's conform path; role-consistent with the
+  parent order's ship_to BY CONSTRUCTION). A labelled-CLEAN family (stratum
+  genuine_clean — precision material, never a recall target): graded against the
+  data-conditional metadata_truth sections (fk_roles + roled relationships) by
+  relationships recall/precision today, and by the banked O6 oracle
+  (test_role_identity_e2e, post-DAT-725-pin) for role-separated conformed
+  identity. ~30% of orders bill and ship to the SAME address — the realistic
+  overlap a naive value-overlap pairing would seize on.
+
+# Engine surface: relationship judge + conformed identity (DAT-788). No detector_id
+# override — the injector's default (relationship_discovery) is already correct.
+
+injections:
+  - injector: inject_role_playing_fks
+    table: orders
+    params:
+      seed: 20260723
+      severity: low
