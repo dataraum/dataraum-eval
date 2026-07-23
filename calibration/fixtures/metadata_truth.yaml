@@ -315,6 +315,8 @@ cycles:
   - invoices
   - payments
   required: true
+  family: settlement
+  direction: outgoing
 - canonical_type: bank_reconciliation
   key_tables:
   - bank_transactions

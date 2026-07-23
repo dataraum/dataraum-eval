@@ -47,6 +47,7 @@ from calibration.metadata_truth import (
     expected_groundings,
     expected_reconciles_with,
     is_wild,
+    read_detected_cycles,
     read_extract_snippets,
     read_groundings,
     read_reconciles_with,
@@ -272,6 +273,79 @@ def test_reconciles_with_population(metadata_truth: dict[str, Any], strategy_nam
             "expected reconciling concepts carry no reconciles_with verdict — their "
             f"groundings are LLM-recall-dependent: {uncovered}"
         )
+
+
+# --- (f) validity-scope semantic check (O4, P8/DAT-733) -----------------------
+
+
+@pytest.mark.llm
+def test_validity_scope_semantic(strategy_name: str, metadata_truth: dict[str, Any]) -> None:
+    """Every HEALTHY grounding on a status-bearing relation carries the posted-only
+    predicate in ``where_predicates`` OR a typed ``scope.validity`` bypass
+    assumption in its provenance — never neither.
+
+    The engine's default-inject vs defer split is DELIBERATE (sweep-attention #2:
+    the imperative prompt line is gone; scope is injected deterministically, and a
+    grounding that already constrains the status column bypasses with a typed
+    assumption). Conditioned-hard (Q5): graded only when a MEASURED status cycle
+    exists this run — whether one SHOULD exist is the cycles oracle's job.
+    """
+    from sqlalchemy import text
+
+    from calibration.tools._runs import short
+
+    with workspace_session() as session:
+        if not read_view_exists(session, "current_groundings"):
+            pytest.skip("current_groundings absent — pre-P2 engine")
+        cycles = read_detected_cycles(session)
+        # status_table/status_column of every MEASURED status cycle
+        status_by_relation: dict[str, str] = {}
+        for c in cycles:
+            if c["status_column"] and c["completion_value"] is not None and c["completion_rate"] is not None:
+                for tbl in c["tables"]:
+                    status_by_relation.setdefault(tbl, str(c["status_column"]))
+        if not status_by_relation:
+            pytest.skip(
+                "conditional-cell: no MEASURED status cycle detected this run "
+                "(validity-scope semantic check conditioned-hard, Q5 idiom)"
+            )
+        from dataraum.storage.read_views import read_schema_name_for
+
+        read_schema = read_schema_name_for(
+            str(session.execute(text("SELECT current_schema()")).scalar())
+        )
+        rows = session.execute(
+            text(
+                "SELECT concept, relation, where_predicates, provenance "
+                f'FROM "{read_schema}".current_groundings WHERE NOT failed'
+            )
+        ).all()
+
+    graded = [r for r in rows if short(str(r.relation or "")) in status_by_relation]
+    if not graded:
+        pytest.skip("no healthy grounding targets a status-bearing relation this run")
+
+    violations: list[str] = []
+    for r in graded:
+        status_col = status_by_relation[short(str(r.relation))]
+        scoped = status_col in str(r.where_predicates or "")
+        prov = r.provenance if isinstance(r.provenance, dict) else {}
+        bypassed = any(
+            a.get("dimension") == "scope.validity"
+            for a in (prov.get("assumptions") or [])
+            if isinstance(a, dict)
+        )
+        if not (scoped or bypassed):
+            violations.append(
+                f"{r.concept} @ {r.relation}: neither the posted-only predicate "
+                f"({status_col!r} in where_predicates) nor a scope.validity bypass assumption"
+            )
+    print(f"\n[validity scope] {len(graded)} groundings on status-bearing relations, "
+          f"{len(violations)} unscoped")
+    assert not violations, (
+        "healthy grounding(s) on a status-bearing relation carry NO validity scope and "
+        "NO typed bypass — unscoped totals leak unposted rows:\n  " + "\n  ".join(violations)
+    )
 
 
 # --- (e) served-context / AP oracle (DAT-734 AC, pending P9) ------------------

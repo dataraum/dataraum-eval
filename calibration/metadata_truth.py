@@ -737,7 +737,8 @@ def read_detected_cycles(session: Any) -> list[dict[str, Any]]:
     )
     rows = session.execute(
         text(
-            "SELECT canonical_type, cycle_name, is_known_type, confidence, tables_involved "
+            "SELECT canonical_type, cycle_name, is_known_type, confidence, tables_involved, "
+            "family, direction, status_column, completion_value, completion_rate "
             f'FROM "{read_schema}".current_detected_business_cycles'
         )
     ).all()
@@ -748,6 +749,16 @@ def read_detected_cycles(session: Any) -> list[dict[str, Any]]:
             "is_known_type": bool(r.is_known_type),
             "confidence": r.confidence,
             "tables": {short(t) for t in (r.tables_involved or [])},
+            # DAT-856 direction surface (engine CHECK: family/direction both-null-
+            # or-both-set; Cut B renders an undirected detection as canonical_type
+            # = the family with direction='undetermined').
+            "family": r.family,
+            "direction": r.direction,
+            # the measured-status surface (O4's conditioned-hard condition reads
+            # the same rows; exposed here so there is one loader, not two).
+            "status_column": r.status_column,
+            "completion_value": r.completion_value,
+            "completion_rate": r.completion_rate,
         }
         for r in rows
     ]

@@ -1,0 +1,29 @@
+name: detection-crossunit-v1
+level: medium
+description: >
+  DECLARED mixed-currency corpus (CAP-measured-in-truth, DAT-731): the mix_units
+  declared variant converts ~12% of invoice amounts at an FX rate AND writes the
+  alt currency into the unit column — a genuinely multi-currency, honestly-declared
+  table. The data-derived measured_in truth flips cross_unit=true for
+  invoices.amount (and, at merged levels, whatever the currency column unions
+  into); every other measure stays single-currency (the silent legs). Graded by
+  test_units_additivity_e2e's cross-unit gate surface: (distinct_count > 1) on the
+  unit column == cross_unit truth, per (fact, column) — a sibling fact must never
+  be flagged for this one's mixing. The gate itself is the cockpit drill unit gate
+  (DAT-731 unitGate); this corpus grades the engine surface it consumes.
+
+# detector_id: unit_entropy is the family's historical id — the recall oracle
+# stands down on it (not implemented); the graded surface is the measured_in /
+# cross_unit truth comparison above, not a detector score.
+
+injections:
+  - injector: mix_units
+    table: invoices
+    detector_id: unit_entropy
+    params:
+      col: amount
+      alt_currency: EUR
+      ratio: 0.12
+      fx_rate: 1.1
+      unit_col: currency
+      severity: medium

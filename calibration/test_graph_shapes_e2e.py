@@ -49,14 +49,87 @@ _MATCH_SHAPES: dict[str, str] = {
         "MATCH (g IS grounding_node)-[u IS uses]->(col IS column_node) "
         "COLUMNS (1 AS one))"
     ),
+    # --- O3 (P7/DAT-732) metric DAG — seeded from the vertical, so present on
+    # --- every declaring corpus (finance seeds working-capital metrics) --------
+    "og_metrics": (
+        "SELECT count(*) FROM GRAPH_TABLE ({graph} MATCH (m IS metric_node) COLUMNS (1 AS one))"
+    ),
+    "og_derives_from": (
+        "SELECT count(*) FROM GRAPH_TABLE ({graph} "
+        "MATCH (m IS metric_node)-[d IS derives_from]->(c IS concept_node) "
+        "COLUMNS (1 AS one))"
+    ),
+    "og_has_parameter": (
+        "SELECT count(*) FROM GRAPH_TABLE ({graph} "
+        "MATCH (m IS metric_node)-[p IS has_parameter]->(par IS parameter_node) "
+        "COLUMNS (1 AS one))"
+    ),
 }
 
-# O4 (P8/DAT-733) validity-scope shapes — CONDITIONED-HARD (owner-ruled): asserted
-# only when a measured status cycle exists in this run's detected cycles; the skip
-# carries the Q5 `conditional-cell:` prefix so sweep accounting can partition
-# designed conditioning from silent stand-downs. Populated alongside _MATCH_SHAPES
-# growth as the DAT-725 elements are confirmed on the pinned engine.
-_CONDITIONED_SHAPES: dict[str, str] = {}
+# CONDITIONED-HARD shapes (the Q5 idiom): hard-asserted only when their runtime
+# condition holds in THIS run's materialized cell; otherwise skip with the
+# `conditional-cell:` reason prefix so sweep accounting can partition designed
+# conditioning from silent stand-downs. The condition's own recall belongs to
+# another oracle (cycles recall for the status cycle; the DAT-787 member-precision
+# oracle for filter declarations) — these entries grade PLUMBING only.
+#
+# * O4 (P8/DAT-733, owner-ruled): og_validity_filter / og_scoped_by exist iff a
+#   MEASURED status cycle was detected (status_column/completion_value/
+#   completion_rate all non-NULL in detected_business_cycles).
+# * DAT-787: og_dim_members / og_filtered_by exist iff >= 1 healthy grounding
+#   declared typed filter_members in its provenance (prompt v10.0 — an
+#   LLM-selective declaration; zero declarations is a legitimate run, not a
+#   binding defect).
+_CONDITIONED_SHAPES: dict[str, tuple[str, str]] = {
+    "og_validity_filter": (
+        "status_cycle",
+        "SELECT count(*) FROM GRAPH_TABLE ({graph} "
+        "MATCH (v IS validity_filter) COLUMNS (1 AS one))",
+    ),
+    "og_scoped_by": (
+        "status_cycle",
+        "SELECT count(*) FROM GRAPH_TABLE ({graph} "
+        "MATCH (t IS table_node)-[s IS scoped_by]->(v IS validity_filter) "
+        "COLUMNS (1 AS one))",
+    ),
+    "og_dim_members": (
+        "filter_members",
+        "SELECT count(*) FROM GRAPH_TABLE ({graph} "
+        "MATCH (dm IS dim_member) COLUMNS (1 AS one))",
+    ),
+    "og_filtered_by": (
+        "filter_members",
+        "SELECT count(*) FROM GRAPH_TABLE ({graph} "
+        "MATCH (g IS grounding_node)-[f IS filtered_by]->(dm IS dim_member) "
+        "COLUMNS (1 AS one))",
+    ),
+}
+
+
+def _condition_holds(session: Any, condition: str, read_schema: str) -> tuple[bool, str]:
+    """Evaluate a conditioned shape's runtime condition on the materialized cell."""
+    from sqlalchemy import text
+
+    if condition == "status_cycle":
+        n = session.execute(
+            text(
+                "SELECT count(*) FROM "
+                f'"{read_schema}".current_detected_business_cycles '
+                "WHERE status_column IS NOT NULL AND completion_value IS NOT NULL "
+                "AND completion_rate IS NOT NULL"
+            )
+        ).scalar()
+        return bool(n), "no MEASURED status cycle detected in this run"
+    if condition == "filter_members":
+        n = session.execute(
+            text(
+                "SELECT count(*) FROM "
+                f'"{read_schema}".current_groundings '
+                "WHERE NOT failed AND provenance::text LIKE '%filter_members%'"
+            )
+        ).scalar()
+        return bool(n), "no healthy grounding declared filter_members this run"
+    raise ValueError(f"unknown condition {condition!r}")
 
 
 @pytest.fixture(autouse=True)
@@ -108,3 +181,23 @@ def test_element_instantiates_in_match(
 ) -> None:
     """A present og_* element view has rows AND those rows instantiate in a PGQ MATCH."""
     _assert_shape(element, _MATCH_SHAPES[element], metadata_truth)
+
+
+@pytest.mark.llm
+@pytest.mark.parametrize("element", sorted(_CONDITIONED_SHAPES))
+def test_conditioned_element_instantiates_in_match(
+    element: str, strategy_name: str, metadata_truth: dict[str, Any]
+) -> None:
+    """A conditioned og_* element instantiates in a MATCH WHEN its condition holds.
+
+    Condition unmet → `conditional-cell:` skip (designed stand-down, partitionable
+    in the verdict store); condition met → the full hard contract (rows + MATCH).
+    """
+    condition, shape = _CONDITIONED_SHAPES[element]
+    with workspace_session() as session:
+        if not read_view_exists(session, element):
+            pytest.skip(f"{element} element view absent — pre-cutover engine")
+        holds, why = _condition_holds(session, condition, _read_schema(session))
+    if not holds:
+        pytest.skip(f"conditional-cell: {why} ({element} conditioned-hard, Q5 idiom)")
+    _assert_shape(element, shape, metadata_truth)
