@@ -138,7 +138,7 @@ def record_pass(
         for nid, entry in sorted(rows.items()):
             module = Path(nid.split("::", 1)[0]).stem
             spec = reg.get(module)
-            row = {
+            row: dict[str, Any] = {
                 "pass_id": pass_id,
                 "recorded_at": recorded_at,
                 "dataset": strategy,
@@ -154,8 +154,52 @@ def record_pass(
                 "engine_on_main": _on_main(ENGINE_DIR),
                 "run_id": run_id,
             }
+            if nid.endswith("::test_bind_surface_fingerprinted_not_asserted"):
+                detail = _bind_fingerprints(strategy)
+                if detail is not None:
+                    row["detail"] = {"sql_fingerprints": detail}
             f.write(json.dumps(row, sort_keys=True) + "\n")
     return len(rows)
+
+
+def _bind_fingerprints(strategy: str) -> dict[str, str] | None:
+    """The parity oracle's per-pass sql_used fingerprint sidecar, if it wrote one.
+
+    Written by ``test_bind_surface_fingerprinted_not_asserted`` (Q3: the VERDICT is
+    never persisted, the grounded BIND is) — attaching it to the verdict row makes
+    cross-pass bind parity a store query instead of a run-log archaeology dig.
+    """
+    path = EVAL_ROOT / "output" / strategy / "parity_fingerprints.json"
+    if not path.exists():
+        return None
+    try:
+        loaded = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+    return loaded if isinstance(loaded, dict) else None
+
+
+def bind_parity(strategy: str, *, store: Path = STORE) -> list[dict[str, Any]]:
+    """The sweep-#2 read-out: bind fingerprints per pass, oldest first.
+
+    Each entry: ``{pass_id, recorded_at, engine_commit, fingerprints}``. Drift in a
+    deterministic check's fingerprint across same-engine passes is a bind-stability
+    finding; ``sign_conventions`` is the known flapper (reduced-verdict parity, Q3).
+    """
+    out: list[dict[str, Any]] = []
+    for pass_rows in passes(strategy, store=store):
+        for row in pass_rows:
+            fps = (row.get("detail") or {}).get("sql_fingerprints")
+            if fps and row["oracle"].endswith("::test_bind_surface_fingerprinted_not_asserted"):
+                out.append(
+                    {
+                        "pass_id": row["pass_id"],
+                        "recorded_at": row["recorded_at"],
+                        "engine_commit": row["engine_commit"],
+                        "fingerprints": fps,
+                    }
+                )
+    return out
 
 
 def load(*, store: Path = STORE) -> list[dict[str, Any]]:
@@ -215,7 +259,27 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="verdict store queries (DAT-862)")
     parser.add_argument("-s", "--strategy", required=True)
+    parser.add_argument(
+        "--bind-parity", action="store_true",
+        help="sweep-#2 read-out: seed-validation sql_used fingerprints across passes",
+    )
     args = parser.parse_args()
+
+    if args.bind_parity:
+        entries = bind_parity(args.strategy)
+        if not entries:
+            print(f"{args.strategy}: no fingerprint-bearing passes recorded yet")
+            return
+        ids = sorted({vid for e in entries for vid in e["fingerprints"]})
+        for e in entries:
+            print(f"pass {e['pass_id']} ({e['recorded_at']}, engine {e['engine_commit']}):")
+            for vid in ids:
+                print(f"  {vid:<28} {e['fingerprints'].get(vid, '—')}")
+        if len(entries) >= 2:
+            prev, curr = entries[-2]["fingerprints"], entries[-1]["fingerprints"]
+            drift = sorted(v for v in ids if prev.get(v) != curr.get(v))
+            print("drift vs previous pass: " + (", ".join(drift) if drift else "none"))
+        return
 
     history = passes(args.strategy)
     print(f"{args.strategy}: {len(history)} recorded pass(es)")

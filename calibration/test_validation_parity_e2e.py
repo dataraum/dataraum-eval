@@ -166,13 +166,25 @@ def test_bind_surface_fingerprinted_not_asserted(
 
     executed = {str(r.validation_id) for r in results}
     unexecuted = sorted(set(db) - executed)
+    fps = {
+        str(r.validation_id): hashlib.sha256((r.sql_used or "").encode()).hexdigest()[:12]
+        for r in results
+    }
     print("\n[bind surface] grounded-SQL fingerprints (cross-pass parity = the sweep-#2 read-out):")
-    for r in sorted(results, key=lambda r: str(r.validation_id)):
-        fp = hashlib.sha256((r.sql_used or "").encode()).hexdigest()[:12]
+    for vid in sorted(fps):
         flap = "  ← known flapper (reduced-verdict parity applies)" if (
-            r.validation_id in _KNOWN_FLAPPERS
+            vid in _KNOWN_FLAPPERS
         ) else ""
-        print(f"  {r.validation_id:<28} sql_fp={fp}{flap}")
+        print(f"  {vid:<28} sql_fp={fps[vid]}{flap}")
+
+    # Durable leg of the sweep-#2 mechanism: the store attaches this sidecar to
+    # this oracle's verdict row (results_store.record_pass), so cross-pass bind
+    # parity is a store query — the printed table above is display only.
+    import json
+
+    detail_path = EVAL_ROOT / "output" / strategy_name / "parity_fingerprints.json"
+    detail_path.parent.mkdir(parents=True, exist_ok=True)
+    detail_path.write_text(json.dumps(fps, sort_keys=True))
     assert not unexecuted, (
         "seed validation(s) never executed this run — a declared check that no longer "
         f"binds is a migration defect, not judgment variance: {unexecuted}"
