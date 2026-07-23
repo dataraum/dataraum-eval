@@ -72,3 +72,22 @@ def test_missed_when_neither_type_nor_family_detected() -> None:
         _AP, [_row(canonical_type="bank_reconciliation", family=None, direction=None)]
     )
     assert state == "MISSED"
+
+
+def test_mislabeled_when_typed_row_shares_no_key_table() -> None:
+    # DAT-854 split (v3): the crossunit draw — a TB-shaped cycle wearing the
+    # bank_reconciliation label. Zero key-table overlap = a different process.
+    state, detail = classify_directed_cycle(
+        _AP,
+        [_row(tables={"trial_balance", "journal_lines", "chart_of_accounts"},
+              cycle_name="Trial Balance Reconciliation Cycle")],
+    )
+    assert state == "MISLABELED" and "Trial Balance" in detail
+
+
+def test_partial_overlap_stays_key_tables_short_not_mislabeled() -> None:
+    # One shared key table = a partial detection of the RIGHT cycle.
+    state, _ = classify_directed_cycle(
+        _AP, [_row(tables={"invoices", "trial_balance"})]
+    )
+    assert state == "KEY_TABLES_SHORT"

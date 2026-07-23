@@ -24,6 +24,8 @@ cycle vocabulary + corpus structure). Cycle detection is LLM-inferred, so:
 
 version=2: three-state directed grading + the family/direction loader columns —
 one coordinated verdict-changing bump (the sweep-#3 vocabulary co-evolution).
+version=3: the DAT-854 ruling's state split — MISLABELED (typed row sharing zero
+key tables: "wrong cycle, right label") split out of KEY_TABLES_SHORT, both paths.
 
 Tier-3 (docker + Temporal + LLM): marked ``llm``.
 """
@@ -39,7 +41,7 @@ from calibration.conftest import require_pipeline_run
 from calibration.metadata_truth import read_detected_cycles
 from calibration.tools._runs import workspace_session
 
-pytestmark = cube.needs(vertical="finance", dataset="*", from_stage="operating_model", version=2)
+pytestmark = cube.needs(vertical="finance", dataset="*", from_stage="operating_model", version=3)
 
 
 def classify_directed_cycle(
@@ -48,14 +50,23 @@ def classify_directed_cycle(
     """Three-state verdict for one expected DIRECTED cycle (pure; Tier-1-able).
 
     Returns ``(state, detail)`` with state ∈ {CORRECT, DETECTED_BUT_UNDIRECTED,
-    MISSED, KEY_TABLES_SHORT, WRONG_DIRECTION}. WRONG_DIRECTION (a directed row
-    whose direction contradicts the declared truth) is graded as its own state
-    too — it is neither correct nor undetermined.
+    MISSED, KEY_TABLES_SHORT, MISLABELED, WRONG_DIRECTION}. WRONG_DIRECTION (a
+    directed row whose direction contradicts the declared truth) is graded as its
+    own state too — it is neither correct nor undetermined. MISLABELED (v3, the
+    DAT-854 ruling's state split) is a typed row sharing ZERO key tables with the
+    truth — the label sits on a different business process entirely ("wrong cycle,
+    right label"), a distinct defect from a partial detection missing some tables.
     """
     want_tables = set(expected["key_tables"])
     exact = [d for d in detected if d["canonical_type"] == expected["canonical_type"]]
     if exact:
         d = exact[0]
+        if not want_tables & d["tables"]:
+            return "MISLABELED", (
+                f"label on a different cycle — tables {sorted(d['tables'])} share no "
+                f"key table with {sorted(want_tables)}"
+                + (f" ({d.get('cycle_name')})" if d.get("cycle_name") else "")
+            )
         if not want_tables <= d["tables"]:
             return "KEY_TABLES_SHORT", (
                 f"detected but tables {sorted(d['tables'])} miss {sorted(want_tables - d['tables'])}"
@@ -112,7 +123,14 @@ def test_cycle_recall(metadata_truth: dict[str, Any]) -> None:
             continue
         d = by_type.get(e["canonical_type"])
         covered = d is not None and set(e["key_tables"]) <= d["tables"]
-        status = "✓" if covered else ("MISSING" if d is None else "key-tables-short")
+        if covered:
+            status = "✓"
+        elif d is None:
+            status = "MISSING"
+        elif not set(e["key_tables"]) & d["tables"]:
+            status = "MISLABELED"  # DAT-854 split: label on a different cycle
+        else:
+            status = "key-tables-short"
         print(f"[cycle recall] {e['canonical_type']} (required={e.get('required', False)}): {status}")
         if e.get("required") and not covered:
             failures.append(f"{e['canonical_type']}: {status}")
