@@ -53,6 +53,14 @@ def test_offline_metrics_reproduce_ground_truth(
     down: this is the only place the financial check runs for free (the lake-mode
     buckets and prevention attribution still need the paid run).
     """
+    from calibration.conftest import DATA_DIR
+
+    if not (DATA_DIR / strategy_name / "journal_lines.csv").exists():
+        pytest.skip(
+            "offline golden SQL is canonical-shape-only — journal_lines.csv absent "
+            "(a transformed corpus: flat/single merge the journal; the same truth is "
+            "graded on the canonical sibling)"
+        )
     result = outcomes.label(strategy_name, offline=True)
     annual = ground_truth.get("annual", {})
     scored = [m for m in result["metrics"] if "in_tolerance" in m]

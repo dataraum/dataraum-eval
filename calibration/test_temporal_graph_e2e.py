@@ -193,8 +193,14 @@ def test_absence_falls_loud_null_contract(strategy_name: str) -> None:
 
 @pytest.mark.llm
 def test_anchor_one_home(strategy_name: str) -> None:
-    """og_columns.anchor_time_axis == the lineage witness's axis where reconciled,
-    else the single declared is_anchor event column — never positional."""
+    """og_columns.anchor_time_axis, PER COLUMN: a measure whose lineage witness
+    reconciled carries the witness's axis; every other column carries its OWN
+    table's single declared is_anchor event column — never positional.
+
+    (v1 of this test compared every column against a table-level expectation and
+    misapplied the witness's EVENT-table axis to the measure's table — the sweep-#1
+    reds it produced were this oracle's bug, not the engine's.)
+    """
     from sqlalchemy import text
 
     with workspace_session() as session:
@@ -205,7 +211,7 @@ def test_anchor_one_home(strategy_name: str) -> None:
         anchors = session.execute(
             text(
                 "SELECT t.table_name AS table_name, c.column_name AS column_name, "
-                "c.anchor_time_axis AS anchor_time_axis "
+                "c.column_id AS column_id, c.anchor_time_axis AS anchor_time_axis "
                 f'FROM "{read_schema}".og_columns c '
                 "JOIN tables t ON t.table_id = c.table_id "
                 "WHERE c.anchor_time_axis IS NOT NULL"
@@ -213,10 +219,9 @@ def test_anchor_one_home(strategy_name: str) -> None:
         ).all()
         witness = session.execute(
             text(
-                "SELECT t.table_name AS table_name, mal.event_time_axis_column AS axis "
+                "SELECT mal.measure_column_id AS column_id, "
+                "mal.event_time_axis_column AS axis "
                 f'FROM "{read_schema}".current_measure_aggregation_lineage mal '
-                "JOIN columns c ON c.column_id = mal.measure_column_id "
-                "JOIN tables t ON t.table_id = c.table_id "
                 "WHERE mal.event_time_axis_column IS NOT NULL"
             )
         ).all()
@@ -224,24 +229,32 @@ def test_anchor_one_home(strategy_name: str) -> None:
     if not anchors:
         pytest.skip("no anchor_time_axis populated on this corpus")
 
-    witness_by_table = {r.table_name: r.axis for r in witness}
+    witness_by_column = {r.column_id: r.axis for r in witness}
+    declared_anchor_by_table: dict[str, str] = {}
+    for table, cols in declared.items():
+        event_anchors = [
+            c["column"] for c in cols if c.get("role") == "event" and c.get("is_anchor")
+        ]
+        if len(event_anchors) == 1:
+            declared_anchor_by_table[table] = event_anchors[0]
+
     problems: list[str] = []
+    checked = 0
     for r in anchors:
-        expected = witness_by_table.get(r.table_name)
+        expected = witness_by_column.get(r.column_id) or declared_anchor_by_table.get(
+            r.table_name
+        )
         if expected is None:
-            declared_anchors = [
-                c["column"]
-                for c in declared.get(r.table_name, [])
-                if c.get("role") == "event" and c.get("is_anchor")
-            ]
-            if len(declared_anchors) == 1:
-                expected = declared_anchors[0]
-        if expected is not None and r.anchor_time_axis != expected:
+            continue  # no one-home basis for this column — nothing to hold it to
+        checked += 1
+        if r.anchor_time_axis != expected:
+            home = "witness" if r.column_id in witness_by_column else "declared"
             problems.append(
                 f"{r.table_name}.{r.column_name}: anchor={r.anchor_time_axis!r}, "
-                f"one-home says {expected!r}"
+                f"one-home ({home}) says {expected!r}"
             )
-    print(f"\n[anchor one-home] {len(anchors)} anchored columns, {len(problems)} divergent")
+    print(f"\n[anchor one-home] {checked}/{len(anchors)} anchored columns checked, "
+          f"{len(problems)} divergent")
     assert not problems, (
         "anchor_time_axis diverges from its one home (witness ▸ declared):\n  "
         + "\n  ".join(problems)
