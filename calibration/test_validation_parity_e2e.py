@@ -99,7 +99,10 @@ def test_seed_parity_deterministic_legs(metadata_truth: dict[str, Any], strategy
     with workspace_session() as session:
         db = _db_home(session)
     if not db:
-        pytest.skip("no seed validations in the DB home — pre-migration engine")
+        pytest.skip(
+            "no seed validations in the DB home — pre-migration engine OR post-band-3 "
+            "(seed YAMLs retired, induction-only; the parity gate is decided)"
+        )
 
     missing = sorted(set(yaml_specs) - set(db))
     extra = sorted(set(db) - set(yaml_specs))
@@ -148,7 +151,10 @@ def test_bind_surface_fingerprinted_not_asserted(
     with workspace_session() as session:
         db = _db_home(session)
         if not db:
-            pytest.skip("no seed validations in the DB home — pre-migration engine")
+            pytest.skip(
+                "no seed validations in the DB home — pre-migration engine OR post-band-3 "
+                "(seed YAMLs retired, induction-only; bind-parity retired with the seed home)"
+            )
         read_schema = read_schema_name_for(
             str(session.execute(text("SELECT current_schema()")).scalar())
         )

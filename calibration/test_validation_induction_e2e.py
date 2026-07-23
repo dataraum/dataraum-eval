@@ -12,11 +12,14 @@ Grades the ``validation_induction`` phase's output in the ``validations`` home:
    EXECUTED (a validation_results row exists for it): the engine
    membership-validates at induction; a generated validation that never binds is
    exactly the fabrication this read exists to catch.
-3. **Declared/generated separation (HARD)** — ``source`` ∈ {seed, generated,
-   NULL} exactly, and the finance corpus's declared (seed) set is present —
-   induction can never flip ``nothing_declared`` because generated ≠ declared
-   (pinned engine-side; the zero-declare corpus that proves the flip-impossibility
-   end-to-end is band 6's exam, not this corpus's).
+3. **Induction-only separation (HARD, post-band-3)** — ``source`` ∈ {seed,
+   generated, NULL} exactly. Band-3 (DAT-735) DELETED the nine finance seed
+   YAMLs, so finance is induction-only now: the seed home is empty by design and
+   induction is the SOLE source. On a fresh volume the invariant flips — seed
+   rows must be ABSENT (a lingering seed is incomplete deletion / a re-seed path,
+   not the declared home) and generated must be PRESENT (the only thing standing
+   between the corpus and zero validations). Band-3 turned finance into the
+   zero-declare shape band 6 will exam-grade with no hand-authored YAML at all.
 4. **check_type vocabulary (HARD)** — every persisted validation row's
    ``check_type`` ∈ {aggregate, balance, comparison, constraint} — the
    cross-package contract read (mirrors the cockpit zod contract; the engine CHECK
@@ -124,11 +127,21 @@ def test_declared_generated_separation(metadata_truth: dict[str, Any], strategy_
     if is_wild(metadata_truth):
         return
     seeds = [r for r in rows if r.source == "seed"]
-    print(f"\n[separation] {len(seeds)} seed (declared) / "
-          f"{sum(1 for r in rows if r.source == 'generated')} generated")
-    assert seeds, (
-        "the finance corpus declares seed validations but NONE are present — the "
-        "declared home is empty (this is what would wrongly flip nothing_declared)"
+    generated = [r for r in rows if r.source == "generated"]
+    print(f"\n[separation] {len(seeds)} seed / {len(generated)} generated "
+          "(post-band-3: finance is induction-only, seed home retired)")
+    # Band-3 (DAT-735) deleted the 9 finance seed YAMLs — induction is the sole
+    # source now. Generated must be present; seed rows must be absent on a fresh
+    # volume (a lingering seed = incomplete deletion / re-seed path / stale volume).
+    assert generated, (
+        "induction-only finance produced ZERO generated validations — with the seed "
+        "YAMLs retired (band-3), the validations home would be empty (nothing declared, "
+        "nothing induced)"
+    )
+    assert not seeds, (
+        "seed-source validation(s) present after band-3 deleted the finance seed YAMLs — "
+        "incomplete deletion, a re-seed path, or a non-reset volume: "
+        f"{[r.validation_id for r in seeds]}"
     )
 
 
