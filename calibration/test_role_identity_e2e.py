@@ -218,8 +218,15 @@ def test_same_role_conform_path(metadata_truth: dict[str, Any], strategy_name: s
 def test_identity_signature_content_derived(
     metadata_truth: dict[str, Any], strategy_name: str
 ) -> None:
-    """Every referenced address signature is ref:{dimension_table_id}:… — content-
-    derived, never per-run random."""
+    """The CONFORMED-IDENTITY key (conformed_group) is the content-derived
+    ``ref:{dimension_table_id}:…`` form — never per-run random.
+
+    (v1 of this test asserted the ``ref:`` form on the bus-matrix ENTRY signature,
+    which is legitimately ``bus:referenced:{fact_id}:{dim_id}:{key_column}`` — a
+    different, also content-derived key. The ``ref:`` form is the role-group /
+    conformed-identity key, i.e. ``conformed_group``. The first roleplay run's red
+    was this oracle's field mixup, not the engine.)
+    """
     roles_truth = _fk_roles(metadata_truth)
     if not roles_truth:
         pytest.skip("no fk_roles truth — not the role-play corpus")
@@ -229,12 +236,18 @@ def test_identity_signature_content_derived(
             pytest.skip("current_bus_matrix absent — pre-DAT-762 engine")
         exposures = _address_exposures(session)
 
-    if not exposures:
-        pytest.skip("no referenced address exposures — recall graded elsewhere")
+    grouped = [e for e in exposures if e["conformed_group"]]
+    if not grouped:
+        pytest.skip(
+            "no conformed_group on any address exposure this draw — the conform-path "
+            "oracle owns whether grouping should have happened"
+        )
     bad = [
-        e["signature"]
-        for e in exposures
-        if not str(e["signature"]).startswith(f"ref:{e['dimension_table_id']}:")
+        str(e["conformed_group"])
+        for e in grouped
+        if not str(e["conformed_group"]).startswith(f"ref:{e['dimension_table_id']}:")
     ]
-    print(f"\n[signature] {len(exposures)} exposures, {len(bad)} non-content-derived")
-    assert not bad, f"signatures not content-derived (ref:{{dim_table_id}}:…): {bad}"
+    print(f"\n[signature] {len(grouped)} grouped exposures, {len(bad)} non-content-derived")
+    assert not bad, (
+        f"conformed_group keys not content-derived (ref:{{dim_table_id}}:…): {bad}"
+    )
