@@ -695,7 +695,8 @@ def read_driver_rankings(session: Any) -> dict[str, dict[str, Any]]:
             "SELECT t.table_name AS tn, c.column_name AS cn, dr.measure_label AS ml, "
             "dr.target_type AS tt, dr.grain AS grain, dr.entity AS entity, "
             "dr.n_rows AS n_rows, dr.ranked_dimensions AS ranked, "
-            "dr.interesting_slices AS slices, dr.secondary_dimensions AS secondary "
+            "dr.interesting_slices AS slices, dr.secondary_dimensions AS secondary, "
+            "dr.status AS status, dr.abstain_reason AS abstain_reason "
             f'FROM "{read_schema}".current_driver_rankings dr '
             f'JOIN "{read_schema}".current_columns c ON c.column_id = dr.measure_column_id '
             f'JOIN "{read_schema}".current_tables t ON t.table_id = dr.measure_table_id'
@@ -714,6 +715,11 @@ def read_driver_rankings(session: Any) -> dict[str, dict[str, Any]]:
             ],
             "interesting_slices": list(r.slices or []),
             "secondary_dimensions": list(r.secondary or []),
+            # DAT-725 rewiring: rankings carry status/abstain_reason. An ABSTAINED
+            # row is coverage evidence, not a measured-empty ranking — consumers
+            # must split on status (the DAT-853 abstention rule, same class).
+            "status": r.status,
+            "abstain_reason": r.abstain_reason,
         }
         for r in rows
     }
