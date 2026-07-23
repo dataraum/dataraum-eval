@@ -54,26 +54,11 @@ from calibration.metadata_truth import (
 )
 from calibration.tools._runs import workspace_session
 
-pytestmark = cube.needs(vertical="finance", dataset="*", from_stage="operating_model")
-
-# The P2 property-graph elements and the MATCH each must instantiate in. The
-# capability probe is the element VIEW's existence; the assertion is the graph
-# BINDING (a view can hold rows whose keys dangle — only a MATCH proves the edge).
-_P2_MATCH_SHAPES: dict[str, str] = {
-    "og_grounding": (
-        "SELECT count(*) FROM GRAPH_TABLE ({graph} MATCH (g IS grounding_node) COLUMNS (1 AS one))"
-    ),
-    "og_grounded_by": (
-        "SELECT count(*) FROM GRAPH_TABLE ({graph} "
-        "MATCH (c IS concept_node)-[e IS grounded_by]->(g IS grounding_node) "
-        "COLUMNS (1 AS one))"
-    ),
-    "og_uses": (
-        "SELECT count(*) FROM GRAPH_TABLE ({graph} "
-        "MATCH (g IS grounding_node)-[u IS uses]->(col IS column_node) "
-        "COLUMNS (1 AS one))"
-    ),
-}
+# version=2: the MATCH-shape inventory (_P2_MATCH_SHAPES + its parametrized test)
+# moved to test_graph_shapes_e2e.py (the Q2 ruling — modules split by version-churn
+# driver: graph schema there, semantic judgment here). Its old nodeids show as
+# `gone` in the verdict store — intended, moved.
+pytestmark = cube.needs(vertical="finance", dataset="*", from_stage="operating_model", version=2)
 
 _EMPTY_BATCH = (
     "current_groundings exists but the grounding batch is EMPTY — a stop-condition "
@@ -85,13 +70,6 @@ _EMPTY_BATCH = (
 def _completed_run(strategy_name: str) -> None:
     """Skip without a completed run; otherwise activate the strategy's workspace."""
     require_pipeline_run(strategy_name)
-
-
-def _read_schema(session: Any) -> str:
-    from dataraum.storage.read_views import read_schema_name_for
-    from sqlalchemy import text
-
-    return read_schema_name_for(str(session.execute(text("SELECT current_schema()")).scalar()))
 
 
 # --- (c) parts parity — structural, HARD, truth-free -------------------------
@@ -157,50 +135,6 @@ def test_extract_snippet_parts_parity(strategy_name: str) -> None:
     assert not failures, (
         "extract snippet parts do not re-render the stored sql — a second authoring "
         "path violated the DAT-671 parts-at-source contract:\n" + "\n".join(failures)
-    )
-
-
-# --- (d) MATCH-shape capability tests — structural, HARD ----------------------
-
-
-@pytest.mark.llm
-@pytest.mark.parametrize("element", sorted(_P2_MATCH_SHAPES))
-def test_p2_element_instantiates_in_match(
-    element: str, strategy_name: str, metadata_truth: dict[str, Any]
-) -> None:
-    """A present P2 element view has rows AND those rows instantiate in a PGQ MATCH.
-
-    View absent -> skip (pre-P2 engine). View present but empty on the finance
-    corpus -> FAIL (absence falls loud). Rows present but the MATCH returns none ->
-    FAIL (the element's keys dangle against its vertex tables — the binding defect
-    the every-bound-edge-ships-a-MATCH-test invariant exists to catch).
-    """
-    from sqlalchemy import text
-
-    with workspace_session() as session:
-        if not read_view_exists(session, element):
-            pytest.skip(f"{element} element view absent — pre-P2 engine")
-        read_schema = _read_schema(session)
-        direct = session.execute(
-            text(f'SELECT count(*) FROM "{read_schema}".{element}')  # noqa: S608 (fixed names)
-        ).scalar()
-        # The defect this catches is a DANGLING BINDING — rows present, MATCH empty.
-        # That is only testable where rows exist. A Tier-B corpus declares no concepts
-        # to ground, so an empty substrate there is the corpus, not a defect; Tier A
-        # keeps falling loud (the generator always authors groundable concepts).
-        if not direct and is_wild(metadata_truth):
-            pytest.skip(f"{element} empty on a Tier-B corpus — no declared concepts to ground")
-        assert direct, (
-            f"{element} exists but has ZERO rows on the finance corpus — an empty "
-            "grounding substrate is a stop-condition (absence falls loud), never a green run"
-        )
-        graph = f'"{read_schema}".operating_model'
-        matched = session.execute(text(_P2_MATCH_SHAPES[element].format(graph=graph))).scalar()
-
-    print(f"\n[match shape] {element}: {direct} view rows, {matched} MATCH rows")
-    assert matched, (
-        f"{element} holds {direct} rows but its MATCH returns none — the element never "
-        "instantiates in the property graph (dangling keys or a label/binding mismatch)"
     )
 
 
