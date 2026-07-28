@@ -1,0 +1,267 @@
+# The dimension prior library — DATA, not code (DAT-885 / RFC 3 lane A2).
+#
+# Three dimensions, not six: Demand, Offer and Capital are exactly the ones the A1
+# operating chain (DAT-884) lights. Supply, Capacity and Throughput wait for their
+# generator families (RFC 3 B7) — authoring priors for dimensions nothing can carry
+# would put a menu in front of a user that leads nowhere, which is the coverage-map
+# lie in a different costume.
+#
+# VERTICAL-NEUTRAL BY CONSTRUCTION. These are the cross-industry spine, and their whole
+# reason to exist is replacing a frame-induction seed that leaks one industry's
+# vocabulary into another's. So: "customer", "order line", "product group", "receivable"
+# — never "journal entry", never "chart of accounts", never a finance account code. The
+# `finance_binding` blocks at the bottom are the ONLY place a vertical's own names
+# appear, and they are deliberately separated so the prior content stays clean.
+#
+# SELECTION-FIRST. Structured as a per-dimension menu because that is the cockpit flow
+# it serves: the user selects metrics at frame time, the selection implies the required
+# entities, the staging hub proposes recipes covering them. Selection is also the noise
+# control — only a selected dimension's vocabulary enters induction ("priors propose,
+# user prunes, only what was declared is written", RFC 0).
+#
+# CONSUMERS: frame-induction seed (DAT-855 strand 2), starter recipes at the staging hub
+# (RFC 6), and the vocabulary the coverage map groups by.
+
+version: 1
+
+dimensions:
+  demand:
+    label: Your customers
+    facet: demand
+    # Canonical entities, RFC 2. `required` marks what a schema must expose for the
+    # dimension to be carryable at all — the dry-run coverage read keys on it.
+    entities:
+      - name: customer
+        required: true
+        aliases: [account, client, buyer, party, counterparty]
+      - name: order
+        required: true
+        aliases: [sales_order, purchase_order_in, booking, deal]
+      - name: order_line
+        required: true
+        aliases: [order_item, line_item, sales_order_line, position]
+      - name: segment
+        required: false
+        aliases: [customer_segment, tier, category]
+      - name: channel
+        required: false
+        aliases: [sales_channel, route_to_market]
+      - name: region
+        required: false
+        aliases: [territory, market, country, geo]
+    ladder: [region, channel, segment, customer, order, order_line]
+    metrics:
+      - id: revenue_per_customer
+        label: Revenue per customer
+        numerator: revenue
+        denominator: customer
+        grain: customer
+        allocation_free: true
+        note: the ladder entry point — trivial, and the thing everyone checks first
+      - id: db1_per_customer
+        label: Contribution margin per customer
+        numerator: revenue_minus_variable_cost
+        denominator: customer
+        grain: customer
+        allocation_free: true
+        note: shippable before any allocation scheme exists
+      - id: customer_concentration
+        label: Customer concentration risk
+        numerator: revenue_top_5pct_customers
+        denominator: revenue
+        grain: portfolio
+        allocation_free: true
+        note: tracked by every executive, automated by none
+      - id: cost_to_serve
+        label: Cost to serve
+        numerator: allocated_operating_cost
+        denominator: customer
+        grain: customer
+        allocation_free: false
+        requires_allocation: true
+        note: >
+          the flagship allocation and the hardest — freight by weight vs by revenue vs by
+          order count gives three defensible and different customer rankings. Deliberately
+          NOT allocation-free: it must wait for the allocation object (RFC 3 B5).
+      - id: order_to_cash_duration
+        label: Order-to-cash duration
+        numerator: settlement_date_minus_order_date
+        denominator: order
+        grain: order
+        allocation_free: true
+        shared_with: capital
+        note: same fact as Capital's DSO, two readings
+    relations:
+      - [order, customer, many_to_one]
+      - [order_line, order, many_to_one]
+    levers: [volume, price, mix, allocation_key]
+
+  offer:
+    label: What you sell
+    facet: offer
+    entities:
+      - name: product
+        required: true
+        aliases: [item, sku, article, service, offering]
+      - name: product_group
+        required: true
+        aliases: [category, family, product_line, assortment_group]
+      - name: order_line
+        required: true
+        aliases: [order_item, line_item, position]
+      - name: price_list
+        required: false
+        aliases: [list_price, rate_card, tariff]
+      - name: standard_cost
+        required: false
+        aliases: [unit_cost, cost_price, moving_average_cost]
+    ladder: [product_group, product, variant]
+    metrics:
+      - id: db1_per_product_group
+        label: Contribution margin per product group
+        numerator: revenue_minus_variable_cost
+        denominator: product_group
+        grain: product_group
+        allocation_free: true
+        note: the canonical template; the DISCLOSED calculation is the point
+      - id: price_realization
+        label: Price realization
+        numerator: invoiced_price
+        denominator: list_price
+        grain: order_line
+        allocation_free: true
+        note: catches discount leakage; almost never visible in ERP reporting
+      - id: mix_effect
+        label: Mix effect
+        numerator: mix_term_of_price_volume_mix_bridge
+        denominator: revenue_delta
+        grain: product_group
+        allocation_free: true
+        note: the reason Offer is its own dimension rather than a cut of Demand
+      - id: portfolio_tail
+        label: Portfolio tail
+        numerator: products_below_contribution_threshold
+        denominator: product
+        grain: portfolio
+        allocation_free: true
+        note: pairs with Demand's concentration risk
+      - id: db2_per_product_group
+        label: Contribution margin after step-fixed cost
+        numerator: revenue_minus_variable_and_step_fixed_cost
+        denominator: product_group
+        grain: product_group
+        allocation_free: false
+        requires_allocation: true
+        note: an allocation step BY DEFINITION — the ladder is the disclosure surface
+    relations:
+      - [product, product_group, many_to_one]
+      - [order_line, product, many_to_one]
+    levers: [price, mix, volume, allocation_key]
+
+  capital:
+    label: Where your cash sits
+    facet: capital
+    entities:
+      - name: receivable
+        required: false
+        aliases: [ar_invoice, customer_invoice, debtor, outstanding_invoice]
+      - name: payable
+        required: false
+        aliases: [ap_invoice, vendor_invoice, supplier_invoice, creditor]
+      - name: inventory_position
+        required: false
+        aliases: [stock, stock_on_hand, warehouse_position]
+      - name: settlement
+        required: false
+        aliases: [receipt, payment, cash_application, remittance]
+    # Capital is the dimension where partial coverage is NORMAL and honest: a schema
+    # carrying only payables genuinely supports DPO and genuinely does not support DIO.
+    # Hence no entity is `required` — the metrics declare what each of them needs.
+    ladder: [working_capital, component, entity, item]
+    metrics:
+      - id: dso_by_customer
+        label: Days sales outstanding by customer
+        numerator: receivable
+        denominator: revenue_run_rate
+        grain: customer
+        allocation_free: true
+        needs_entities: [receivable]
+        note: pairs with Demand's cost-to-serve for a true customer ranking
+      - id: dpo_by_supplier
+        label: Days payable outstanding by supplier
+        numerator: payable
+        denominator: spend_run_rate
+        grain: supplier
+        allocation_free: true
+        needs_entities: [payable]
+      - id: dio_by_product_group
+        label: Days inventory by product group
+        numerator: inventory_position
+        denominator: cost_of_sale_run_rate
+        grain: product_group
+        allocation_free: true
+        needs_entities: [inventory_position]
+        note: where dead stock becomes visible as money rather than units
+      - id: cash_conversion_cycle
+        label: Cash conversion cycle
+        numerator: dio_plus_dso_minus_dpo
+        denominator: null
+        grain: entity
+        allocation_free: true
+        needs_entities: [receivable, payable, inventory_position]
+        note: >
+          the anchor metric, and the honest partial — it needs all three components, so a
+          schema missing any one of them must report *partial*, not compute something.
+      - id: inventory_carrying_cost
+        label: Inventory carrying cost
+        numerator: holding_rate_times_average_inventory_value
+        denominator: null
+        grain: product_group
+        allocation_free: true
+        needs_entities: [inventory_position]
+        note: the holding rate is an ASSUMPTION — a named, versioned parameter, not a fact
+    relations:
+      - [receivable, customer, many_to_one]
+      - [payable, supplier, many_to_one]
+      - [settlement, receivable, many_to_one]
+    levers: [timing, volume, rate]
+
+# Cross-dimension questions the conformed keys make expressible (RFC 2). Recorded here
+# because they are what the facet coordinate is FOR — a dimension that never joins to
+# another is just a report.
+cross_dimension:
+  - dimensions: [demand, capital]
+    question: which customers are profitable on margin and unprofitable on cash?
+    conformed_on: customer
+  - dimensions: [offer, capital]
+    question: which product groups tie up the most cash per unit of contribution?
+    conformed_on: product_group
+
+# ---------------------------------------------------------------------------
+# Vertical bindings — the ONLY place a vertical's own table names appear.
+#
+# Kept apart from the priors above on purpose: the priors are the cross-industry spine
+# and must stay free of one industry's vocabulary (that leak is precisely what they
+# exist to replace). A binding says "in THIS schema, the prior's `customer` is that
+# table" — product configuration, never ground truth.
+# ---------------------------------------------------------------------------
+bindings:
+  finance:
+    description: the synthetic finance corpus after the A1 operating chain (DAT-884)
+    entities:
+      customer: customers
+      order: sales_orders
+      order_line: sales_order_lines
+      product: products
+      product_group: products.product_group
+      standard_cost: products.standard_cost
+      price_list: products.list_price
+      segment: customers.segment
+      region: customers.region
+      receivable: ar_invoices
+      payable: invoices
+      settlement: receipts
+      # inventory_position: intentionally absent — the corpus has inventory MOVEMENTS
+      # (the cost-of-sale and replenishment legs) but no position table. DIO and the
+      # cash conversion cycle must therefore read *partial*, which is the honest answer
+      # and the live example of the coverage gate working.
