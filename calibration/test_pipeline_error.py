@@ -84,17 +84,24 @@ def test_pipeline_error_within_kpi_tolerance(
         # Relative error is the comparable unit across metrics of different magnitude
         # (RFC 1's open question, resolved here); the judging bar rides on whichever
         # form the deliverable spec declared, so `held` means what it says.
-        verdict_values.record(
-            request, "pipeline_relative_error", row.relative_error_pct,
-            **({"threshold": row.tolerance_pct, "comparator": "<="}
-               if row.tolerance_abs is None else {}),
-            unit="percent", subject=f"{row.engine}:{row.grounding_class}",
-        )
-        if row.tolerance_abs is not None:
+        subject = f"{row.engine}:{row.grounding_class}"
+        if row.tolerance_abs is None:
+            verdict_values.record(
+                request, "pipeline_relative_error", row.relative_error_pct,
+                threshold=row.tolerance_pct, comparator="<=",
+                unit="percent", subject=subject,
+            )
+        else:
+            # An absolute bar judges the absolute error; the relative form rides along
+            # reported, so the distribution is comparable across metrics either way.
+            verdict_values.record(
+                request, "pipeline_relative_error", row.relative_error_pct,
+                unit="percent", subject=subject,
+            )
             verdict_values.record(
                 request, "pipeline_absolute_error", row.absolute_error,
                 threshold=row.tolerance_abs, comparator="<=",
-                unit=row.unit, subject=f"{row.engine}:{row.grounding_class}",
+                unit=row.unit, subject=subject,
             )
 
     if strategy_name != "clean":
@@ -194,11 +201,17 @@ def test_grounded_validations_pass_on_clean(
 
     failed = [v for v in verdicts if v.status == "failed"]
     errored = [v for v in verdicts if v.status == "error"]
-    verdict_values.record(
-        request, "validation_failures_on_clean", len(failed),
-        **({"threshold": 0, "comparator": "=="} if strategy_name == "clean" else {}),
-        unit="count",
-    )
+    # The bar is only declared where it applies: on an injected corpus a failing check
+    # may be the injection being caught, so zero failures is not the criterion there.
+    if strategy_name == "clean":
+        verdict_values.record(
+            request, "validation_failures_on_clean", len(failed),
+            threshold=0, comparator="==", unit="count",
+        )
+    else:
+        verdict_values.record(
+            request, "validation_failures_on_clean", len(failed), unit="count",
+        )
     verdict_values.record(request, "validations_executed", len(verdicts), unit="count")
     verdict_values.record(request, "validations_abstained", len(abstained), unit="count")
     verdict_values.record(request, "validations_inconclusive", len(errored), unit="count")

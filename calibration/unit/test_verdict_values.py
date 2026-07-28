@@ -95,8 +95,10 @@ def test_ledger_carries_values_onto_the_failing_report() -> None:
     Severity order still decides the status, and a red oracle KEEPS its number:
     that is the one worth trending.
     """
-    shared = [(verdict_values.KEY, {"name": "delta", "value": 0.01, "threshold": 0.05,
-                                    "comparator": ">", "unit": "margin", "subject": "x"})]
+    shared: list[tuple[str, object]] = [
+        (verdict_values.KEY, {"name": "delta", "value": 0.01, "threshold": 0.05,
+                              "comparator": ">", "unit": "margin", "subject": "x"})
+    ]
     ledger = build_oracle_ledger(
         {
             "passed": [_Report("calibration/test_a.py::test_ok", [])],

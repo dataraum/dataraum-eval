@@ -360,10 +360,11 @@ def measure(
             by_name[q.name] = q
 
     for pair in PAIRS:
-        q = by_name.get(pair.engine)
-        if q is None:
+        found = by_name.get(pair.engine)
+        if found is None:
             report.unavailable[pair.engine] = "the run persisted no such metric/extract"
             continue
+        q = found
         if q.value is None:
             report.unavailable[pair.engine] = q.error or "no value"
             continue
@@ -661,11 +662,13 @@ def render(report: Report) -> str:
             f"expected={r.expected:>18,.4f}  rel={r.relative_error_pct:>8.4f}%  "
             f"tol={bar:<9} [{r.grounding_class}]"
         )
+    def pct(value: float | None) -> str:
+        return "—" if value is None else f"{value:.4g}%"
+
     dist = report.distribution
     lines.append("")
-    fmt = lambda v: "—" if v is None else f"{v:.4g}%"  # noqa: E731 — local formatter
-    lines.append(f"  distribution over {dist['n']} graded: min={fmt(dist['min_pct'])} "
-                 f"median={fmt(dist['median_pct'])} max={fmt(dist['max_pct'])}")
+    lines.append(f"  distribution over {dist['n']} graded: min={pct(dist['min_pct'])} "
+                 f"median={pct(dist['median_pct'])} max={pct(dist['max_pct'])}")
     for cls, stats in dist["by_grounding_class"].items():
         lines.append(f"    {cls:<18} n={stats['n']}  max={stats['max_pct']:.4f}%")
     if dist["out_of_tolerance"]:
