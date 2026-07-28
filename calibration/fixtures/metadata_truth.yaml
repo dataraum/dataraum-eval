@@ -328,6 +328,9 @@ cycles:
   - balance_sheet
   required: false
 measured_in:
+- measure: ar_invoices.amount
+  unit_column: ar_invoices.currency
+  cross_unit: false
 - measure: balance_sheet.ending_balance
   unit_column: null
   cross_unit: false
@@ -352,6 +355,24 @@ measured_in:
   cross_unit: false
 - measure: payments.amount
   unit_column: payments.currency
+  cross_unit: false
+- measure: products.list_price
+  unit_column: null
+  cross_unit: false
+- measure: products.standard_cost
+  unit_column: null
+  cross_unit: false
+- measure: receipts.amount
+  unit_column: receipts.currency
+  cross_unit: false
+- measure: sales_order_lines.line_amount
+  unit_column: null
+  cross_unit: false
+- measure: sales_order_lines.line_cost
+  unit_column: null
+  cross_unit: false
+- measure: sales_order_lines.unit_price
+  unit_column: null
   cross_unit: false
 - measure: trial_balance.credit_balance
   unit_column: null
