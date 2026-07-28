@@ -69,6 +69,43 @@ detectors:
       precision sharpened (ending_balance reconciled cumulative match 1.0, C 0.006).
       Witness fires at session_detect only (exact-run rows), abstains at add_source.
 
+  stored_sign:
+    disposition: pool
+    witnesses: [llm_claim, sign_partition]
+    coverage:
+      recall: unverified           # no stored-sign injection family exists yet
+      precision: unverified
+      reliabilities: placeholder   # calibrated:false in BOTH reliabilities.yaml and
+                                   # loss.yaml; sign_partition measured by our rig at
+                                   # 0.990 (see the note), llm_claim needs a real run
+      teach_closure: none          # by design: the convention is data-determined, so
+                                   # the detector emits no teach_suggestion at all
+      in_slice: true               # session_detect; silent at add_source (no claim row)
+    note: >-
+      DAT-875 / DAT-886. The two witnesses are genuinely independent — a per-column name
+      -and-marginal read vs a row-aligned reconciliation — which is why this is a pool
+      and not a candidate. TWO GAPS, both ours to close and neither closable by the
+      engine: (1) no injection family targets the storage convention, so recall is
+      unverified and stays that way until the generator can mint a corpus whose
+      convention is known and wrong; (2) the llm_claim reliability needs a real
+      catalogue run. What IS measured: our Tier-1 rig drives the REAL witnesses
+      (lineage.classify_series + processor._sign_partition + measurements.stored_sign)
+      over a labelled synthetic population and puts sign_partition at 0.990 (96/96
+      opinionated votes) on WELL-POSED populations — both families present, one
+      convention throughout, family-blind event side. That qualifier is the whole
+      story: the number does not transfer, in three named ways, each a deterministic
+      probe in calibration/unit/test_stored_sign_witness.py.
+      (1) family-normalized event side -> accuracy 0.010, i.e. EXACTLY inverted, same
+      confidence (engine caveat 1). (2) single-family population -> a confident
+      ledger_signed over a fact the data cannot discriminate, indistinguishable from a
+      determined one (engine caveat 2) — which is why 0.990 excludes that stratum
+      rather than banking a coin flip as accuracy. (3) OURS, not in the engine's
+      docstring: two credit-normal accounts out of 200 keyed the other way relabel the
+      whole column natural_balance, at C=0.000 and the SAME ignorance 0.556 as the
+      correct reading. One dissenter abstains; the second makes it confident. The
+      degradation shape is otherwise right — heavy anchor noise costs coverage
+      (96 -> 73 votes) and never mints a wrong vote.
+
   # ---- LATENT CANDIDATES (pool IFF an independent grounded 2nd witness exists) -
   # entry_criterion = the (b) adversarial gate: the 2nd witness must be DATA-GROUNDED and
   # INDEPENDENT (grounded on data the existing witness does NOT use), not a collinear echo.
