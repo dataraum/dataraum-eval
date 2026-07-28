@@ -24,7 +24,7 @@ from typing import Any
 import pytest
 import yaml
 
-from calibration import cube
+from calibration import cube, verdict_values
 from calibration.test_detector_recall import (
     CURRENT_SLICE_DETECTORS,
     KNOWN_MISALIGNED,
@@ -131,6 +131,7 @@ def _clean_baseline() -> dict[str, dict[str, str]]:
 
 def test_clean_readiness_no_regression(
     clean_intent_readiness: dict[tuple[str, str], dict[str, str]],
+    request: pytest.FixtureRequest,
 ) -> None:
     """Precision: no clean column reads WORSE than its captured baseline.
 
@@ -143,12 +144,29 @@ def test_clean_readiness_no_regression(
     baseline = _clean_baseline()
 
     regressions: list[str] = []
+    non_ready = 0
+    graded = 0
     for (tbl, col), intents in sorted(clean_intent_readiness.items()):
         expected = baseline.get(f"{tbl}.{col}", {})
         for intent, actual in sorted(intents.items()):
+            graded += 1
+            if actual != "ready":
+                non_ready += 1
             floor = expected.get(intent, "ready")
             if _RANK[actual] > _RANK[floor]:
                 regressions.append(f"  {tbl}.{col} {intent}: {actual} (baseline {floor})")
+
+    # The judged number plus the population it came out of: a false-alarm RATE that
+    # holds steady while the corpus grows is a different story from one that holds
+    # steady while it shrinks (DAT-862 / RFC 5 ext 1).
+    verdict_values.record(
+        request, "readiness_regressions", len(regressions),
+        threshold=0, comparator="==", unit="count",
+    )
+    if graded:
+        verdict_values.record(
+            request, "clean_non_ready_rate", non_ready / graded, unit="ratio",
+        )
 
     assert not regressions, (
         "clean columns read worse than baseline (new false readiness alarms):\n"

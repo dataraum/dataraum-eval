@@ -23,7 +23,7 @@ from typing import Any
 import pytest
 import yaml
 
-from calibration import cube
+from calibration import cube, verdict_values
 
 pytestmark = cube.needs(vertical="finance", dataset="*", from_stage="operating_model", baseline=("clean",))
 
@@ -434,6 +434,10 @@ def test_injection_detected(
             f"{detector} produced no score for {table}.{{{column}}} — "
             f"detector didn't run or doesn't cover this injection type"
         )
+        verdict_values.record(
+            request, "score", best, threshold=DETECTION_THRESHOLD, comparator=">",
+            unit="score", subject=f"{table}.{{{column}}}:{detector}",
+        )
         assert best > DETECTION_THRESHOLD, (
             f"{detector} scored {best:.3f} for {table}.{{{column}}} — "
             f"injection missed (threshold={DETECTION_THRESHOLD})"
@@ -457,7 +461,26 @@ def test_injection_detected(
     clean = clean_pipeline_scores.get((table, column_lc, detector), 0.0)
     delta = score - clean
 
-    if detector in ORDERING_DETECTORS:
+    # The numbers behind the verdict (DAT-862 / RFC 5 ext 1). Recorded BEFORE the
+    # assertion so a miss keeps its margin: "the detector fired at 0.31 against a
+    # 0.30 bar" and "it fired at 0.95" are the same green today and very different
+    # trends. The judging bar rides along, so the stored value is never re-read to
+    # decide anything — a threshold moved in code is visible as a threshold change.
+    # The threshold rides on whichever value actually judged this detector — the
+    # other is reported, never re-judged. Recall is ordering for ORDERING_DETECTORS,
+    # a point threshold for the rest; recording both bars would invent a criterion.
+    subject = f"{table}.{column}:{detector}"
+    ordering = detector in ORDERING_DETECTORS
+    if ordering:
+        verdict_values.record(request, "score", score, unit="score", subject=subject)
+        verdict_values.record(request, "delta", delta, threshold=ORDERING_MARGIN,
+                              comparator=">", unit="margin", subject=subject)
+    else:
+        verdict_values.record(request, "score", score, threshold=DETECTION_THRESHOLD,
+                              comparator=">", unit="score", subject=subject)
+        verdict_values.record(request, "delta", delta, unit="margin", subject=subject)
+
+    if ordering:
         # Ordering grammar: injected must sit a clear margin above clean. The
         # absolute score is honestly modest (a divergence), so a point threshold
         # would wrongly read "missed" while the detector cleanly separates.

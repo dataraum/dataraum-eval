@@ -47,7 +47,7 @@ from typing import Any
 import pytest
 import yaml
 
-from calibration import cube
+from calibration import cube, verdict_values
 from calibration.conftest import DetectorScores
 
 pytestmark = cube.needs(vertical="finance", dataset="*", from_stage="operating_model", baseline=("clean",))
@@ -121,6 +121,7 @@ def _pooled_ceiling(bands: dict[str, dict[str, dict[str, Any]]], detector: str) 
 def test_clean_scores_within_measured_bands(
     clean_detector_scores: DetectorScores,
     clean_only: None,
+    request: pytest.FixtureRequest,
 ) -> None:
     """Every clean score above its floor sits within its measured band (+tolerance).
 
@@ -148,6 +149,15 @@ def test_clean_scores_within_measured_bands(
                     f"{band['max']:.3f}] + {BAND_TOLERANCE} (seen {band['seen']}x)"
                 )
 
+    # Counts, so "one key crept above its band" and "forty did" are distinguishable
+    # in the store rather than both reading `failed`. new_high is reported, not
+    # judged: a NEW high score has no band to breach — it is coverage news.
+    verdict_values.record(
+        request, "band_regressions", len(regressions),
+        threshold=0, comparator="==", unit="count",
+    )
+    verdict_values.record(request, "unbanded_new_highs", len(new_high), unit="count")
+
     lines = []
     if regressions:
         lines.append(f"{len(regressions)} regressions above measured bands:")
@@ -168,6 +178,7 @@ def test_clean_scores_within_measured_bands(
 def test_pooled_llm_detectors_below_measured_ceiling(
     clean_detector_scores: DetectorScores,
     clean_only: None,
+    request: pytest.FixtureRequest,
 ) -> None:
     """No clean column looks unnamed — the population claim, not a per-column one.
 
@@ -197,6 +208,13 @@ def test_pooled_llm_detectors_below_measured_ceiling(
         print(
             f"\n[{detector}] {len(scored)} clean emissions, "
             f"worst {worst:.3f} ({grain} {key}) vs measured ceiling {ceiling:.3f}"
+        )
+        # How close the model came to the ceiling it has never exceeded — the
+        # headroom is the trend, the breach is only its last day.
+        verdict_values.record(
+            request, "worst_clean_emission", worst,
+            threshold=ceiling + BAND_TOLERANCE, comparator="<=",
+            unit="score", subject=detector,
         )
         # Compare at the MEASUREMENT's resolution, not IEEE754's. The score is
         # ``1 - confidence`` over a 2-decimal LLM confidence, so it lands on a
@@ -255,6 +273,7 @@ def test_stable_clean_emitters_still_emit(
 def test_clean_average_below_threshold(
     clean_pipeline_scores: dict[tuple[str, str, str], float],
     clean_only: None,
+    request: pytest.FixtureRequest,
 ) -> None:
     """Average column score across clean data should be low.
 
@@ -264,4 +283,9 @@ def test_clean_average_below_threshold(
         return
 
     avg = sum(clean_pipeline_scores.values()) / len(clean_pipeline_scores)
+    # The value is the point of this oracle: 0.02 → 0.14 is still green and is the
+    # drift it exists to catch (DAT-862 / RFC 5 ext 1).
+    verdict_values.record(
+        request, "clean_mean_score", avg, threshold=0.15, comparator="<", unit="score",
+    )
     assert avg < 0.15, f"Average clean score {avg:.3f} too high — detectors are noisy"

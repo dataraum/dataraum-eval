@@ -22,6 +22,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from calibration.verdict_values import values_from
+
 BASELINES_DIR = Path(__file__).parent / "coverage_baselines"
 
 # Report categories a test can land in; severity order so a failed/errored call
@@ -38,32 +40,39 @@ def _skip_reason(report: Any) -> str:
     return raw.removeprefix("Skipped: ").removeprefix("xfail: ").strip()
 
 
-def build_oracle_ledger(stats: dict[str, list[Any]]) -> dict[str, dict[str, str]]:
-    """Per-oracle outcome map: nodeid -> {status, reason?}.
+def build_oracle_ledger(stats: dict[str, list[Any]]) -> dict[str, dict[str, Any]]:
+    """Per-oracle outcome map: nodeid -> {status, reason?, values?}.
 
     The flat pass/skip COUNTS hid which oracle stood down — a whole oracle could
     vanish behind a bumped skip tally and the run still read clean. This names every
     one, so a silently-dropped oracle is visible and diffable against a baseline.
     Severity order (``_LEDGER_ORDER``) makes a failed/errored call beat the same
     test's passed setup report when both land under one nodeid.
+
+    ``values`` carries the oracle's measured numbers and the thresholds that judged
+    them (DAT-862 / RFC 5 ext 1, ``verdict_values.record``) — the margin, not just
+    whether it held. Absent when the oracle recorded none.
     """
-    ledger: dict[str, dict[str, str]] = {}
+    ledger: dict[str, dict[str, Any]] = {}
     for status in _LEDGER_ORDER:
         for report in stats.get(status, []):
-            entry: dict[str, str] = {"status": status}
+            entry: dict[str, Any] = {"status": status}
             if status in ("skipped", "xfailed"):
                 entry["reason"] = _skip_reason(report)
+            values = values_from(getattr(report, "user_properties", None))
+            if values:
+                entry["values"] = values
             ledger[report.nodeid] = entry
     return ledger
 
 
-def graded_nodeids(ledger: dict[str, dict[str, str]]) -> set[str]:
+def graded_nodeids(ledger: dict[str, dict[str, Any]]) -> set[str]:
     """The oracles that reached a verdict (ran, didn't stand down or break)."""
     return {nid for nid, e in ledger.items() if e.get("status") in _GRADED}
 
 
 def diff_against_baseline(
-    baseline: list[str] | set[str], ledger: dict[str, dict[str, str]]
+    baseline: list[str] | set[str], ledger: dict[str, dict[str, Any]]
 ) -> dict[str, list[str]]:
     """Compare this run's graded set to the blessed baseline.
 
@@ -95,7 +104,7 @@ def load_baseline(strategy: str) -> list[str] | None:
     return graded if isinstance(graded, list) else None
 
 
-def save_baseline(strategy: str, ledger: dict[str, dict[str, str]]) -> Path:
+def save_baseline(strategy: str, ledger: dict[str, dict[str, Any]]) -> Path:
     """Bless this run's graded-set as the strategy's baseline (a committed reference)."""
     path = baseline_file(strategy)
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -223,6 +223,19 @@ def _within(computed: float, expected: float, spec: dict[str, Any]) -> tuple[boo
     return abs(deviation) / abs(expected) * 100.0 <= tol_pct, deviation
 
 
+def _tolerance(spec: dict[str, Any]) -> dict[str, float]:
+    """The bar a metric was judged at, carried on its scored row.
+
+    ``_within`` applies it and throws it away; a grader that wants to record the
+    measured error NEXT TO the threshold that judged it (DAT-862 / RFC 5 ext 1 — the
+    input to DAT-687's pipeline-error distribution) would otherwise have to re-read
+    the deliverable spec and hope it read the same branch.
+    """
+    if "tolerance_abs" in spec:
+        return {"tolerance_abs": float(spec["tolerance_abs"])}
+    return {"tolerance_pct": float(spec.get("tolerance_pct", 1.0))}
+
+
 def _offline_tables(conn: duckdb.DuckDBPyConnection, strategy: str) -> dict[str, str]:
     """Register the raw generated CSVs as views named by their logical names."""
     data_dir = EVAL_ROOT / "data" / strategy
@@ -438,6 +451,7 @@ def label(strategy: str, *, offline: bool = False) -> dict[str, Any]:
                 "computed": value if isinstance(value, bool) else round(float(value), 2),
                 "deviation": round(deviation, 2),
                 "in_tolerance": ok,
+                **({} if m_spec.get("type") == "boolean" else _tolerance(m_spec)),
                 "non_ready_lineage": {col: bands[col] for col in warned},
                 **({} if offline else {"bucket": bucket}),
                 **({"prevention": prevention} if prevention else {}),

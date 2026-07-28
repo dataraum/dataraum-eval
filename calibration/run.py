@@ -315,6 +315,17 @@ def _emit_scoreboard(name: str, out: Outcome) -> None:
         "saturated": board.saturated,
     }
 
+    # Retain it (DAT-862 / RFC 5 ext 2): printed-and-forgotten made "has our
+    # false-positive rate on unseen schemas moved?" answerable only by re-running a
+    # real corpus. The rows are kind='scoreboard' — findings, never gates.
+    from calibration import results_store
+
+    try:
+        n = results_store.record_scoreboard(name, board)
+        print(f"  → {n} scoreboard row(s) → {results_store.STORE.relative_to(runner.EVAL_ROOT)}")
+    except Exception as exc:  # noqa: BLE001 — retention must never sink a run
+        print(f"[scoreboard] {name}: not retained — {exc}", file=sys.stderr)
+
 
 def _run_one_wild(name: str, *, do_assert: bool) -> Outcome:
     """Stage → frame → run the pipeline → grade (wild-aware oracles) → scoreboard.

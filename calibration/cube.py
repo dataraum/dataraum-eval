@@ -40,6 +40,21 @@ import pytest
 # consumed cell on the way (the DAT-861 cache's write path).
 STAGES: tuple[str, ...] = ("raw", "add_source", "begin_session", "operating_model")
 
+# The performance-dimension facet (RFC 0) as a cube coordinate — the fourth
+# comparability extension (DAT-862 / RFC 5 ext 3). An oracle declares a dimension
+# ONLY when it grades that dimension's unit metric; the coverage map's *lit* gate
+# then reads off the verdict store instead of off a claim
+# (``results_store.dimension_status``).
+#
+# Declaring one you do not grade is the exact failure the gate exists to prevent —
+# "the coverage map lying costs more than the dark cell it was covering" (RFC 3).
+# So the axis ships empty: no oracle grades a Demand/Offer/Capital unit metric until
+# the operating-model chain lands (A1 / DAT-884) and the facet reaches the ontology
+# (B2). An axis with no values is honest; a populated one that lies is not.
+DIMENSIONS: tuple[str, ...] = (
+    "demand", "offer", "supply", "capacity", "throughput", "capital",
+)
+
 TIER3_DIR = Path(__file__).parent
 
 
@@ -54,7 +69,9 @@ class Needs:
     ``clean_pipeline_scores``, ``score_deltas``, ``clean_intent_readiness``).
     ``version`` is the oracle version (DAT-862): bump on any verdict-changing change
     to the module — threshold, vocabulary, assertion shape — so stored verdicts are
-    never silently compared across different oracles.
+    never silently compared across different oracles. ``dimension`` is the optional
+    performance-dimension facet (see :data:`DIMENSIONS`), set only by an oracle that
+    grades that dimension's unit metric.
     """
 
     vertical: str
@@ -62,6 +79,7 @@ class Needs:
     from_stage: str
     baseline: tuple[str, ...] = ()
     version: int = 1
+    dimension: str | None = None
 
     def binds(self, dataset: str) -> bool:
         return self.datasets is None or dataset in self.datasets
@@ -74,6 +92,7 @@ def needs(
     from_stage: str,
     baseline: tuple[str, ...] = (),
     version: int = 1,
+    dimension: str | None = None,
 ) -> pytest.MarkDecorator:
     """The per-oracle declaration (DAT-860): ``pytestmark = cube.needs(...)``.
 
@@ -82,6 +101,8 @@ def needs(
     """
     if from_stage not in STAGES:
         raise ValueError(f"from_stage {from_stage!r} not in {STAGES}")
+    if dimension is not None and dimension not in DIMENSIONS:
+        raise ValueError(f"dimension {dimension!r} not in {DIMENSIONS}")
     datasets: tuple[str, ...] | None
     if dataset == "*":
         datasets = None
@@ -97,6 +118,7 @@ def needs(
         from_stage=from_stage,
         baseline=tuple(baseline),
         version=version,
+        dimension=dimension,
     )
     return pytest.mark.needs(spec=spec)
 

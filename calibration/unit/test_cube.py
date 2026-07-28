@@ -39,6 +39,46 @@ def test_needs_rejects_empty_dataset_tuple() -> None:
         cube.needs(vertical="finance", dataset=(), from_stage="raw")
 
 
+def test_dimension_vocabulary_frozen() -> None:
+    """The six performance dimensions (RFC 0) — the facet, not a free string."""
+    assert cube.DIMENSIONS == (
+        "demand", "offer", "supply", "capacity", "throughput", "capital",
+    )
+
+
+def test_needs_rejects_unknown_dimension() -> None:
+    with pytest.raises(ValueError, match="dimension"):
+        cube.needs(vertical="finance", dataset="*", from_stage="raw", dimension="revenue")
+
+
+def test_dimension_declaration_rides_the_spec() -> None:
+    spec: Needs = cube.needs(
+        vertical="finance", dataset="*", from_stage="raw", dimension="capital"
+    ).mark.kwargs["spec"]
+    assert spec.dimension == "capital"
+    assert cube.needs(
+        vertical="finance", dataset="*", from_stage="raw"
+    ).mark.kwargs["spec"].dimension is None
+
+
+def test_no_oracle_claims_a_dimension_it_cannot_grade() -> None:
+    """The axis ships EMPTY, on purpose (DAT-862 / RFC 5 ext 3).
+
+    No oracle grades a Demand/Offer/Capital unit metric until the operating-model
+    chain lands (DAT-884) and the facet reaches the ontology (DAT-855 strand 3).
+    A dimension declared before then would read *lit* off a metric nothing graded —
+    "the coverage map lying costs more than the dark cell it was covering" (RFC 3).
+
+    When A1 lands, the oracle that grades DB1 per customer declares its dimension
+    and this test records the change deliberately, rather than a facet drifting in.
+    """
+    declared = {n: s.dimension for n, s in cube.registry().items() if s.dimension}
+    assert declared == {}, (
+        "an oracle declares a performance dimension — it must GRADE that dimension's "
+        f"unit metric within tolerance, or the coverage map lies: {declared}"
+    )
+
+
 def test_needs_binding_forms() -> None:
     """"*" binds anything; a str binds one; a tuple binds its members."""
     any_ds: Needs = cube.needs(

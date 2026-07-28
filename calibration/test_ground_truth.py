@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from calibration import cube, outcomes
+from calibration import cube, outcomes, verdict_values
 
 pytestmark = cube.needs(vertical="finance", dataset="*", from_stage="raw")
 
@@ -40,8 +40,44 @@ def test_invariants_hold(ground_truth: dict[str, Any]) -> None:
     assert inv["invoice_payment_matched"] is True
 
 
+def _record_metric_errors(request: pytest.FixtureRequest, scored: list[dict[str, Any]]) -> None:
+    """Per-metric error next to the tolerance that judged it (RFC 5 ext 1).
+
+    This is the shape DAT-687 (A3) writes into: the pipeline-error term is a
+    DISTRIBUTION over graded metrics, and a distribution cannot be reassembled from
+    pass rates. What lands here today is the GOLDEN-SQL leg — eval's own SQL over the
+    generated CSVs — so it measures the generator and the golden SQL, not the engine.
+    The engine's own metric SQL becomes a second series under the same names when
+    DAT-687 lands, and the two side by side are what separates "product SQL wrong"
+    from "data wrong".
+
+    Relative error where the spec judges by percent (the comparable unit across
+    metrics of different magnitude), absolute where it judges by an absolute bar —
+    each recorded against its own threshold, never converted into the other.
+    """
+    for m in scored:
+        expected = m.get("expected")
+        if isinstance(expected, bool) or not isinstance(expected, (int, float)):
+            continue
+        deviation = abs(float(m["deviation"]))
+        if "tolerance_pct" in m and float(expected) != 0:
+            verdict_values.record(
+                request, "relative_error", deviation / abs(float(expected)) * 100.0,
+                threshold=float(m["tolerance_pct"]), comparator="<=",
+                unit="percent", subject=m["metric"],
+            )
+        else:
+            # tolerance_abs, or an expected value of zero (where a relative error is
+            # undefined and `outcomes._within` falls back to a cent of drift).
+            verdict_values.record(
+                request, "absolute_error", deviation,
+                threshold=float(m.get("tolerance_abs", 0.01)), comparator="<=",
+                unit="absolute", subject=m["metric"],
+            )
+
+
 def test_offline_metrics_reproduce_ground_truth(
-    strategy_name: str, ground_truth: dict[str, Any]
+    strategy_name: str, ground_truth: dict[str, Any], request: pytest.FixtureRequest
 ) -> None:
     """Golden SQL over the generated CSVs reproduces the known metrics — no pipeline.
 
@@ -76,6 +112,8 @@ def test_offline_metrics_reproduce_ground_truth(
         print(f"  [ -- ] {m['metric']:<22} {m['skipped']}")
 
     assert scored, "offline labeler computed no scorable metric — generator/spec drift"
+
+    _record_metric_errors(request, scored)
 
     # The labeler's per-metric expected values come from this same ground_truth.yaml;
     # confirm they agree, so a labeler reading a stale/wrong truth file is caught here
