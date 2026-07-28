@@ -4,7 +4,7 @@ Every other oracle here grades what the engine *measured*. This one grades what 
 *computed*: the metric SQL the graph agent composed and persisted, executed on the
 run's own lake and compared to generator truth at KPI decision tolerance.
 
-Three legs, deliberately separate because they fail for different reasons:
+Four legs, deliberately separate because they fail for different reasons:
 
 1. ``test_pipeline_error_within_kpi_tolerance`` — the like-for-like comparison. Only
    quantities whose population provably matches ground truth's are graded
@@ -14,7 +14,11 @@ Three legs, deliberately separate because they fail for different reasons:
 2. ``test_declared_metric_expectations_hold`` — the engine against ITS OWN declared
    contract (each metric graph's ``validation: [{condition, severity}]``). No eval
    metric definition is involved, so a violation is unarguable and needs no pairing.
-3. ``test_every_engine_quantity_is_graded_or_reasoned`` — the anti-vacuity leg. A
+3. ``test_grounded_validations_pass_on_clean`` — leg (b) of the ticket: re-run each
+   executed validation's stored ``sql_used`` and judge it with the engine's own rule.
+   On clean data a failing grounded check is a false alarm, and this names it directly
+   instead of waiting for the readiness fan-out it causes.
+4. ``test_every_engine_quantity_is_graded_or_reasoned`` — the anti-vacuity leg. A
    number the engine computed that nobody paired and nobody explained is how this
    oracle would quietly stop measuring anything.
 
@@ -160,6 +164,56 @@ def test_declared_metric_expectations_hold(
             f"{e.metric}: {e.condition} but value = {e.value:,.4f} "
             f"(severity {e.severity!r}: {e.message})"
             for e in violated
+        )
+    )
+
+
+def test_grounded_validations_pass_on_clean(
+    strategy_name: str, request: pytest.FixtureRequest
+) -> None:
+    """DAT-687 leg (b): every EXECUTED validation's recomputed verdict passes on clean.
+
+    Verdicts are recomputed-not-stored (ADR-0017), so this re-runs each check's stored
+    ``sql_used`` and judges it with the engine's OWN rule
+    (``validation.evaluate.verdict_from_sql``) — not a reimplementation, which would
+    drift from theirs the first time the per-leg semantics move.
+
+    On clean data a grounded check that fails is a **false alarm**: nothing is wrong
+    with the data, so the check itself is wrong. That is a more direct signal than the
+    readiness/band fan-out it eventually causes, and it names the offending check.
+
+    Checks the engine DECLINED to execute are reported, never counted as failures —
+    an artifact left at ``declared`` with a binder error is the abstention contract
+    working. Counting those would fabricate findings out of correct refusals.
+    """
+    verdicts, abstained = pipeline_error.validation_verdicts(strategy_name)
+    if not verdicts:
+        pytest.skip("no executed validation carries stored SQL for this run")
+
+    print("\n" + pipeline_error.render_verdicts(verdicts, abstained))
+
+    failed = [v for v in verdicts if v.status == "failed"]
+    errored = [v for v in verdicts if v.status == "error"]
+    verdict_values.record(
+        request, "validation_failures_on_clean", len(failed),
+        **({"threshold": 0, "comparator": "=="} if strategy_name == "clean" else {}),
+        unit="count",
+    )
+    verdict_values.record(request, "validations_executed", len(verdicts), unit="count")
+    verdict_values.record(request, "validations_abstained", len(abstained), unit="count")
+    verdict_values.record(request, "validations_inconclusive", len(errored), unit="count")
+
+    if strategy_name != "clean":
+        pytest.skip(
+            f"grounded checks passing is a clean-data invariant; on injected "
+            f"'{strategy_name}' a failing check may be the injection being caught"
+        )
+
+    assert not failed, (
+        "generated validation(s) FAIL on clean data — the data is fine, so the check is "
+        "wrong (a false alarm that fans out into readiness bands):\n  "
+        + "\n  ".join(
+            f"{v.name} [{v.check_type}, {v.severity}]: {v.message}" for v in failed
         )
     )
 

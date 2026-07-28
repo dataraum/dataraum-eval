@@ -509,6 +509,141 @@ def declared_expectations(
 
 
 # ---------------------------------------------------------------------------
+# Leg (b) — the validation verdicts, recomputed (ADR-0017)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Verdict:
+    """One validation's verdict, recomputed from its stored SQL."""
+
+    name: str
+    validation_id: str
+    check_type: str
+    source: str
+    severity: str
+    tolerance: float | None
+    status: str  # passed | failed | error (the engine's own vocabulary)
+    message: str
+    details: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def deviation(self) -> float | None:
+        d = self.details.get("deviation")
+        return float(d) if isinstance(d, (int, float)) else None
+
+
+def validation_verdicts(strategy: str) -> tuple[list[Verdict], dict[str, str]]:
+    """Re-run each EXECUTED validation's stored SQL and judge it (DAT-687 leg (b)).
+
+    Returns ``(verdicts, abstained)`` — the judged checks, and the ones the engine
+    itself declined to execute, keyed by name with its recorded reason.
+
+    Verdicts are recomputed-not-stored by design (ADR-0017), so grading them means
+    re-running ``validation_results.sql_used`` against the current lake. The
+    judgement uses the ENGINE's own rule — ``validation.evaluate.verdict_from_sql``,
+    called as a library — deliberately: re-implementing "deviation <= tolerance,
+    worst leg decides" here would grade the engine against OUR contract and quietly
+    diverge from theirs the first time DAT-852-style per-leg semantics change.
+
+    **Only artifacts that reached ``executed`` are re-run**, and that filter is
+    load-bearing rather than cosmetic. A ``validation_results`` row is written for
+    every check the phase *attempted*, including one whose generated SQL failed to
+    bind — such an artifact stays at ``declared`` with the binder error recorded
+    (``validation_phase``), which is the abstention contract working. Re-running its
+    SQL anyway produces an ERROR verdict that looks like a defect and is not: the
+    engine already refused it, loudly, on the row. Measured on `clean`: exactly one
+    check ("Accounts receivable accounts carry debit-normal balance") sits there, and
+    counting it as an engine error would have been a fabricated finding.
+
+    ``error`` on an EXECUTED check is still INCONCLUSIVE, never a failure — a query
+    that no longer plans against re-imported data is ignorance, not a measurement.
+    """
+    from sqlalchemy import text
+
+    from calibration import runner as runner_mod
+    from calibration.tools._runs import load_run, workspace_session
+
+    load_run(strategy)
+    with workspace_session() as session:
+        from dataraum.storage.read_views import read_schema_name_for
+
+        read_schema = read_schema_name_for(
+            session.execute(text("SELECT current_schema()")).scalar()
+        )
+        rows = session.execute(text(
+            f"SELECT v.validation_id, v.name, v.check_type, v.source, v.severity, "
+            f"       v.tolerance, r.sql_used "
+            f"FROM validation_results r "
+            f"JOIN validations v ON v.validation_id = r.validation_id "
+            f'JOIN "{read_schema}".current_lifecycle_artifacts a '
+            f"  ON a.artifact_key = v.validation_id AND a.artifact_type = 'validation' "
+            f"WHERE v.superseded_at IS NULL AND a.state = 'executed' "
+            f"ORDER BY v.name"
+        )).all()
+        abstained = {
+            r.name or r.artifact_key: (r.state_reason or "")
+            for r in session.execute(text(
+                f"SELECT a.artifact_key, a.state_reason, v.name "
+                f'FROM "{read_schema}".current_lifecycle_artifacts a '
+                f"LEFT JOIN validations v ON v.validation_id = a.artifact_key "
+                f"  AND v.superseded_at IS NULL "
+                f"WHERE a.artifact_type = 'validation' AND a.state <> 'executed' "
+                f"ORDER BY v.name"
+            )).all()
+        }
+
+    runner_mod.bootstrap_engine()
+    from dataraum.analysis.validation.evaluate import DEFAULT_TOLERANCE, verdict_from_sql
+    from dataraum.worker.bootstrap import bootstrap_worker_substrate, shutdown_worker_substrate
+
+    out: list[Verdict] = []
+    manager = bootstrap_worker_substrate()
+    try:
+        with manager.duckdb_cursor() as cursor:
+            for r in rows:
+                tolerance = r.tolerance if r.tolerance is not None else DEFAULT_TOLERANCE
+                verdict = verdict_from_sql(
+                    cursor, r.sql_used, tolerance=tolerance, check_type=r.check_type or ""
+                )
+                out.append(Verdict(
+                    name=r.name, validation_id=r.validation_id,
+                    check_type=r.check_type or "", source=r.source or "",
+                    severity=r.severity or "", tolerance=r.tolerance,
+                    status=str(getattr(verdict.status, "value", verdict.status)),
+                    message=verdict.message, details=dict(verdict.details or {}),
+                ))
+    finally:
+        shutdown_worker_substrate(manager)
+    return out, abstained
+
+
+def render_verdicts(verdicts: list[Verdict], abstained: dict[str, str]) -> str:
+    counts: dict[str, int] = {}
+    for v in verdicts:
+        counts[v.status] = counts.get(v.status, 0) + 1
+    lines = [
+        f"validation verdicts, recomputed from stored sql_used ({len(verdicts)} executed): "
+        + ", ".join(f"{k}={n}" for k, n in sorted(counts.items()))
+    ]
+    if abstained:
+        lines.append(f"  engine declined to execute ({len(abstained)}) — abstention, not failure:")
+        for name, reason in sorted(abstained.items()):
+            lines.append(f"    {name[:56]:<56} {reason.splitlines()[0][:90]}")
+    for v in sorted(verdicts, key=lambda v: (v.status != "failed", v.name)):
+        if v.status == "passed":
+            continue
+        dev = "—" if v.deviation is None else f"{v.deviation:,.2f}"
+        lines.append(
+            f"  [{v.status.upper():<6}] {v.name[:52]:<52} {v.check_type:<11} "
+            f"{v.severity:<8} deviation={dev} tol={v.tolerance}"
+        )
+        if v.message:
+            lines.append(f"           {v.message[:150]}")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -563,7 +698,14 @@ def main() -> None:
     parser.add_argument("--expectations", action="store_true",
                         help="check each executed metric against its graph's own declared "
                              "validation conditions")
+    parser.add_argument("--validations", action="store_true",
+                        help="leg (b): re-run every validation's stored sql_used and judge it "
+                             "with the engine's own rule")
     args = parser.parse_args()
+
+    if args.validations:
+        print(render_verdicts(*validation_verdicts(args.strategy)))
+        return
 
     quantities = engine_quantities(args.strategy)
     print(render(measure(args.strategy, quantities=quantities)))
