@@ -75,6 +75,39 @@ clean_readiness:
   # Closable by the concept_property/rebind teach once corroborated.
   fx_rates.rate:
     aggregation_intent: investigate
+  # Rebaselined 2026-07-29 (DAT-884 operating chain): the new price/cost columns
+  # read non-ready on clean, and it is ACCURATE — the same shape as fx_rates.rate
+  # above. `products` carries NO currency column, so a monetary column on it has
+  # no resolvable denomination: the unit_source detector reports
+  # `unit_status: "unresolved"` and scores 1.0, and the rollup blocks aggregation.
+  # Summing money of unknown currency is meaningless, so blocked is the right
+  # answer, not a false alarm.
+  #
+  # Banked on TWO draws, not one: seeds 42 and 46 both score these keys 1.0 —
+  # `clean_bands.yaml` records min == max == 1.0, seen 2. This is a structural
+  # property of the corpus (no currency column), not an LLM wobble, which is why
+  # it is recorded rather than filed.
+  #
+  # This is a BASELINE update, not a relaxed oracle: the guard still fails on any
+  # future move away from this state. The closing move is on OUR side — give
+  # `products` a currency column — and that is deliberately NOT bundled here,
+  # because changing the corpus invalidates the bands just rebuilt from it.
+  #
+  # Observation, not yet filed: the catalogue agent populates `unit_source_column`
+  # with a DERIVATION source rather than a unit column — sales_order_lines.line_cost
+  # carries `unit_source_column: "products.list_price"` while its own formula
+  # hypothesis is `units*products.standard_cost`. Worth a look if the unit family
+  # is revisited.
+  products.list_price:
+    aggregation_intent: blocked
+    presentation_intent: investigate
+  products.standard_cost:
+    aggregation_intent: blocked
+    presentation_intent: investigate
+  # Partially resolved (the agent points its unit source at products.list_price),
+  # hence investigate rather than blocked.
+  sales_order_lines.unit_price:
+    aggregation_intent: investigate
 
 detection-v1:
   expectations:

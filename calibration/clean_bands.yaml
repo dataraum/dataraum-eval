@@ -1,10 +1,9 @@
 provenance:
   source: clean seed sweep (scripts/sweep_clean_seeds.py)
   seeds:
+  - 42
   - 46
-  - 47
-  - 48
-  date: '2026-07-22'
+  date: '2026-07-29'
   notes: "Observed [min, max] per key across seeds; 'seen' < len(seeds) means the\
     \ key was not emitted on every run (LLM annotation coverage varies \u2014 normal,\
     \ not a regression). Wide bands document real run-to-run variance at sweep time;\
@@ -12,129 +11,189 @@ provenance:
     \ never by hand-editing."
 bands:
   column:
-    balance_sheet.ending_balance:business_meaning:
+    ar_invoices.amount:business_meaning:
       min: 0.1
       max: 0.15
-      seen: 3
+      seen: 2
+    ar_invoices.order_id:business_meaning:
+      min: 0.1
+      max: 0.15
+      seen: 2
+    balance_sheet.account_id:business_meaning:
+      min: 0.1
+      max: 0.15
+      seen: 2
+    bank_transactions.account_id:business_meaning:
+      min: 0.1
+      max: 0.15
+      seen: 2
+    bank_transactions.amount:business_meaning:
+      min: 0.1
+      max: 0.15
+      seen: 2
     bank_transactions.counterparty:business_meaning:
       min: 0.1
       max: 0.15
-      seen: 3
+      seen: 2
     bank_transactions.payment_id:business_meaning:
-      min: 0.1
-      max: 0.15
-      seen: 3
-    bank_transactions.payment_id:null_ratio:
-      min: 0.5104
-      max: 0.5166
-      seen: 3
-    bank_transactions.payment_id:slice_conditional_null:
-      min: 0.9642
-      max: 0.9712
-      seen: 3
-    bank_transactions.reference:business_meaning:
       min: 0.15
-      max: 0.3
-      seen: 3
-    chart_of_accounts.opened_date:business_meaning:
-      min: 0.1
       max: 0.15
-      seen: 3
+      seen: 2
+    bank_transactions.payment_id:null_ratio:
+      min: 0.5464
+      max: 0.5525
+      seen: 2
+    bank_transactions.payment_id:slice_conditional_null:
+      min: 0.9638
+      max: 0.969
+      seen: 2
+    bank_transactions.reference:business_meaning:
+      min: 0.3
+      max: 0.3
+      seen: 2
     chart_of_accounts.parent_id:business_meaning:
       min: 0.15
-      max: 0.15
-      seen: 3
-    fx_rates.date:business_meaning:
-      min: 0.1
-      max: 0.15
-      seen: 3
-    fx_rates.from_ccy:business_meaning:
-      min: 0.1
-      max: 0.15
-      seen: 3
+      max: 0.2
+      seen: 2
     fx_rates.rate:business_meaning:
       min: 0.1
       max: 0.15
-      seen: 3
+      seen: 2
     fx_rates.source:business_meaning:
       min: 0.1
       max: 0.15
-      seen: 3
-    fx_rates.to_ccy:business_meaning:
-      min: 0.1
-      max: 0.15
-      seen: 3
+      seen: 2
     invoices.amount:business_meaning:
       min: 0.1
       max: 0.15
-      seen: 3
+      seen: 2
+    invoices.date:business_meaning:
+      min: 0.1
+      max: 0.15
+      seen: 2
     invoices.entry_id:business_meaning:
       min: 0.15
       max: 0.15
-      seen: 3
-    invoices.payment_terms:business_meaning:
-      min: 0.1
-      max: 0.15
-      seen: 3
-    invoices.vendor_id:business_meaning:
-      min: 0.1
-      max: 0.15
-      seen: 3
+      seen: 2
     journal_entries.created_by:business_meaning:
-      min: 0.1
+      min: 0.15
       max: 0.15
-      seen: 3
+      seen: 2
     journal_entries.description:business_meaning:
       min: 0.15
       max: 0.15
-      seen: 3
+      seen: 2
     journal_entries.status:business_meaning:
       min: 0.1
       max: 0.15
-      seen: 3
+      seen: 2
+    journal_lines.account_id:business_meaning:
+      min: 0.1
+      max: 0.15
+      seen: 2
     journal_lines.cost_center:business_meaning:
       min: 0.1
       max: 0.15
-      seen: 3
+      seen: 2
     journal_lines.cost_center:null_ratio:
-      min: 0.5164
-      max: 0.5171
-      seen: 3
+      min: 0.4193
+      max: 0.4254
+      seen: 2
     journal_lines.entry_id:business_meaning:
       min: 0.1
       max: 0.15
-      seen: 3
+      seen: 2
     journal_lines.net_amount:business_meaning:
       min: 0.15
       max: 0.2
-      seen: 3
+      seen: 2
     payments.amount:business_meaning:
       min: 0.1
       max: 0.15
-      seen: 3
+      seen: 2
     payments.invoice_id:business_meaning:
       min: 0.1
       max: 0.15
-      seen: 3
-    trial_balance.credit_balance:benford:
-      min: 0.199
-      max: 0.2573
-      seen: 3
+      seen: 2
+    products.list_price:business_meaning:
+      min: 0.1
+      max: 0.15
+      seen: 2
+    products.list_price:unit_source:
+      min: 1.0
+      max: 1.0
+      seen: 2
+    products.standard_cost:business_meaning:
+      min: 0.15
+      max: 0.15
+      seen: 2
+    products.standard_cost:unit_source:
+      min: 1.0
+      max: 1.0
+      seen: 2
+    receipts.amount:business_meaning:
+      min: 0.1
+      max: 0.15
+      seen: 2
+    receipts.ar_invoice_id:business_meaning:
+      min: 0.1
+      max: 0.15
+      seen: 2
+    sales_order_lines.line_amount:business_meaning:
+      min: 0.1
+      max: 0.15
+      seen: 2
+    sales_order_lines.line_cost:business_meaning:
+      min: 0.15
+      max: 0.15
+      seen: 2
+    sales_order_lines.order_id:business_meaning:
+      min: 0.1
+      max: 0.15
+      seen: 2
+    sales_order_lines.unit_price:benford:
+      min: 0.3219
+      max: 0.3316
+      seen: 2
+    sales_order_lines.unit_price:business_meaning:
+      min: 0.1
+      max: 0.15
+      seen: 2
+    sales_order_lines.units:benford:
+      min: 0.4417
+      max: 0.4461
+      seen: 2
+    sales_order_lines.units:business_meaning:
+      min: 0.1
+      max: 0.15
+      seen: 2
+    trial_balance.account_id:business_meaning:
+      min: 0.1
+      max: 0.15
+      seen: 2
     trial_balance.credit_balance:business_meaning:
       min: 0.1
       max: 0.15
-      seen: 3
+      seen: 2
+    trial_balance.credit_balance:unit_source:
+      min: 0.0
+      max: 1.0
+      seen: 2
     trial_balance.debit_balance:benford:
-      min: 0.2315
-      max: 0.3005
-      seen: 3
+      min: 0.0619
+      max: 0.1113
+      seen: 2
     trial_balance.debit_balance:business_meaning:
       min: 0.1
       max: 0.15
-      seen: 3
+      seen: 2
+    trial_balance.debit_balance:unit_source:
+      min: 0.0
+      max: 1.0
+      seen: 2
   table:
     bank_transactions:dimension_coverage:
-      min: 0.2552
-      max: 0.2583
-      seen: 3
+      min: 0.1366
+      max: 0.3315
+      seen: 2
   relationship: {}
