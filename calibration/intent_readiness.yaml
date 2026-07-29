@@ -56,17 +56,17 @@ clean_readiness:
   # the clean outcomes scoreboard stays 8/8 right with no warnings.
   balance_sheet.ending_balance:
     aggregation_intent: blocked
-    reporting_intent: investigate
+    presentation_intent: investigate
   invoices.amount:
     aggregation_intent: blocked
     query_intent: investigate
-    reporting_intent: investigate
+    presentation_intent: investigate
   trial_balance.credit_balance:
     aggregation_intent: blocked
-    reporting_intent: investigate
+    presentation_intent: investigate
   trial_balance.debit_balance:
     aggregation_intent: blocked
-    reporting_intent: investigate
+    presentation_intent: investigate
   # Rebaselined 2026-07-02 (DAT-602 post-#432 gate): the FIXED temporal_behavior
   # (previously mis-wired — it never claimed this column, hence "ready") now pools
   # a single uncorroborated llm_claim "stock" on fx_rates.rate — conflict 0,
@@ -94,18 +94,18 @@ detection-v1:
     # grammar in test_detector_recall.
 
     # business_meaning is LLM-nondeterministic (xfail strict=False, like recall):
-    # naming_clarity feeds reporting_intent (0.7), so when detection fires the
+    # naming_clarity feeds presentation_intent (0.7), so when detection fires the
     # column should read >= investigate for reporting.
     - target: "invoices.rrFlp_11_zp00"
       driver: "business_meaning"
       min_readiness:
-        reporting_intent: investigate
-      note: "garbage name — naming_clarity -> reporting_intent; LLM-nondeterministic"
+        presentation_intent: investigate
+      note: "garbage name — naming_clarity -> presentation_intent; LLM-nondeterministic"
     - target: "invoices.xQ_v7kL"
       driver: "business_meaning"
       min_readiness:
-        reporting_intent: investigate
-      note: "garbage name — naming_clarity -> reporting_intent; LLM-nondeterministic"
+        presentation_intent: investigate
+      note: "garbage name — naming_clarity -> presentation_intent; LLM-nondeterministic"
 
     # --- Below: drivers whose owning phase is not yet in the workflow slice.
     # Documented now so the oracle is complete; skipped until the phase is wired.
@@ -113,7 +113,7 @@ detection-v1:
       driver: "relationship_entropy"
       grain: relationship
       min_readiness:
-        reporting_intent: ready
+        presentation_intent: ready
       note: >-
         20% orphan FKs at RELATIONSHIP grain (the relationship:{from}::{to} target's
         band, indexed per endpoint; the column's own band is blind to relationship
@@ -166,9 +166,9 @@ detection-typing-v1:
       driver: "temporal_entropy"
       min_readiness:
         query_intent: investigate
-        reporting_intent: investigate
+        presentation_intent: investigate
       note: >
         corrupt dates -> temporal_entropy maps to the time_role node, which feeds
-        query_intent (0.5), aggregation_intent (0.4), and reporting_intent (0.4).
+        query_intent (0.5), aggregation_intent (0.4), and presentation_intent (0.4).
         Unparseable dates break time-filtering, time-bucketed aggregation, and
         time-stamped reporting alike.

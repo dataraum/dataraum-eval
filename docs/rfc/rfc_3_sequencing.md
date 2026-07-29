@@ -290,9 +290,10 @@ A second harness is a second thing to maintain, not a second signal.
 - Customer-facing naming: "performance dimensions" internally; the cockpit should probably
   show plain groups — "Your customers", "What you sell", "Your suppliers", "What you run
   on", "How work flows", "Where your cash sits".
-- `reporting_intent` is still a live readiness intent while the pivot retired reporting as a
-  target. Rename it to what it now means or remove it; leaving it is a slow-burning
-  inconsistency.
+- ~~`reporting_intent` is still a live readiness intent while the pivot retired reporting as a
+  target.~~ **RESOLVED 2026-07-29 (engine PR #539):** renamed to `presentation_intent`,
+  weights untouched — the key name only, so no band value moves. Eval's
+  `intent_readiness.yaml` follows in the same commit (12 occurrences).
 
 **The run model and the dimensions** (grounded 2026-07-27; a design paragraph for the
 DAT-855 strand-3 /refine, not a build item)
