@@ -89,7 +89,7 @@ def read_metric_additivity(session: Any) -> dict[tuple[str, str], AdditivityVerd
     )
     rows = session.execute(
         text(
-            "SELECT target_kind, target_key, axis_kind, status, verdict, reason "
+            "SELECT target_kind, target_key, axis_kind, axis_key, status, verdict, reason "
             f'FROM "{read_schema}".current_metric_axis_additivity'
         )
     ).all()
