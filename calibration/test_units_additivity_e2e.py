@@ -14,7 +14,7 @@ data-derived at export):
    resolves a cross-table pointer — richer than our structural truth, not a
    failure.
 2. **og_additivity parity (HARD, plumbing only)** — the ``additivity_verdict``
-   vertex reproduces ``current_metric_additivity`` row-for-row; verdict VALUES
+   vertex reproduces ``current_metric_axis_additivity`` row-for-row; verdict VALUES
    are already graded by test_metric_additivity_e2e and are NOT re-graded here.
 3. **Cross-unit gate surface (HARD)** — the drill unit gate (cockpit DAT-731)
    flags a measure iff its unit column's distinct count exceeds 1; the
@@ -147,8 +147,13 @@ def test_measured_in_coverage(metadata_truth: dict[str, Any], strategy_name: str
 
 @pytest.mark.llm
 def test_additivity_parity(strategy_name: str) -> None:
-    """The additivity_verdict vertex reproduces current_metric_additivity row-for-row
-    (plumbing; the verdict VALUES are test_metric_additivity_e2e's job)."""
+    """The additivity_verdict vertex reproduces current_metric_axis_additivity
+    row-for-row (plumbing; the verdict VALUES are test_metric_additivity_e2e's job).
+
+    Keyed per (target, axis) since DAT-857/868 made additivity edge-valued — a
+    target-only key would compare 26 view rows against 26 vertices while silently
+    tolerating a vertex projecting the WRONG axis for the right target.
+    """
     from sqlalchemy import text
 
     with workspace_session() as session:
@@ -160,24 +165,27 @@ def test_additivity_parity(strategy_name: str) -> None:
             text(
                 f"SELECT * FROM GRAPH_TABLE ({graph} "
                 "MATCH (a IS additivity_verdict) "
-                "COLUMNS (a.target_kind AS target_kind, a.target_key AS target_key))"
+                "COLUMNS (a.target_kind AS target_kind, a.target_key AS target_key, "
+                "a.axis_kind AS axis_kind, a.axis_key AS axis_key))"
             )
         ).all()
         view = session.execute(
             text(
-                "SELECT target_kind, target_key "
-                f'FROM "{read_schema}".current_metric_additivity'
+                "SELECT target_kind, target_key, axis_kind, axis_key "
+                f'FROM "{read_schema}".current_metric_axis_additivity'
             )
         ).all()
 
     if not view:
-        pytest.skip("current_metric_additivity is empty this run (graded by its own oracle)")
+        pytest.skip("current_metric_axis_additivity is empty this run (graded by its own oracle)")
 
-    vertex_keys = {(r.target_kind, r.target_key) for r in vertex}
-    view_keys = {(r.target_kind, r.target_key) for r in view}
+    def keys(rows: list[Any]) -> set[tuple[str, str, str, str]]:
+        return {(r.target_kind, r.target_key, r.axis_kind, r.axis_key) for r in rows}
+
+    vertex_keys, view_keys = keys(vertex), keys(view)
     print(f"\n[additivity parity] vertex={len(vertex)} view={len(view)}")
     assert vertex_keys == view_keys and len(vertex) == len(view), (
-        "og_additivity does not reproduce current_metric_additivity row-for-row: "
+        "og_additivity does not reproduce current_metric_axis_additivity row-for-row: "
         f"vertex-only={sorted(vertex_keys - view_keys)}, view-only={sorted(view_keys - vertex_keys)}"
     )
 

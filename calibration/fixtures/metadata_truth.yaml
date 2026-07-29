@@ -250,11 +250,17 @@ table_roles:
   - bank_transactions
   - trial_balance
   - balance_sheet
+  - sales_order_lines
+  - ar_invoices
+  - receipts
   dimensions:
   - chart_of_accounts
+  - customers
   ambiguous:
   - journal_entries
   - fx_rates
+  - sales_orders
+  - products
 semantic_roles:
   measure:
   - journal_lines.debit
@@ -267,6 +273,14 @@ semantic_roles:
   - trial_balance.credit_balance
   - balance_sheet.ending_balance
   - fx_rates.rate
+  - sales_order_lines.units
+  - sales_order_lines.unit_price
+  - sales_order_lines.line_amount
+  - sales_order_lines.line_cost
+  - ar_invoices.amount
+  - receipts.amount
+  - products.standard_cost
+  - products.list_price
   timestamp:
   - journal_entries.date
   - invoices.date
@@ -276,6 +290,10 @@ semantic_roles:
   - fx_rates.date
   - trial_balance.period
   - balance_sheet.period
+  - sales_orders.order_date
+  - ar_invoices.invoice_date
+  - ar_invoices.due_date
+  - receipts.receipt_date
 business_concepts:
   required:
     journal_lines.debit: debit

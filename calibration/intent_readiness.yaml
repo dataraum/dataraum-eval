@@ -1,7 +1,7 @@
 # Intent-readiness ground truth — eval-owned, hand-authored from the injections.
 #
 # The loss table rolls detector scores up to three intent readiness signals
-# (query / aggregation / reporting) — risk = clamp01(Σ weight·value), banded
+# (query / aggregation / presentation) — risk = clamp01(Σ weight·value), banded
 # ready < investigate < blocked (DAT-442; no network). This file is the oracle:
 # for each known injection, which intents must it knock off "ready" for the column.
 #

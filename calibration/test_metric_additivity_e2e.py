@@ -105,6 +105,23 @@ def test_metric_additivity_matrix_oracle(
             soft_missing.append(f"  {kind}:{key} — no verdict (not grounded)")
             matrix.append(f"  [{tier}] {kind}:{key:<26} — not grounded")
             continue
+        if got.categorical_additive is None or got.time_additive is None:
+            # The engine ABSTAINED on at least one axis kind (DAT-857/868 typed
+            # abstention). An abstention is not a wrong answer — it is the absence of
+            # one — so it joins the ungrounded bucket rather than failing the oracle.
+            # Grading it against a boolean truth would score an honest refusal as a
+            # defect, which is the same coverage lie in the opposite direction.
+            undetermined = [
+                axis
+                for axis, value in (
+                    ("categorical", got.categorical_additive),
+                    ("time", got.time_additive),
+                )
+                if value is None
+            ]
+            soft_missing.append(f"  {kind}:{key} — abstained on {', '.join(undetermined)}")
+            matrix.append(f"  [{tier}] {kind}:{key:<26} — abstained ({', '.join(undetermined)})")
+            continue
         grounded += 1
         want, have = _fields(spec), _fields(got)
         verdict = (

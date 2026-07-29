@@ -29,20 +29,57 @@ def load_truth() -> dict[str, Any]:
 
 @dataclass(frozen=True)
 class AdditivityVerdict:
-    """One drill target's additivity verdict — the four graded fields."""
+    """One drill target's additivity verdict — the four graded fields.
 
-    categorical_additive: bool
-    time_additive: bool
+    ``None`` on a side means **not determined this run**, which is NOT the same as
+    non-additive: the engine abstains with a typed reason where it cannot classify, and
+    folding an abstention to ``False`` would manufacture an oracle failure out of an
+    honest refusal.
+    """
+
+    categorical_additive: bool | None
+    time_additive: bool | None
     categorical_reason: str | None
     time_reason: str | None
 
 
+# Engine vocabulary (``ck_metric_axis_additivity_verdict``). Only 'additive' is additive;
+# 'semi_additive' and 'non_additive_recompute' both mean "do not SUM this axis".
+_ADDITIVE = "additive"
+
+# The class-level axis row: the verdict for EVERY axis of its kind. A concrete column
+# name in ``axis_key`` refines it (engine property_graph.py, DAT-857/868).
+_CLASS_AXIS = "*"
+
+
 def read_metric_additivity(session: Any) -> dict[tuple[str, str], AdditivityVerdict]:
-    """Every ``current_metric_additivity`` row, keyed ``(target_kind, target_key)``.
+    """Per-target additivity, folded from the per-AXIS rows the engine now emits.
 
     Reads the promoted operating_model head via the ``<ws>_read`` schema — the
     same ``current_*`` surface the drill (cockpit) reads, not the raw versioned
     table — so the oracle grades exactly what the product would consume.
+
+    **Grain change (DAT-857/868).** ``metric_additivity`` became
+    ``metric_axis_additivity``: one row per ``(target, axis_kind, axis_key)`` carrying
+    ``status`` ∈ {classified, abstained} and, when classified, a ``verdict``. Our truth
+    is still per-target-per-axis-KIND, so the rows are folded:
+
+    * ``axis_key = '*'`` is the engine's CLASS-level row — the verdict covering every
+      axis of that kind, which is exactly the grain our truth speaks at. When present
+      it is used directly; a concrete column row REFINES the class and must not be
+      mixed into it.
+    * With no class row, the concrete axes are conjoined: **additive** iff every
+      CLASSIFIED axis of that kind is ``additive``, since the drill may not SUM across
+      an axis that does not sum.
+    * **abstentions are never counted as False.** A kind whose axes all abstained (or
+      that has no rows) is ``None`` — not determined — and the consumer reports it as
+      ungrounded rather than wrong.
+    * ``reason`` is the deciding non-additive row's reason, matching the old column's
+      meaning ("why this kind does not sum").
+
+    The fold loses the per-axis resolution the engine now provides. Recovering it needs
+    per-axis truth in ``metadata_truth`` — a testdata change, tracked as follow-up; until
+    then this grades what the truth can actually express.
     """
     from dataraum.storage.read_views import read_schema_name_for
     from sqlalchemy import text
@@ -52,20 +89,39 @@ def read_metric_additivity(session: Any) -> dict[tuple[str, str], AdditivityVerd
     )
     rows = session.execute(
         text(
-            "SELECT target_kind, target_key, categorical_additive, time_additive, "
-            "categorical_reason, time_reason "
-            f'FROM "{read_schema}".current_metric_additivity'
+            "SELECT target_kind, target_key, axis_kind, status, verdict, reason "
+            f'FROM "{read_schema}".current_metric_axis_additivity'
         )
     ).all()
-    return {
-        (r.target_kind, r.target_key): AdditivityVerdict(
-            categorical_additive=bool(r.categorical_additive),
-            time_additive=bool(r.time_additive),
-            categorical_reason=r.categorical_reason,
-            time_reason=r.time_reason,
+
+    by_target: dict[tuple[str, str], dict[str, list[Any]]] = {}
+    for r in rows:
+        target = by_target.setdefault((r.target_kind, r.target_key), {})
+        target.setdefault(r.axis_kind, []).append(r)
+
+    def fold(axes: list[Any]) -> tuple[bool | None, str | None]:
+        # The class row IS the per-kind answer; concrete axes only refine it.
+        class_rows = [a for a in axes if a.axis_key == _CLASS_AXIS]
+        considered = class_rows or axes
+        classified = [a for a in considered if a.status == "classified"]
+        if not classified:
+            return None, None  # abstained or absent — undetermined, never False
+        non_additive = [a for a in classified if a.verdict != _ADDITIVE]
+        if not non_additive:
+            return True, None
+        return False, next((a.reason for a in non_additive if a.reason), None)
+
+    out: dict[tuple[str, str], AdditivityVerdict] = {}
+    for key, axes_by_kind in by_target.items():
+        categorical, categorical_reason = fold(axes_by_kind.get("categorical", []))
+        time_additive, time_reason = fold(axes_by_kind.get("time", []))
+        out[key] = AdditivityVerdict(
+            categorical_additive=categorical,
+            time_additive=time_additive,
+            categorical_reason=categorical_reason,
+            time_reason=time_reason,
         )
-        for r in rows
-    }
+    return out
 
 
 def expected_additivity(truth: dict[str, Any]) -> dict[tuple[str, str], dict[str, Any]]:
